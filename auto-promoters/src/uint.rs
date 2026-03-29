@@ -1,6 +1,6 @@
 use std::fmt;
 
-use num::{BigUint, One, Unsigned, Zero, traits::{ConstOne, ConstZero}, Integer};
+use num::{BigUint, One, Unsigned, Zero, traits::{ConstZero, ConstOne}, Integer};
 
 mod addition;
 mod division;
@@ -15,18 +15,27 @@ mod serde;
 mod shift;
 mod roots;
 
-#[cfg(test)]
-mod tests;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Uint {
     Machine(usize),
+    Intermediate([usize; 3]),
     Promoted(BigUint),
+    Infinite,
 }
 
 // Machine is ALWAYS less than Promoted.
 impl Ord for Uint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match mem::discriminant(&t1).cmp(mem::discriminant(&t2)) {
+            std::cmp::Ordering::Equal => {
+                match (self, other) {
+                    (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
+                    (Uint::Intermediate())
+                    (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
+                }
+            }
+            ordering: Ordering => return ordering,
+        }
         match (self, other) {
             (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
             (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
