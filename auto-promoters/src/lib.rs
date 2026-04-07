@@ -1,3 +1,2 @@
 pub mod uint;
-// mod coordinate;
-// mod basis;
+// pub mod int;

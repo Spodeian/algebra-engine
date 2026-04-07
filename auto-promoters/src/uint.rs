@@ -26,21 +26,15 @@ pub enum Uint {
 // Machine is ALWAYS less than Promoted.
 impl Ord for Uint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match mem::discriminant(&t1).cmp(mem::discriminant(&t2)) {
-            std::cmp::Ordering::Equal => {
-                match (self, other) {
-                    (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
-                    (Uint::Intermediate())
-                    (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
-                }
+        if let std::cmp::Ordering::Equal = mem::discriminant(&self).cmp(&mem::discriminant(&other)) {
+            match (self, other) {
+                (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
+                (Uint::Intermediate(a), Uint::Intermediate(b)) => a.cmp(b),
+                (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
+                (Uint::Infinite, Uint::Infinite) => std::cmp::Ordering::Equal,
             }
-            ordering: Ordering => return ordering,
-        }
-        match (self, other) {
-            (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
-            (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
-            (Uint::Machine(_), Uint::Promoted(_)) => std::cmp::Ordering::Less,
-            (Uint::Promoted(_), Uint::Machine(_)) => std::cmp::Ordering::Greater,
+        } else {
+            std::cmp::Ordering::Equal
         }
     }
 }
