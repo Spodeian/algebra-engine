@@ -2,10 +2,40 @@
 # ==============================================================================
 # Cloudflare Serverless Deployment Build Pipeline Script (Pages & Workers)
 # Universal Rust Algebra Engine (URAE)
+#
+# Usage:
+#   ./deploy.sh                  # Pure Static Site (Default, no Edge Worker API)
+#   ./deploy.sh --static-only    # Explicit Pure Static Site
+#   ./deploy.sh --with-api       # Full-Stack Mode (Static Site + Cloudflare Pages Worker API)
+#   ./deploy.sh --worker-deploy  # Standalone Cloudflare Worker Deploy (Wrangler)
 # ==============================================================================
 set -euo pipefail
 
-echo "=== Initializing Cloudflare Serverless Build Pipeline for URAE ==="
+ENABLE_EDGE_API="${ENABLE_EDGE_API:-false}"
+CLOUDFLARE_WORKER_DEPLOY="${CLOUDFLARE_WORKER_DEPLOY:-false}"
+
+for arg in "$@"; do
+    case "$arg" in
+        --static-only)
+            ENABLE_EDGE_API="false"
+            CLOUDFLARE_WORKER_DEPLOY="false"
+            ;;
+        --with-api)
+            ENABLE_EDGE_API="true"
+            ;;
+        --worker-deploy)
+            CLOUDFLARE_WORKER_DEPLOY="true"
+            ;;
+    esac
+done
+
+if [ "$ENABLE_EDGE_API" = "true" ]; then
+    echo "=== Initializing Cloudflare Build: Full-Stack Mode (Static Site + Edge Worker API) ==="
+elif [ "$CLOUDFLARE_WORKER_DEPLOY" = "true" ]; then
+    echo "=== Initializing Cloudflare Build: Standalone Wrangler Worker Mode ==="
+else
+    echo "=== Initializing Cloudflare Build: Pure Static Site Mode (No Serverless API) ==="
+fi
 
 # 1. Persistent Environment & PATH Setup
 export NODE_ENV="production"
@@ -223,15 +253,46 @@ except ImportError:
         fi
     fi
 
-    # 8. Ensure Cloudflare configuration files are guaranteed present in output distribution
+    # 8. Configure Cloudflare Deployment Mode (Static-Only vs Full-Stack Edge Worker)
     cp -f crates/urae-wasm/public/_headers "$DIST_DIR/_headers" 2>/dev/null || true
     cp -f crates/urae-wasm/public/_redirects "$DIST_DIR/_redirects" 2>/dev/null || true
+
+    if [ "$ENABLE_EDGE_API" = "true" ]; then
+        echo "Configuring Cloudflare Pages Edge Worker (_worker.js & _routes.json)..."
+        # Adapt relative import paths for _worker.js when placed inside public/
+        sed -e 's|\./public/pkg/|\./pkg/|g' crates/urae-wasm/worker.js > "$DIST_DIR/_worker.js"
+
+        cat << 'EOF' > "$DIST_DIR/_routes.json"
+{
+  "version": 1,
+  "include": [
+    "/api/*"
+  ],
+  "exclude": [
+    "/pkg/*",
+    "/index.html",
+    "/favicon.ico",
+    "/manifest.json",
+    "/sw.js",
+    "/env.js",
+    "/*.wasm",
+    "/*.js",
+    "/*.css"
+  ]
+}
+EOF
+        echo "Edge Worker API enabled for /api/* routes."
+    else
+        # Ensure pure static site deployment: remove any worker artifacts
+        rm -f "$DIST_DIR/_worker.js" "$DIST_DIR/_routes.json"
+        echo "Pure static site deployment confirmed (Zero serverless worker overhead)."
+    fi
 fi
 
-echo "=== Build Completed Successfully! Static assets are ready in: '$DIST_DIR' ==="
+echo "=== Build Completed Successfully! Output directory ready in: '$DIST_DIR' ==="
 
 # 9. Deployment Context Router
-if [ "${CLOUDFLARE_WORKER_DEPLOY:-false}" = "true" ]; then
+if [ "$CLOUDFLARE_WORKER_DEPLOY" = "true" ]; then
     echo "Wrangler Worker deployment context detected."
     if ! command -v wrangler &> /dev/null; then
         if command -v npm &> /dev/null; then
@@ -247,5 +308,5 @@ if [ "${CLOUDFLARE_WORKER_DEPLOY:-false}" = "true" ]; then
     wrangler deploy
     cd ../..
 else
-    echo "Pages / Static CDN deployment context detected. Build ready for publishing."
+    echo "Pages / Static CDN deployment context detected. Ready for publishing to Cloudflare Pages."
 fi
