@@ -1,0 +1,19 @@
+# URAE Mathematics Notepad: Non-Euclidean Geometry & Hyperbolic Tessellations
+# Interactive exploration of Poincaré Disk, Upper Half-Plane, Cayley transform, and Schläfli {p, q} tilings.
+
+# Points in the open unit disk D
+p1 = poincare_point(0.2, 0.3)
+p2 = poincare_point(-0.4, 0.5)
+
+# Exact Hyperbolic Geodesic Distance
+# d(p1, p2) = arcosh(1 + 2 ||p1 - p2||^2 / ((1 - ||p1||^2)(1 - ||p2||^2)))
+hyperbolic_dist(p1, p2)
+
+# Gauss-Bonnet Hyperbolic Triangle Area Defect: Area = pi - (alpha + beta + gamma)
+hyperbolic_triangle_area(0.5, 0.6, 0.7)
+
+# Spherical Triangle Girard Area Excess: Area = (alpha + beta + gamma) - pi
+spherical_triangle_area(1.2, 1.3, 1.4)
+
+# Schläfli {p, q} Hyperbolic Tessellation: Regular {7, 3} heptagonal tiling
+tessellation_schlafli(7, 3)

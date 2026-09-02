@@ -1,0 +1,20 @@
+[package]
+name = "urae-ffi"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "C ABI FFI exports, Python ctypes/CFFI, and native bindings for URAE"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+algebra-core.workspace = true
+algebra-engine.workspace = true
+thiserror.workspace = true

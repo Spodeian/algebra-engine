@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="High-performance formal mathematics, symbolic computation, E-Graph pattern simplification, and reactive notebook in Rust & WebAssembly">
+  <meta name="theme-color" content="#0d1117">
+  <link rel="manifest" href="manifest.json">
+  <title>URAE — Universal Rust Algebra Engine (Reactive Web Notebook)</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "env": "./env.js"
+      }
+    }
+  </script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #app_container {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas#urae_canvas {
+      width: 100%;
+      height: 100%;
+      background: #0d1117;
+      display: block;
+      touch-action: none;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app_container">
+    <canvas id="urae_canvas" tabindex="0"></canvas>
+  </div>
+
+  <script>
+    // PWA & StorageManager Lifecycle Management
+    window.__pwaInstallPrompt = null;
+    window.__isPWAInstalled = false;
+    window.__isStoragePersisted = false;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      window.__pwaInstallPrompt = e;
+      console.log('⚡ [URAE PWA] beforeinstallprompt captured and ready for user trigger');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      window.__pwaInstallPrompt = null;
+      window.__isPWAInstalled = true;
+      console.log('⚡ [URAE PWA] Web app successfully installed');
+    });
+
+    window.__triggerPWAInstall = async function() {
+      if (!window.__pwaInstallPrompt) {
+        alert('App installation is not available at this moment. You can add it via your browser menu.');
+        return false;
+      }
+      window.__pwaInstallPrompt.prompt();
+      const choice = await window.__pwaInstallPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        window.__pwaInstallPrompt = null;
+        return true;
+      }
+      return false;
+    };
+
+    window.__requestPersistentStorage = async function() {
+      if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        window.__isStoragePersisted = isPersisted;
+        console.log(`⚡ [URAE Storage] Persistent Storage Requested: ${isPersisted ? 'GRANTED' : 'DENIED'}`);
+        return isPersisted;
+      }
+      return false;
+    };
+
+    window.__checkStoragePersisted = async function() {
+      if (navigator.storage && navigator.storage.persisted) {
+        const isPersisted = await navigator.storage.persisted();
+        window.__isStoragePersisted = isPersisted;
+        return isPersisted;
+      }
+      return false;
+    };
+
+    window.__checkStoragePersisted();
+
+    // IndexedDB Multi-Tier Fallback Storage Engine
+    const IDB_NAME = 'urae_offline_store';
+    const IDB_STORE = 'urae_notebook_kv';
+
+    function openIndexedDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    window.__saveNotebookToIndexedDB = async function(key, value) {
+      try {
+        const db = await openIndexedDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction([IDB_STORE], 'readwrite');
+          const store = tx.objectStore(IDB_STORE);
+          const req = store.put(value, key);
+          req.onsuccess = () => resolve(true);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (err) {
+        console.error('IndexedDB Put Error:', err);
+        return false;
+      }
+    };
+
+    window.__loadNotebookFromIndexedDB = async function(key) {
+      try {
+        const db = await openIndexedDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction([IDB_STORE], 'readonly');
+          const store = tx.objectStore(IDB_STORE);
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (err) {
+        console.error('IndexedDB Get Error:', err);
+        return null;
+      }
+    };
+
+    window.__triggerBinaryDownload = function(filename, base64Data, mimeType = 'application/octet-stream') {
+      try {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('Binary download error:', err);
+      }
+    };
+  </script>
+
+  <script type="module">
+    import init, { wasm_process_json, start_notebook_web } from './pkg/urae_wasm.js';
+
+    // 1. Define global window.urae CLI & Edge API for F12 Developer Console
+    const uraeFn = function(cmdStr) {
+      if (!window.wasm_process_json) {
+        return "URAE Engine initializing... please wait a moment.";
+      }
+      try {
+        const req = JSON.stringify({ input: cmdStr });
+        const respStr = window.wasm_process_json(req);
+        try {
+          const parsed = JSON.parse(respStr);
+          return parsed.output_unicode || parsed.output_latex || respStr;
+        } catch (_) {
+          return respStr;
+        }
+      } catch (err) {
+        return "Error: " + err;
+      }
+    };
+
+    uraeFn.help = function() {
+      console.log(`
+⚡ URAE F12 Console Interactive API:
+-------------------------------------
+• urae("diff x^3 - 3*x, x")        : Evaluate CLI command directly
+• urae("solve x^2 - 16 = 0, x")    : Solve algebraic equation
+• urae("simplify (x + 0) * 1")     : E-Graph pattern simplification
+• urae.diff("x^3, x")              : Differentiate expression
+• urae.solve("x^2 - 16 = 0, x")    : Solve equation set
+• urae.simplify("(x + 0) * 1")     : E-Graph simplify
+• urae.json({ input: "x^2 + 1" })  : Full structured JSON API request
+• urae.edge.diff("x^2, x")         : Query Cloudflare Workers REST Edge API
+• urae.edge.solve("x^2 - 4 = 0")   : Query Cloudflare Workers REST Edge API
+• urae.edge.json(reqObj)           : POST JSON to /api/json on Edge
+      `);
+      return "Type urae('command') to evaluate math expressions!";
+    };
+
+    uraeFn.diff = function(exprStr, wrtStr = "x") {
+      return uraeFn(`diff ${exprStr}, ${wrtStr}`);
+    };
+
+    uraeFn.solve = function(eqStr, wrtStr = "x") {
+      return uraeFn(`solve ${eqStr}, ${wrtStr}`);
+    };
+
+    uraeFn.simplify = function(exprStr) {
+      return uraeFn(`simplify ${exprStr}`);
+    };
+
+    uraeFn.json = function(reqObj) {
+      if (!window.wasm_process_json) return { error: "WASM initializing" };
+      const reqStr = typeof reqObj === 'string' ? reqObj : JSON.stringify(reqObj);
+      return JSON.parse(window.wasm_process_json(reqStr));
+    };
+
+    // Cloudflare Edge Evaluation Namespace:
+    uraeFn.edge = {
+      diff: async function(exprStr, wrtStr = "x") {
+        const res = await fetch(`/api/differentiate?expr=${encodeURIComponent(exprStr)}&wrt=${encodeURIComponent(wrtStr)}`);
+        return await res.json();
+      },
+      solve: async function(eqStr, wrtStr = "x") {
+        const res = await fetch(`/api/solve?eq=${encodeURIComponent(eqStr)}&wrt=${encodeURIComponent(wrtStr)}`);
+        return await res.json();
+      },
+      simplify: async function(exprStr) {
+        const res = await fetch(`/api/simplify?expr=${encodeURIComponent(exprStr)}`);
+        return await res.json();
+      },
+      json: async function(reqObj) {
+        const res = await fetch(`/api/json`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: typeof reqObj === 'string' ? reqObj : JSON.stringify(reqObj)
+        });
+        return await res.json();
+      }
+    };
+
+    window.urae = uraeFn;
+
+    // 2. Synchronize Canvas dimensions with viewport bounds
+    function fitCanvasToViewport() {
+      const canvas = document.getElementById('urae_canvas');
+      if (canvas) {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    fitCanvasToViewport();
+    window.addEventListener('resize', fitCanvasToViewport);
+
+    // 3. Launch WASM Module and Canvas Runner
+    async function run() {
+      try {
+        await init();
+        window.wasm_process_json = wasm_process_json;
+
+        console.log("%c⚡ Universal Rust Algebra Engine (URAE) Active!", "color: #58a6ff; font-weight: bold; font-size: 14px;");
+        console.log("%cType urae.help() in this F12 console to use CLI & Edge evaluation functions.", "color: #8b949e;");
+
+        if (typeof start_notebook_web === 'function') {
+          start_notebook_web('urae_canvas').catch(err => {
+            console.error('Canvas notebook error:', err);
+          });
+        }
+
+        // 4. Register PWA Service Worker for offline resilience
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+          navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.debug('ServiceWorker registration optional notice:', err);
+          });
+        }
+      } catch (err) {
+        console.error('URAE initialization error:', err);
+      }
+    }
+
+    run();
+  </script>
+</body>
+</html>
+

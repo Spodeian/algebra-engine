@@ -1,0 +1,15 @@
+# URAE Mathematics Notepad: Multiphysics Finite Elements & Neural ODEs
+# Interactive notebook for 2D thermal/structural FEM, Symplectic Yoshida integration, and Continuous Neural ODEs.
+
+# 2D Finite Element Mesh generation on unit square [0, 1] x [0, 1]
+mesh_2d(grid_x = 10, grid_y = 10, element_type = Tri3)
+
+# Multiphysics Poisson Heat Equation: -k Laplacian(T) = Q
+poisson_solver(mesh = "grid_10x10", conductivity = 45.0, heat_source = 1000.0)
+
+# Symplectic 4th-Order Yoshida Integrator for Hamiltonian Systems
+# H(q, p) = 1/2 p^2 + 1/2 q^2
+symplectic_yoshida(q0 = 1.0, p0 = 0.0, dt = 0.01, steps = 1000)
+
+# Continuous Neural ODE with Adjoint Sensitivity
+neural_ode_forward(t_span = [0.0, 1.0], state0 = [1.0, 0.5])

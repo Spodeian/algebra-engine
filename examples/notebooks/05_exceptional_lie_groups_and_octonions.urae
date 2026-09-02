@@ -1,0 +1,20 @@
+# URAE Mathematics Notepad: Exceptional Lie Groups & Octonions
+# Interactive investigation of 8D non-associative Octonions, Albert exceptional Jordan algebra, and the 240 root vectors of E8.
+
+# Octonion 8D division algebra: x = e0 + e1 + ... + e7
+x = octonion!(1, 0, 1, 0, 0, 0, 0, 0)
+y = octonion!(0, 1, 0, 1, 0, 0, 0, 0)
+z = octonion!(0, 0, 1, 0, 1, 0, 0, 0)
+
+# Non-associativity & Associator: [x, y, z] = (x*y)*z - x*(y*z) != 0
+octonion_associator!(x, y, z)
+
+# Alternativity check: [x, x, y] == 0
+octonion_associator!(x, x, y)
+
+# 27D Albert Exceptional Jordan Algebra H_3(O) Freudenthal cubic determinant
+albert = albert_matrix([1.0, 1.0, 1.0], [x, octonion!(0,0,0,0,0,0,0,0), octonion!(0,0,0,0,0,0,0,0)])
+albert_det!(albert)
+
+# 8D E8 Root Lattice Weyl Reflection: s_alpha(v) = v - 2 (v . alpha / alpha . alpha) alpha
+e8_weyl_reflect!([1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])

@@ -1,0 +1,28 @@
+# URAE Mathematics Notepad: Advanced Calculus, Special Functions & ODEs
+# Interactive continuous document for symbolic calculus, limits, series, and differential equations.
+
+# Variable and parameter declarations with physical units and bounds
+a: Parameter = 2.50 [m]
+b: Parameter = 1.20 [s^-1]
+omega: Parameter = 3.14159 [rad/s]
+x: Variable
+t: Variable
+
+# Set-builder domain constraints
+{ x in Reals | -10.0 <= x <= 10.0 }
+{ t in Reals | 0.0 <= t <= 100.0 }
+
+# Symbolic differentiation & Risch integration
+f(x) = a * exp(-b * x) * cos(omega * x)
+diff(f(x), x)
+diff(diff(f(x), x), x)
+integrate(x^3 * exp(x), x)
+
+# Asymptotic Series & Limits
+series(sin(x) / x, x, 0, 8)
+limit((1 - cos(x)) / x^2, x, 0)
+limit(x * ln(1 + 1/x), x, infinity)
+
+# Ordinary Differential Equations (ODEs)
+ode: diff(y(t), t, 2) + 2 * b * diff(y(t), t) + omega^2 * y(t) = 0
+solve_ode(ode, y(t))

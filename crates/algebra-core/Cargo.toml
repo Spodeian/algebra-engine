@@ -1,0 +1,36 @@
+[package]
+name = "algebra-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core expression graph DAG, symbols, intervals, numbers, parser, and formatters for URAE"
+
+[lints]
+workspace = true
+
+[dependencies]
+bnum.workspace = true
+malachite.workspace = true
+num.workspace = true
+num-rational.workspace = true
+num-traits.workspace = true
+dashmap.workspace = true
+rayon.workspace = true
+parking_lot.workspace = true
+smallvec.workspace = true
+ahash.workspace = true
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+serde_json.workspace = true
+tracing.workspace = true
+nom.workspace = true
+
+[features]
+default = ["serde"]
+serde = ["dep:serde"]
+
+[dev-dependencies]
+criterion.workspace = true

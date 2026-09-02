@@ -1,0 +1,40 @@
+[package]
+name = "algebra-engine"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Core Computer Algebra System (CAS) engine: simplification, solvers, calculus, linear algebra, tensors, physics, combinatorics, and esoteric operators"
+
+[lints]
+workspace = true
+
+[dependencies]
+algebra-core.workspace = true
+bnum.workspace = true
+malachite.workspace = true
+num.workspace = true
+num-rational.workspace = true
+num-traits.workspace = true
+num-bigint.workspace = true
+dashmap.workspace = true
+rayon.workspace = true
+parking_lot.workspace = true
+smallvec.workspace = true
+ahash.workspace = true
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+serde_json.workspace = true
+tracing.workspace = true
+egg.workspace = true
+dashu.workspace = true
+nom.workspace = true
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "algebra-core/serde"]
+
+[dev-dependencies]
+criterion.workspace = true

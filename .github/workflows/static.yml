@@ -1,0 +1,109 @@
+# GitHub Actions Workflow for deploying compiled Rust/WASM URAE Notebook to GitHub Pages
+name: Deploy static content to Pages
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main", "master"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Stable Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Cache wasm-opt Binary (Binaryen)
+        id: cache-wasm-opt
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/wasm-opt
+          key: ${{ runner.os }}-wasm-opt-version_132
+
+      - name: Install Binaryen wasm-opt (v132)
+        if: steps.cache-wasm-opt.outputs.cache-hit != 'true'
+        run: |
+          BINARYEN_VERSION="version_132"
+          mkdir -p ~/.cargo/bin
+          wget -qO- "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" | tar -xzf -
+          mv "binaryen-${BINARYEN_VERSION}/bin/wasm-opt" ~/.cargo/bin/wasm-opt
+          chmod +x ~/.cargo/bin/wasm-opt
+          rm -rf "binaryen-${BINARYEN_VERSION}"
+
+      - name: Add Cargo Bin to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build Web Application
+        run: |
+          cd crates/urae-wasm
+          wasm-pack build --target web --out-dir public/pkg --release
+          cd ../..
+          for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
+            if [ -f "$wasm_file" ]; then
+              echo "Optimizing $wasm_file with wasm-opt"
+              wasm-opt -Oz "$wasm_file" -o "$wasm_file" || true
+            fi
+          done
+
+      - name: Minify Production Assets (HTML, CSS, JS)
+        run: |
+          echo "=== Minifying Production Distribution Assets in crates/urae-wasm/public ==="
+          if [ -d "crates/urae-wasm/public" ]; then
+            for js_file in crates/urae-wasm/public/*.js crates/urae-wasm/public/pkg/*.js; do
+              if [ -f "$js_file" ]; then
+                echo "Minifying JS: $js_file"
+                npx --yes esbuild "$js_file" --minify --allow-overwrite --outfile="$js_file" || true
+              fi
+            done
+            for css_file in crates/urae-wasm/public/*.css; do
+              if [ -f "$css_file" ]; then
+                echo "Minifying CSS: $css_file"
+                npx --yes esbuild "$css_file" --minify --allow-overwrite --outfile="$css_file" || true
+              fi
+            done
+            if [ -f "crates/urae-wasm/public/index.html" ]; then
+              echo "Minifying HTML: crates/urae-wasm/public/index.html"
+              npx --yes html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o crates/urae-wasm/public/index.html crates/urae-wasm/public/index.html || true
+            fi
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload compiled assets artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'crates/urae-wasm/public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

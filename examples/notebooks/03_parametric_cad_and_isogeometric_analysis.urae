@@ -1,0 +1,17 @@
+# URAE Mathematics Notepad: Parametric CAD & Isogeometric Analysis (IGA)
+# Interactive generative design for precision mechanical components, NURBS patches, and IGA stiffness quadrature.
+
+# Parametric Involute Spur Gear (teeth=18, module=2.5mm, pressure_angle=20 deg)
+gear!(teeth = 18, module = 2.5, pressure_angle = 20.0, face_width = 12.0)
+
+# ISO Metric Threaded Fastener (M10 x 1.5, length=30mm)
+screw!(dia = 10.0, pitch = 1.5, len = 30.0, head = Hex)
+
+# NACA 4-Digit Cambered Airfoil Wing
+airfoil!(code = "4412", chord = 15.0, span = 40.0)
+
+# Cox-de Boor B-Spline Basis Function of degree p=2
+cox_de_boor_basis!(0.5, 0, 2, [0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+
+# Isogeometric Analysis (IGA) 2D Stiffness Matrix Quadrature
+iga_stiffness_entry_2d!(0, 0, 1, 1, [0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0])

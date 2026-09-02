@@ -1,1 +1,10 @@
 /target
+*.log
+*.math
+*.json
+!Cargo.lock
+!package.json
+!tsconfig.json
+!package-lock.json
+dist/
+.DS_Store

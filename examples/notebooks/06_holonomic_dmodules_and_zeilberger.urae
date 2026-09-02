@@ -1,0 +1,16 @@
+# URAE Mathematics Notepad: Holonomic D-Modules & Zeilberger Creative Telescoping
+# Interactive workspace for non-commutative Weyl algebras, Gröbner bases, and automated hypergeometric sum proofs.
+
+# Coordinate operator x and derivative operator d/dx in Weyl algebra A_1
+x = weyl_x!(1, 0, 1)
+d = weyl_d!(1, 0, 1)
+
+# Canonical Weyl Commutation Relation: [d, x] = d * x - x * d = 1
+weyl_commute!(d, x)
+
+# Automated Zeilberger Creative Telescoping for Binomial Sum sum_k binom(n, k) = 2^n
+# Recurrence: F(n+1, k) - 2 F(n, k) = G(n, k+1) - G(n, k)
+zeilberger_binomial_proof!()
+
+# Differential Creative Telescoping for Parameter Integrals: I(x) = int_R exp(-y^2 + 2xy) dy
+almkvist_zeilberger_gaussian!()

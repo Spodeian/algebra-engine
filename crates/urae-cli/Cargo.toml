@@ -1,0 +1,26 @@
+[package]
+name = "urae-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "High-speed command-line REPL and JSON stream processing interface for URAE"
+
+[[bin]]
+name = "urae-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+algebra-core.workspace = true
+algebra-engine.workspace = true
+algebra-advanced.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

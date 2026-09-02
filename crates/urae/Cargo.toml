@@ -1,0 +1,29 @@
+[package]
+name = "urae"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Universal Rust Algebra Engine (URAE) - Unified Computer Algebra System Facade and Prelude"
+
+[lints]
+workspace = true
+
+[dependencies]
+algebra-core.workspace = true
+algebra-engine.workspace = true
+algebra-advanced = { workspace = true, optional = true }
+urae-cli = { workspace = true, optional = true }
+
+[features]
+default = ["full"]
+full = ["engine", "advanced", "agent", "cli"]
+engine = []
+advanced = ["dep:algebra-advanced"]
+agent = ["advanced", "algebra-advanced/agent"]
+cli = ["dep:urae-cli"]
+
+[dev-dependencies]
+criterion.workspace = true

@@ -1,0 +1,32 @@
+[package]
+name = "urae-wasm"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "WebAssembly edge target and Cloudflare Workers serverless engine for URAE"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+algebra-core.workspace = true
+algebra-engine.workspace = true
+urae-cli.workspace = true
+urae-notebook.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+getrandom = { version = "0.3", features = ["wasm_js"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

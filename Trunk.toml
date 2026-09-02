@@ -1,0 +1,10 @@
+[build]
+target = "crates/urae-wasm/public/index.html"
+dist = "crates/urae-wasm/public/dist"
+wasm_opt = "z"
+
+[serve]
+port = 8080
+
+[clean]
+value = true

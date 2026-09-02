@@ -1,0 +1,23 @@
+PROPRIETARY SOFTWARE LICENSE AGREEMENT
+
+Copyright (c) 2026 Universal Rust Algebra Engine (URAE) Contributors. All Rights Reserved.
+
+NOTICE TO USER: PLEASE READ THIS PROPRIETARY SOFTWARE LICENSE AGREEMENT ("AGREEMENT") CAREFULLY. BY DOWNLOADING, INSTALLING, COPYING, ACCESSING, OR USING ALL OR ANY PORTION OF THE UNIVERSAL RUST ALGEBRA ENGINE (URAE) SOFTWARE, LIBRARIES, SOURCE CODE, BINARIES, OR DOCUMENTATION ("SOFTWARE"), YOU ACCEPT AND AGREE TO BE BOUND BY ALL THE TERMS AND CONDITIONS OF THIS AGREEMENT.
+
+1. PROPRIETARY RIGHTS AND OWNERSHIP
+The Software, including its source code, object code, architecture, algorithms, documentation, interfaces, and visual elements, is confidential and proprietary to the Copyright Holders. The Software is protected by copyright laws, international copyright treaties, and other intellectual property laws and treaties. All title, ownership rights, and intellectual property rights in and to the Software remain exclusively with the Copyright Holders.
+
+2. LICENSE GRANT RESTRICTIONS
+Except as expressly authorized in writing by the Copyright Holders:
+(a) You may NOT copy, reproduce, modify, adapt, translate, or create derivative works based upon the Software in whole or in part.
+(b) You may NOT distribute, publish, sub-license, rent, lease, sell, assign, transfer, convey, or otherwise disclose the Software or any portion thereof to any third party.
+(c) You may NOT reverse engineer, decompile, disassemble, decrypt, or otherwise attempt to derive or discover the source code, underlying ideas, or structure of any compiled or binary components of the Software.
+(d) You may NOT incorporate or integrate the Software or any portion thereof into any commercial product, service, SaaS platform, or cloud hosting offering without a valid commercial license agreement explicitly executed by the Copyright Holders.
+
+3. NO WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+4. TERMINATION
+Any unauthorized use, copying, modification, or distribution of the Software automatically terminates this Agreement and any implied rights granted hereunder, and may subject the violator to civil and criminal penalties under applicable laws.
+
+For commercial licensing inquiries or authorization requests, please contact the repository maintainers.

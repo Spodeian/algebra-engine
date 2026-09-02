@@ -1,0 +1,18 @@
+[package]
+name = "urae-kernel"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Native Zero-Latency Jupyter Kernel for the Universal Rust Algebra Engine (URAE)"
+
+[lints]
+workspace = true
+
+[dependencies]
+urae = { workspace = true, features = ["full", "cli"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
