@@ -372,11 +372,11 @@ impl CommandPalette {
                                     egui::Color32::from_rgb(226, 232, 240)
                                 };
 
-                                let mut frame = egui::Frame::none().inner_margin(6.0);
+                                let mut frame = egui::Frame::NONE.inner_margin(6);
                                 if is_selected {
                                     frame = frame
                                         .fill(egui::Color32::from_rgb(30, 41, 59))
-                                        .rounding(4.0);
+                                        .corner_radius(4);
                                 }
 
                                 let resp = frame

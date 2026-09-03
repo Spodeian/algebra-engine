@@ -69,7 +69,7 @@ fn test_theme_kind_to_style_produces_valid_egui_style() {
         let style = theme.to_style();
         // Rounded corners should be applied
         assert!(
-            style.visuals.widgets.noninteractive.rounding.nw >= 4.0,
+            style.visuals.widgets.noninteractive.corner_radius.nw >= 4,
             "Theme {:?} should have >= 4px rounding",
             theme
         );

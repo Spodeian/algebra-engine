@@ -174,6 +174,7 @@ impl Viewport3D {
                 rect,
                 8.0,
                 egui::Stroke::new(1.0, egui::Color32::from_rgb(51, 65, 85)),
+                egui::StrokeKind::Inside,
             );
 
             // Fetch or generate model geometry

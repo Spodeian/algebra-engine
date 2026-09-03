@@ -328,7 +328,7 @@ impl UraeNotebookApp {
 
         fonts.font_data.insert(
             "NotoSansMath".to_string(),
-            egui::FontData::from_static(include_bytes!("../assets/NotoSansMath-Regular.ttf")),
+            egui::FontData::from_static(include_bytes!("../assets/NotoSansMath-Regular.ttf")).into(),
         );
 
         fonts
@@ -621,11 +621,11 @@ impl UraeNotebookApp {
         // Combined Alert
         if is_ephemeral && is_quota && !self.dismissed_combined_warning {
             ui.scope(|ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(180, 40, 40, 45))
                     .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 60, 60)))
-                    .rounding(6.0)
-                    .inner_margin(8.0)
+                    .corner_radius(6)
+                    .inner_margin(8)
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(
@@ -650,11 +650,11 @@ impl UraeNotebookApp {
             ui.add_space(4.0);
         } else if is_ephemeral && !self.dismissed_ephemeral_warning {
             ui.scope(|ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
                     .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 160, 30)))
-                    .rounding(6.0)
-                    .inner_margin(8.0)
+                    .corner_radius(6)
+                    .inner_margin(8)
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
@@ -673,11 +673,11 @@ impl UraeNotebookApp {
             ui.add_space(4.0);
         } else if is_quota && !self.dismissed_quota_warning {
             ui.scope(|ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
                     .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 160, 30)))
-                    .rounding(6.0)
-                    .inner_margin(8.0)
+                    .corner_radius(6)
+                    .inner_margin(8)
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
@@ -917,7 +917,7 @@ impl eframe::App for UraeNotebookApp {
                 }
                 export_text.push('\n');
             }
-            ctx.output_mut(|o| o.copied_text = export_text);
+            ctx.copy_text(export_text);
             self.export_notice =
                 Some("Copied notepad with live evaluated results to clipboard!".to_string());
         }
@@ -928,7 +928,7 @@ impl eframe::App for UraeNotebookApp {
                 && i.key_pressed(egui::Key::E)
         }) {
             let md = self.state.session.export_markdown();
-            ctx.output_mut(|o| o.copied_text = md);
+            ctx.copy_text(md);
             self.export_notice = Some("Exported clean Markdown document to clipboard!".to_string());
         }
 
@@ -3245,11 +3245,11 @@ impl UraeNotebookApp {
                                         egui::Stroke::NONE
                                     };
 
-                                    egui::Frame::none()
+                                    egui::Frame::NONE
                                         .fill(frame_color)
                                         .stroke(frame_stroke)
-                                        .rounding(egui::Rounding::same(4.0))
-                                        .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                                        .corner_radius(4)
+                                        .inner_margin(egui::Margin::symmetric(4, 2))
                                         .show(ui, |ui| {
                                         ui.vertical(|ui| {
                                             match &pl.kind {
@@ -4149,17 +4149,17 @@ impl UraeNotebookApp {
                                 for ex in &filtered_examples {
                                     let is_selected = self.selected_example_id == ex.id;
                                     let card_frame = if is_selected {
-                                        egui::Frame::none()
+                                        egui::Frame::NONE
                                             .fill(egui::Color32::from_rgba_premultiplied(40, 90, 160, 45))
                                             .stroke(egui::Stroke::new(1.5, egui::Color32::from_rgb(100, 180, 255)))
-                                            .rounding(6.0)
-                                            .inner_margin(6.0)
+                                            .corner_radius(6)
+                                            .inner_margin(6)
                                     } else {
-                                        egui::Frame::none()
+                                        egui::Frame::NONE
                                             .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 30))
                                             .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 70, 70)))
-                                            .rounding(6.0)
-                                            .inner_margin(6.0)
+                                            .corner_radius(6)
+                                            .inner_margin(6)
                                     };
 
                                     card_frame.show(ui, |ui| {
@@ -4244,8 +4244,8 @@ impl UraeNotebookApp {
                     egui::Frame::window(&ctx.style())
                         .fill(palette.bg_card)
                         .stroke(egui::Stroke::new(1.0, palette.accent_primary))
-                        .rounding(egui::Rounding::same(8.0))
-                        .inner_margin(egui::Margin::symmetric(10.0, 8.0)),
+                        .corner_radius(8)
+                        .inner_margin(egui::Margin::symmetric(10, 8)),
                 )
                 .show(ctx, |ui| {
                     ui.horizontal(|ui| {

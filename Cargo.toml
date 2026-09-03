@@ -1,3 +1,102 @@
 [workspace]
-resolver = "3"
-members = ["auto-promoters"]
+resolver = "2"
+members = [
+    "crates/algebra-core",
+    "crates/algebra-engine",
+    "crates/algebra-advanced",
+    "crates/urae",
+    "crates/urae-notebook",
+    "crates/urae-cli",
+    "crates/urae-wasm",
+    "crates/urae-lsp",
+    "crates/urae-kernel",
+    "crates/urae-py",
+    "crates/urae-ffi",
+    "tests",
+]
+
+[workspace.package]
+version = "0.2.0"
+authors = ["Liam <spodeian@gmail.com>"]
+edition = "2021"
+license = "Proprietary"
+repository = "https://github.com/Spodeian/algebra-engine"
+homepage = "https://github.com/Spodeian/algebra-engine"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+all = "warn"
+
+[workspace.dependencies]
+# Internal workspace crates
+algebra-core = { path = "crates/algebra-core" }
+algebra-engine = { path = "crates/algebra-engine" }
+algebra-advanced = { path = "crates/algebra-advanced" }
+urae = { path = "crates/urae" }
+urae-notebook = { path = "crates/urae-notebook" }
+urae-cli = { path = "crates/urae-cli" }
+urae-wasm = { path = "crates/urae-wasm" }
+urae-lsp = { path = "crates/urae-lsp" }
+urae-kernel = { path = "crates/urae-kernel" }
+urae-py = { path = "crates/urae-py" }
+urae-ffi = { path = "crates/urae-ffi" }
+
+# GUI & Graphic dependencies
+egui = "0.31"
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
+egui_plot = "0.31"
+
+# Numerics & High-Precision CAS
+bnum = "0.13"
+malachite = "0.9"
+num = "0.4"
+num-rational = "0.4"
+num-traits = "0.2"
+num-bigint = "0.4"
+dashu = "0.4"
+egg = "0.9"
+
+# Concurrency, collections & data structures
+dashmap = "6.1"
+rayon = "1.10"
+parking_lot = "0.12"
+smallvec = { version = "1.13", features = ["serde"] }
+ahash = { version = "0.8", features = ["serde"] }
+
+# Serialization & formatters
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+bson = "2.13"
+base64 = "0.22"
+nom = "7.1"
+
+# Logging & error handling
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Networking & HTTP
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+
+# WASM & Web bindings
+getrandom = { version = "0.3", features = ["wasm_js"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+wasm-bindgen-test = "0.3"
+console_error_panic_hook = "0.1"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlCanvasElement", "Performance"] }
+web-time = "1.1"
+
+# Benchmarking
+criterion = "0.5"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+overflow-checks = false

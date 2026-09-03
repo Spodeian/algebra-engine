@@ -3,7 +3,7 @@
 //! Provides customizable, high-contrast, accessible themes with tailored math syntax highlighting,
 //! refined widget geometry, and custom `egui::Visuals`.
 
-use egui::{Color32, Margin, Rounding, Stroke, Style, Vec2, Visuals};
+use egui::{Color32, CornerRadius, Margin, Stroke, Style, Vec2, Visuals};
 use serde::{Deserialize, Serialize};
 
 /// Supported theme presets in URAE.
@@ -332,9 +332,9 @@ impl ThemeKind {
         visuals.extreme_bg_color = p.bg_input;
         visuals.code_bg_color = p.bg_input;
 
-        // Modern Rounded Corners (6.0–8.0px)
-        visuals.window_rounding = Rounding::same(8.0);
-        visuals.menu_rounding = Rounding::same(6.0);
+        // Modern Rounded Corners (6–8px)
+        visuals.window_corner_radius = CornerRadius::same(8);
+        visuals.menu_corner_radius = CornerRadius::same(6);
 
         // Window & Dialog Strokes
         visuals.window_stroke = Stroke::new(1.0, p.border);
@@ -343,25 +343,25 @@ impl ThemeKind {
         visuals.widgets.noninteractive.bg_fill = p.bg_panel;
         visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.border);
         visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.text_primary);
-        visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
+        visuals.widgets.noninteractive.corner_radius = CornerRadius::same(6);
 
         visuals.widgets.inactive.bg_fill = p.bg_card;
         visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, p.border);
         visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, p.text_primary);
-        visuals.widgets.inactive.rounding = Rounding::same(6.0);
+        visuals.widgets.inactive.corner_radius = CornerRadius::same(6);
 
         // Widget Hover State
         visuals.widgets.hovered.bg_fill = p.accent_primary.linear_multiply(0.25);
         visuals.widgets.hovered.bg_stroke = Stroke::new(1.5, p.accent_primary);
         visuals.widgets.hovered.fg_stroke = Stroke::new(1.5, p.text_primary);
-        visuals.widgets.hovered.rounding = Rounding::same(6.0);
+        visuals.widgets.hovered.corner_radius = CornerRadius::same(6);
         visuals.widgets.hovered.expansion = 1.0;
 
         // Widget Active / Clicked State
         visuals.widgets.active.bg_fill = p.accent_primary.linear_multiply(0.4);
         visuals.widgets.active.bg_stroke = Stroke::new(2.0, p.accent_primary);
         visuals.widgets.active.fg_stroke = Stroke::new(2.0, Color32::WHITE);
-        visuals.widgets.active.rounding = Rounding::same(6.0);
+        visuals.widgets.active.corner_radius = CornerRadius::same(6);
         visuals.widgets.active.expansion = 0.5;
 
         // Selection Highlighting
@@ -381,8 +381,8 @@ impl ThemeKind {
         // Modern spacing & padding metrics
         style.spacing.item_spacing = Vec2::new(8.0, 8.0);
         style.spacing.button_padding = Vec2::new(10.0, 6.0);
-        style.spacing.window_margin = Margin::same(12.0);
-        style.spacing.menu_margin = Margin::same(8.0);
+        style.spacing.window_margin = Margin::same(12);
+        style.spacing.menu_margin = Margin::same(8);
         style.spacing.indent = 16.0;
         style.spacing.scroll.bar_width = 8.0;
         style.spacing.scroll.bar_inner_margin = 2.0;

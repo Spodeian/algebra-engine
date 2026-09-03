@@ -5,6 +5,8 @@
 //! Allows embedding the Universal Rust Algebra Engine into C, C++, Python, WebAssembly (WASM),
 //! and other native host environments.
 
+#![allow(unsafe_code)]
+
 use algebra_core::format::{Formatter, LatexFormatter};
 use algebra_core::parser::ExprParser;
 use algebra_core::ExprGraph;

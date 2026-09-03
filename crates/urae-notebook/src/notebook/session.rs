@@ -290,7 +290,7 @@ pub struct SessionData {
 /// Export `SessionData` to zlib-compressed BSON binary blob
 pub fn export_session_to_compressed_bson(session: &SessionData) -> Result<Vec<u8>, String> {
     let raw_bson =
-        bson::serialize_to_vec(session).map_err(|e| format!("BSON serialization error: {}", e))?;
+        bson::to_vec(session).map_err(|e| format!("BSON serialization error: {}", e))?;
     let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&raw_bson, 6);
     Ok(compressed)
 }
@@ -301,7 +301,7 @@ pub fn import_session_from_compressed_bson(bytes: &[u8]) -> Result<SessionData, 
         Ok(decomp) => decomp,
         Err(_) => bytes.to_vec(),
     };
-    bson::deserialize_from_slice::<SessionData>(&decompressed)
+    bson::from_slice::<SessionData>(&decompressed)
         .map_err(|e| format!("BSON deserialization error: {}", e))
 }
 
