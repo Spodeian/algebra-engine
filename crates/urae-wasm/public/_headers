@@ -39,15 +39,5 @@
   Cache-Control: public, max-age=0, must-revalidate
   Content-Type: application/javascript; charset=utf-8
 
-/*.wasm
-  Cache-Control: public, max-age=0, must-revalidate
-  Access-Control-Allow-Origin: *
-  Cross-Origin-Resource-Policy: cross-origin
-  Content-Type: application/wasm
-
-/*.js
-  Cache-Control: public, max-age=0, must-revalidate
-  Content-Type: application/javascript; charset=utf-8
-
 /*.css
   Cache-Control: public, max-age=86400, stale-while-revalidate=604800

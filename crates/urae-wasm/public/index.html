@@ -53,6 +53,22 @@
   </div>
 
   <script>
+    // WebGL Deprecation Interceptor for WEBGL_debug_renderer_info (Firefox privacy policy)
+    if (typeof WebGLRenderingContext !== 'undefined') {
+      const origGetExt = WebGLRenderingContext.prototype.getExtension;
+      WebGLRenderingContext.prototype.getExtension = function(name) {
+        if (name === 'WEBGL_debug_renderer_info') return null;
+        return origGetExt.apply(this, arguments);
+      };
+    }
+    if (typeof WebGL2RenderingContext !== 'undefined') {
+      const origGetExt2 = WebGL2RenderingContext.prototype.getExtension;
+      WebGL2RenderingContext.prototype.getExtension = function(name) {
+        if (name === 'WEBGL_debug_renderer_info') return null;
+        return origGetExt2.apply(this, arguments);
+      };
+    }
+
     // PWA & StorageManager Lifecycle Management
     window.__pwaInstallPrompt = null;
     window.__isPWAInstalled = false;
@@ -279,7 +295,7 @@
     // 3. Launch WASM Module and Canvas Runner
     async function run() {
       try {
-        await init('./pkg/urae_wasm_bg.wasm?v=20260904');
+        await init({ module_or_path: './pkg/urae_wasm_bg.wasm?v=20260904' });
         window.wasm_process_json = wasm_process_json;
 
         console.log("%c⚡ Universal Rust Algebra Engine (URAE) Active!", "color: #58a6ff; font-weight: bold; font-size: 14px;");
