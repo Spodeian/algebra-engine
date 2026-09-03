@@ -159,7 +159,7 @@ fi
 
 DIST_DIR="crates/urae-wasm/public"
 
-# Run wasm-opt pass on generated wasm artifact with full performance optimizations
+# Run wasm-opt pass on generated wasm artifact with bulk memory and performance optimizations
 WASM_OPT_FLAGS=(
     "-Oz"
     "--enable-bulk-memory"
@@ -167,10 +167,6 @@ WASM_OPT_FLAGS=(
     "--enable-mutable-globals"
     "--enable-sign-ext"
     "--enable-nontrapping-float-to-int"
-    "--enable-reference-types"
-    "--enable-multivalue"
-    "--strip-debug"
-    "--strip-producers"
 )
 
 if [ -x "$WASM_OPT_BIN" ] || command -v wasm-opt &> /dev/null; then
@@ -182,13 +178,20 @@ if [ -x "$WASM_OPT_BIN" ] || command -v wasm-opt &> /dev/null; then
     done
 fi
 
-# 6. Production Asset Minification (HTML, CSS, JS)
+# 6. Deployment Cache Invalidation & Version Stamping
+BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || date +%s)
+echo "=== Stamping Deployment Cache Invalidation with BUILD_ID: $BUILD_ID ==="
+if [ -f "$DIST_DIR/sw.js" ]; then
+    sed -i "s/CACHE_NAME = '.*'/CACHE_NAME = 'urae-cache-${BUILD_ID}'/g" "$DIST_DIR/sw.js" 2>/dev/null || true
+fi
+
+# 7. Production Asset Minification (HTML, CSS, JS)
 if [ -d "$DIST_DIR" ]; then
     echo "=== Running Production Asset Minification (HTML, CSS, JS) for '$DIST_DIR' ==="
 
     if command -v npx &> /dev/null; then
         echo "Minifying JavaScript and CSS assets using esbuild..."
-        for js_file in "$DIST_DIR"/*.js "$DIST_DIR"/pkg/*.js; do
+        for js_file in "$DIST_DIR"/*.js; do
             if [ -f "$js_file" ]; then
                 echo "  Minifying JS: $js_file"
                 npx --yes esbuild "$js_file" --minify --allow-overwrite --outfile="$js_file" 2>/dev/null || true

@@ -1,5 +1,5 @@
-// Service Worker for URAE — Immutable Serverless Deployment Caching Strategy
-const CACHE_NAME = 'urae-algebra-engine-cache-v1';
+// Service Worker for URAE — Atomic Serverless Deployment Caching Strategy
+const CACHE_NAME = 'urae-algebra-engine-cache-v2';
 
 // Static assets to pre-cache on install
 const PRECACHE_ASSETS = [
@@ -47,9 +47,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   const isNavigation = event.request.mode === 'navigate' || event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname === '/';
+  const isCodeAsset = url.pathname.includes('/pkg/') || url.pathname.endsWith('.wasm') || url.pathname.endsWith('.js');
 
-  if (isNavigation) {
-    // Network-First for HTML: Always fetch newest deployment entrypoint from edge CDN when online; fallback to cached shell when offline
+  if (isNavigation || isCodeAsset) {
+    // Network-First for HTML, WASM binaries, and JS wrappers:
+    // Always fetch newest deployment assets from edge CDN when online so JS and WASM are always in lockstep;
+    // fallback to cache when offline.
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
@@ -59,10 +62,14 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html') || caches.match('./')))
+        .catch(() => caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          if (isNavigation) return caches.match('./index.html') || caches.match('./');
+          return Promise.reject('Resource offline');
+        }))
     );
   } else {
-    // Cache-First for immutable content-hashed assets (.wasm, .js, .css, images)
+    // Cache-First for static media, icons, and fonts
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) {
