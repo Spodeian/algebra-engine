@@ -1,5 +1,5 @@
 // Service Worker for URAE — Atomic Cache-First with Background Network Revalidation
-const CACHE_NAME = 'urae-algebra-engine-cache-v2';
+const CACHE_NAME = 'urae-cache-20260904';
 
 // Core assets to pre-cache on install to guarantee complete atomic offline capability
 const PRECACHE_ASSETS = [
@@ -7,8 +7,8 @@ const PRECACHE_ASSETS = [
   './index.html',
   './manifest.json',
   './favicon.ico',
-  './pkg/urae_wasm.js',
-  './pkg/urae_wasm_bg.wasm'
+  './pkg/urae_wasm.js?v=20260904',
+  './pkg/urae_wasm_bg.wasm?v=20260904'
 ];
 
 // 1. Pre-cache all matching assets on install and activate immediately

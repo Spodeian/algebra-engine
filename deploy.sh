@@ -183,6 +183,10 @@ BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || date +%s)
 echo "=== Stamping Deployment Cache Invalidation with BUILD_ID: $BUILD_ID ==="
 if [ -f "$DIST_DIR/sw.js" ]; then
     sed -i "s/CACHE_NAME = '.*'/CACHE_NAME = 'urae-cache-${BUILD_ID}'/g" "$DIST_DIR/sw.js" 2>/dev/null || true
+    sed -i "s/?v=[a-zA-Z0-9_-]*/?v=${BUILD_ID}/g" "$DIST_DIR/sw.js" 2>/dev/null || true
+fi
+if [ -f "$DIST_DIR/index.html" ]; then
+    sed -i "s/?v=[a-zA-Z0-9_-]*/?v=${BUILD_ID}/g" "$DIST_DIR/index.html" 2>/dev/null || true
 fi
 
 # 7. Production Asset Minification (HTML, CSS, JS)

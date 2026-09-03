@@ -179,7 +179,7 @@
   </script>
 
   <script type="module">
-    import init, { wasm_process_json, start_notebook_web } from './pkg/urae_wasm.js';
+    import init, { wasm_process_json, start_notebook_web } from './pkg/urae_wasm.js?v=20260904';
 
     // 1. Define global window.urae CLI & Edge API for F12 Developer Console
     const uraeFn = function(cmdStr) {
@@ -279,7 +279,7 @@
     // 3. Launch WASM Module and Canvas Runner
     async function run() {
       try {
-        await init();
+        await init('./pkg/urae_wasm_bg.wasm?v=20260904');
         window.wasm_process_json = wasm_process_json;
 
         console.log("%c⚡ Universal Rust Algebra Engine (URAE) Active!", "color: #58a6ff; font-weight: bold; font-size: 14px;");
