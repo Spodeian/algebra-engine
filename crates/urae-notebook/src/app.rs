@@ -11,6 +11,7 @@ use std::collections::HashSet;
 use urae::calculus::SymbolicCalculus;
 use urae::format::Formatter;
 use urae::geometry::{ArbitraryCurvilinearSystem, CoordinateSystem};
+use base64::Engine;
 
 pub fn format_latex_as_pretty_unicode(latex_str: &str) -> String {
     let mut s = latex_str.trim().to_string();
@@ -162,12 +163,24 @@ pub struct UraeNotebookApp {
     pub hovered_line_idx: Option<usize>,
     pub right_sidebar_width: f32,
     pub collapsed_plot_lines: HashSet<usize>,
+    pub line_screen_positions: std::collections::HashMap<usize, egui::Pos2>,
+    pub inspector_to_focus: Option<String>,
+    pub active_scrubbing: Option<ActiveScrubbing>,
 
     // Performance Debouncing and Fast Auto-Save (<500ms)
     pub last_keystroke_time: web_time::Instant,
     pub is_edit_dirty: bool,
     pub last_autosave_time: web_time::Instant,
     pub is_save_dirty: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActiveScrubbing {
+    pub byte_range: (usize, usize),
+    pub original_val: f64,
+    pub has_decimal: bool,
+    pub decimal_places: usize,
+    pub start_pointer_x: f32,
 }
 
 impl Default for UraeNotebookApp {
@@ -207,6 +220,9 @@ impl Default for UraeNotebookApp {
             hovered_line_idx: None,
             right_sidebar_width: 280.0,
             collapsed_plot_lines: HashSet::new(),
+            line_screen_positions: std::collections::HashMap::new(),
+            inspector_to_focus: None,
+            active_scrubbing: None,
 
             // Storage defaults
             show_storage_modal: false,
@@ -290,8 +306,9 @@ impl UraeNotebookApp {
             let sym = self.active_open_inspectors.remove(pos);
             self.active_open_inspectors.push(sym);
         } else {
-            self.active_open_inspectors.push(clean);
+            self.active_open_inspectors.push(clean.clone());
         }
+        self.inspector_to_focus = Some(clean);
     }
 
     /// Create new `UraeNotebookApp` instance initializing fonts and available notebooks before the first frame.
@@ -593,23 +610,28 @@ impl UraeNotebookApp {
         }
     }
 
+    /// Triggers a cross-platform file download (browser download in WASM, filesystem write on native desktop).
+    pub fn trigger_file_download(&self, filename: &str, data: &[u8], _mime_type: &str) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(data);
+            let code = format!(
+                "if (window.__triggerBinaryDownload) {{ window.__triggerBinaryDownload({:?}, {:?}, {:?}); }}",
+                filename, b64, _mime_type
+            );
+            let _ = js_sys::eval(&code);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = std::fs::write(filename, data);
+        }
+    }
+
     /// Download active session as a compressed .bson binary file
     pub fn download_bson_backup(&self) {
         if let Ok(bytes) = self.export_current_session_compressed_bson() {
-            #[cfg(target_arch = "wasm32")]
-            {
-                use base64::Engine;
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                let code = format!(
-                    "if (window.__triggerBinaryDownload) {{ window.__triggerBinaryDownload({:?}, {:?}, 'application/octet-stream'); }}",
-                    "notebook_backup.bson", b64
-                );
-                let _ = js_sys::eval(&code);
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let _ = std::fs::write("notebook_backup.bson", bytes);
-            }
+            self.trigger_file_download("notebook_backup.bson", &bytes, "application/octet-stream");
         }
     }
 
@@ -1039,25 +1061,37 @@ impl eframe::App for UraeNotebookApp {
                     ui.menu_button("📤 Export", |ui| {
                         if ui.button("LaTeX (.tex)").clicked() {
                             let tex = format!("\\documentclass{{article}}\n\\begin{{document}}\n{}\n\\end{{document}}", self.state.session.raw_document_text);
-                            let _ = std::fs::write("notebook_export.tex", tex);
+                            self.trigger_file_download("notebook_export.tex", tex.as_bytes(), "text/x-tex");
                             self.export_notice = Some("Exported to 'notebook_export.tex'".to_string());
                             ui.close_menu();
                         }
                         if ui.button("Python SymPy (.py)").clicked() {
                             let py = format!("# URAE Exported Python Script\nimport sympy as sp\nx = sp.Symbol('x')\n# Document Text:\n\"\"\"{}\"\"\"", self.state.session.raw_document_text);
-                            let _ = std::fs::write("notebook_export.py", py);
+                            self.trigger_file_download("notebook_export.py", py.as_bytes(), "text/x-python");
                             self.export_notice = Some("Exported to 'notebook_export.py'".to_string());
                             ui.close_menu();
                         }
                         if ui.button("Lean 4 Proof (.lean)").clicked() {
                             let lean = "-- URAE Exported Lean 4 Formal Script\nimport Mathlib\n";
-                            let _ = std::fs::write("notebook_export.lean", lean);
+                            self.trigger_file_download("notebook_export.lean", lean.as_bytes(), "text/plain");
                             self.export_notice = Some("Exported to 'notebook_export.lean'".to_string());
                             ui.close_menu();
                         }
                         if ui.button("Compressed BSON (.bson)").clicked() {
                             self.download_bson_backup();
                             self.export_notice = Some("Exported compressed BSON backup".to_string());
+                            ui.close_menu();
+                        }
+                        ui.separator();
+                        if ui.button("🌐 WASM Embed IFrame Snippet").on_hover_text("Generate embeddable iframe tag for blogs, textbooks & documentation").clicked() {
+                            let doc_bytes = self.state.session.raw_document_text.as_bytes();
+                            let encoded = base64::engine::general_purpose::STANDARD.encode(doc_bytes);
+                            let iframe_html = format!(
+                                r#"<iframe src="https://urae.app/embed?data={}" width="800" height="600" frameborder="0" style="border: 1px solid #334155; border-radius: 8px;" allow="clipboard-write"></iframe>"#,
+                                encoded
+                            );
+                            ctx.copy_text(iframe_html);
+                            self.export_notice = Some("Copied WASM embed iframe snippet to clipboard!".to_string());
                             ui.close_menu();
                         }
                     });
@@ -1734,6 +1768,11 @@ impl eframe::App for UraeNotebookApp {
                     crate::ui::Viewport3D::show(ui, &mut self.viewport_3d_state, None);
                 });
             self.show_viewport_3d = is_open;
+
+            if let Some(req) = self.viewport_3d_state.export_request.take() {
+                self.trigger_file_download(&req.filename, &req.data, req.format.mime_type());
+                self.export_notice = Some(format!("Exported 3D model to '{}'", req.filename));
+            }
         }
 
         if state_changed {
@@ -3171,6 +3210,80 @@ impl UraeNotebookApp {
                         state_changed = true;
                     }
 
+                    // Inline Number Scrubbing via Alt + Drag
+                    let is_alt_down = ui.input(|i| i.modifiers.alt);
+                    if is_alt_down && (edit_resp.hovered() || self.active_scrubbing.is_some()) {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                    }
+
+                    if is_alt_down && ui.input(|i| i.pointer.primary_down()) {
+                        if self.active_scrubbing.is_none() {
+                            let pointer_pos = ui.input(|i| i.pointer.interact_pos());
+                            let char_idx = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id)
+                                .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
+                            if let Some(c_idx) = char_idx {
+                                if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
+                                    find_numeric_literal_at(&self.state.session.raw_document_text, c_idx)
+                                {
+                                    let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
+                                    self.active_scrubbing = Some(ActiveScrubbing {
+                                        byte_range: (byte_start, byte_end),
+                                        original_val: val,
+                                        has_decimal: has_dec,
+                                        decimal_places: dec_places,
+                                        start_pointer_x: start_x,
+                                    });
+                                }
+                            }
+                        }
+
+                        if let Some(ref mut scrub) = self.active_scrubbing {
+                            let curr_x = ui.input(|i| {
+                                i.pointer
+                                    .interact_pos()
+                                    .map(|p| p.x)
+                                    .unwrap_or(scrub.start_pointer_x)
+                            });
+                            let delta_x = curr_x - scrub.start_pointer_x;
+                            let is_shift = ui.input(|i| i.modifiers.shift);
+                            let step = if is_shift {
+                                if scrub.has_decimal {
+                                    10.0_f64.powi(-(scrub.decimal_places as i32)) * 0.1
+                                } else {
+                                    0.1
+                                }
+                            } else if scrub.has_decimal {
+                                10.0_f64.powi(-(scrub.decimal_places as i32))
+                            } else {
+                                1.0
+                            };
+                            let new_val = scrub.original_val + (delta_x as f64 * step * 0.2);
+
+                            let new_str = if scrub.has_decimal {
+                                format!("{:.*}", scrub.decimal_places, new_val)
+                            } else {
+                                format!("{:.0}", new_val)
+                            };
+
+                            let (start, end) = scrub.byte_range;
+                            if start <= end && end <= self.state.session.raw_document_text.len() {
+                                if &self.state.session.raw_document_text[start..end] != new_str {
+                                    self.state
+                                        .session
+                                        .raw_document_text
+                                        .replace_range(start..end, &new_str);
+                                    scrub.byte_range.1 = start + new_str.len();
+                                    self.is_edit_dirty = true;
+                                    self.last_keystroke_time = web_time::Instant::now();
+                                    state_changed = true;
+                                    ui.ctx().request_repaint();
+                                }
+                            }
+                        }
+                    } else if !ui.input(|i| i.pointer.primary_down()) {
+                        self.active_scrubbing = None;
+                    }
+
                     // 3. Reactive Gutter Column (if show_right_sidebar is true)
                     if self.show_right_sidebar {
                         let (res_rect, res_resp) = ui.allocate_exact_size(
@@ -3245,7 +3358,7 @@ impl UraeNotebookApp {
                                         egui::Stroke::NONE
                                     };
 
-                                    egui::Frame::NONE
+                                    let line_resp = egui::Frame::NONE
                                         .fill(frame_color)
                                         .stroke(frame_stroke)
                                         .corner_radius(4)
@@ -3512,6 +3625,12 @@ impl UraeNotebookApp {
                                             }
                                         });
                                     });
+
+                                    self.line_screen_positions.insert(pl.line_idx, line_resp.response.rect.left_bottom());
+                                    if line_resp.response.hovered() {
+                                        new_hovered_line = Some(pl.line_idx);
+                                        self.inspected_symbol = Some(line_token.clone());
+                                    }
                                 }
                             },
                         );
@@ -4231,11 +4350,31 @@ impl UraeNotebookApp {
         let mut symbol_to_open = None;
         let mut to_close = Vec::new();
 
+        if let Some(focus_sym) = self.inspector_to_focus.take() {
+            let window_id = egui::Id::new(format!("obj_inspector_window_{}", focus_sym));
+            ctx.move_to_top(egui::LayerId::new(egui::Order::Middle, window_id));
+        }
+
         for sym_name in &self.active_open_inspectors {
             let mut is_open = true;
             let window_id = egui::Id::new(format!("obj_inspector_window_{}", sym_name));
 
-            egui::Window::new(format!("inspector_{}", sym_name))
+            // Determine default position: right below the highlighted line or origin line
+            let mut default_pos = None;
+            if let Some(num_str) = sym_name.strip_prefix('$') {
+                if let Ok(line_num) = num_str.parse::<usize>() {
+                    if line_num > 0 {
+                        default_pos = self.line_screen_positions.get(&(line_num - 1)).copied();
+                    }
+                }
+            }
+            if default_pos.is_none() {
+                if let Some(h_idx) = self.hovered_line_idx {
+                    default_pos = self.line_screen_positions.get(&h_idx).copied();
+                }
+            }
+
+            let mut win = egui::Window::new(format!("inspector_{}", sym_name))
                 .id(window_id)
                 .title_bar(false) // NO HEADER
                 .resizable(true)
@@ -4246,24 +4385,29 @@ impl UraeNotebookApp {
                         .stroke(egui::Stroke::new(1.0, palette.accent_primary))
                         .corner_radius(8)
                         .inner_margin(egui::Margin::symmetric(10, 8)),
-                )
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.colored_label(palette.accent_primary, format!("🔍 {}", sym_name));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("✕").on_hover_text("Close inspector").clicked() {
-                                is_open = false;
-                            }
-                        });
-                    });
-                    ui.separator();
+                );
 
-                    if let Some(info) = self.state.get_symbol_info_card(sym_name) {
-                        render_symbol_info_card_content(ui, &info, &palette, &mut symbol_to_open);
-                    } else {
-                        ui.weak(format!("No symbol metadata for '{}'", sym_name));
-                    }
+            if let Some(pos) = default_pos {
+                win = win.default_pos(egui::pos2(pos.x.max(40.0), pos.y + 4.0));
+            }
+
+            win.show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.colored_label(palette.accent_primary, format!("🔍 {}", sym_name));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("✕").on_hover_text("Close inspector").clicked() {
+                            is_open = false;
+                        }
+                    });
                 });
+                ui.separator();
+
+                if let Some(info) = self.state.get_symbol_info_card(sym_name) {
+                    render_symbol_info_card_content(ui, &info, &palette, &mut symbol_to_open);
+                } else {
+                    ui.weak(format!("No symbol metadata for '{}'", sym_name));
+                }
+            });
 
             if !is_open {
                 to_close.push(sym_name.clone());
@@ -4277,6 +4421,94 @@ impl UraeNotebookApp {
         if let Some(next_sym) = symbol_to_open {
             self.open_or_focus_inspector(&next_sym);
         }
+    }
+}
+
+/// Finds numeric literal around `char_idx` in `text`.
+/// Returns `Some((byte_start, byte_end, initial_val, has_decimal, decimal_places))`.
+pub fn find_numeric_literal_at(
+    text: &str,
+    char_idx: usize,
+) -> Option<(usize, usize, f64, bool, usize)> {
+    if text.is_empty() {
+        return None;
+    }
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    if chars.is_empty() {
+        return None;
+    }
+    let clamped_idx = char_idx.min(chars.len() - 1);
+
+    // Look around clamped_idx for digit or decimal point
+    let mut target_idx = clamped_idx;
+    if !chars[target_idx].1.is_ascii_digit() && chars[target_idx].1 != '.' {
+        if target_idx > 0
+            && (chars[target_idx - 1].1.is_ascii_digit() || chars[target_idx - 1].1 == '.')
+        {
+            target_idx -= 1;
+        } else if target_idx + 1 < chars.len()
+            && (chars[target_idx + 1].1.is_ascii_digit() || chars[target_idx + 1].1 == '.')
+        {
+            target_idx += 1;
+        } else {
+            return None;
+        }
+    }
+
+    if !chars[target_idx].1.is_ascii_digit() && chars[target_idx].1 != '.' {
+        return None;
+    }
+
+    // Expand backwards
+    let mut start_idx = target_idx;
+    while start_idx > 0 {
+        let prev_c = chars[start_idx - 1].1;
+        if prev_c.is_ascii_digit() || prev_c == '.' {
+            start_idx -= 1;
+        } else if prev_c == '-' {
+            if start_idx == 1 {
+                start_idx -= 1;
+            } else {
+                let before_minus = chars[start_idx - 2].1;
+                if before_minus.is_whitespace() || "+-*/=,(^".contains(before_minus) {
+                    start_idx -= 1;
+                }
+            }
+            break;
+        } else {
+            break;
+        }
+    }
+
+    // Expand forwards
+    let mut end_idx = target_idx;
+    while end_idx + 1 < chars.len() {
+        let next_c = chars[end_idx + 1].1;
+        if next_c.is_ascii_digit() || next_c == '.' {
+            end_idx += 1;
+        } else {
+            break;
+        }
+    }
+
+    let byte_start = chars[start_idx].0;
+    let byte_end = if end_idx + 1 < chars.len() {
+        chars[end_idx + 1].0
+    } else {
+        text.len()
+    };
+
+    let slice = &text[byte_start..byte_end];
+    if let Ok(val) = slice.parse::<f64>() {
+        let has_decimal = slice.contains('.');
+        let decimal_places = if let Some(dot_pos) = slice.find('.') {
+            slice.len().saturating_sub(dot_pos + 1)
+        } else {
+            0
+        };
+        Some((byte_start, byte_end, val, has_decimal, decimal_places))
+    } else {
+        None
     }
 }
 

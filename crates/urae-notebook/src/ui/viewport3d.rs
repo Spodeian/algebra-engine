@@ -22,6 +22,40 @@ pub struct Viewport3DState {
     pub color_mode: ViewportColorMode,
     /// Active 3D model preset for interactive demo.
     pub active_model: ViewportModelPreset,
+    /// Pending export request (if user clicked export in 3D toolbar).
+    pub export_request: Option<Export3DRequest>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Export3DFormat {
+    StlBinary,
+    StlAscii,
+    Obj,
+    Step,
+}
+
+impl Export3DFormat {
+    pub fn extension(&self) -> &'static str {
+        match self {
+            Self::StlBinary | Self::StlAscii => "stl",
+            Self::Obj => "obj",
+            Self::Step => "step",
+        }
+    }
+
+    pub fn mime_type(&self) -> &'static str {
+        match self {
+            Self::StlBinary => "application/octet-stream",
+            Self::StlAscii | Self::Obj | Self::Step => "text/plain",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Export3DRequest {
+    pub format: Export3DFormat,
+    pub filename: String,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -55,6 +89,7 @@ impl Default for Viewport3DState {
             wireframe: false,
             color_mode: ViewportColorMode::SolidBlue,
             active_model: ViewportModelPreset::InvoluteGear,
+            export_request: None,
         }
     }
 }
@@ -70,6 +105,18 @@ impl Viewport3D {
         state: &mut Viewport3DState,
         custom_mesh: Option<CustomMeshGeometry>,
     ) {
+        // Fetch or generate model geometry
+        let (verts, tris, stresses): (Vec<[f64; 3]>, Vec<[usize; 3]>, Vec<f64>) =
+            if let Some((v, t, s)) = custom_mesh {
+                (
+                    v.to_vec(),
+                    t.to_vec(),
+                    s.map(|arr| arr.to_vec()).unwrap_or_default(),
+                )
+            } else {
+                Self::get_preset_geometry(state.active_model)
+            };
+
         ui.vertical(|ui| {
             // Controls toolbar
             ui.horizontal_wrapped(|ui| {
@@ -135,6 +182,55 @@ impl Viewport3D {
                     state.zoom = 15.0;
                     state.pan = [0.0, 0.0];
                 }
+
+                ui.menu_button("📥 Export 3D", |ui| {
+                    let model_name = match state.active_model {
+                        ViewportModelPreset::InvoluteGear => "involute_gear",
+                        ViewportModelPreset::ThreadedBolt => "threaded_bolt",
+                        ViewportModelPreset::NacaWing => "naca_wing",
+                        ViewportModelPreset::HelicalSpring => "helical_spring",
+                        ViewportModelPreset::RiemannSqrt => "riemann_sqrt",
+                        ViewportModelPreset::RiemannLog => "riemann_log",
+                        ViewportModelPreset::UnitCube => "unit_cube",
+                    };
+
+                    if ui.button("STL (Binary - 3D Printing)").clicked() {
+                        let data = export_stl_binary(&verts, &tris);
+                        state.export_request = Some(Export3DRequest {
+                            format: Export3DFormat::StlBinary,
+                            filename: format!("{}.stl", model_name),
+                            data,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("STL (ASCII)").clicked() {
+                        let data = export_stl_ascii(&verts, &tris, model_name).into_bytes();
+                        state.export_request = Some(Export3DRequest {
+                            format: Export3DFormat::StlAscii,
+                            filename: format!("{}.stl", model_name),
+                            data,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("OBJ (Wavefront Mesh)").clicked() {
+                        let data = export_obj(&verts, &tris, model_name).into_bytes();
+                        state.export_request = Some(Export3DRequest {
+                            format: Export3DFormat::Obj,
+                            filename: format!("{}.obj", model_name),
+                            data,
+                        });
+                        ui.close_menu();
+                    }
+                    if ui.button("STEP (ISO 10303-21 CAD)").clicked() {
+                        let data = export_step(&verts, &tris, model_name).into_bytes();
+                        state.export_request = Some(Export3DRequest {
+                            format: Export3DFormat::Step,
+                            filename: format!("{}.step", model_name),
+                            data,
+                        });
+                        ui.close_menu();
+                    }
+                });
             });
 
             ui.add_space(4.0);
@@ -177,17 +273,6 @@ impl Viewport3D {
                 egui::StrokeKind::Inside,
             );
 
-            // Fetch or generate model geometry
-            let (verts, tris, stresses): (Vec<[f64; 3]>, Vec<[usize; 3]>, Vec<f64>) =
-                if let Some((v, t, s)) = custom_mesh {
-                    (
-                        v.to_vec(),
-                        t.to_vec(),
-                        s.map(|arr| arr.to_vec()).unwrap_or_default(),
-                    )
-                } else {
-                    Self::get_preset_geometry(state.active_model)
-                };
 
             // Project 3D vertices to 2D screen space
             let cos_y = state.yaw.cos();
@@ -322,4 +407,167 @@ impl Viewport3D {
             }
         }
     }
+}
+
+/// Serializes 3D triangular mesh into binary STL format (standard 80-byte header, 50 bytes per triangle).
+pub fn export_stl_binary(verts: &[[f64; 3]], tris: &[[usize; 3]]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(84 + tris.len() * 50);
+    let header = b"URAE 3D CAD Binary STL - Universal Rust Algebra Engine";
+    buf.extend_from_slice(header);
+    buf.resize(80, 0);
+
+    buf.extend_from_slice(&(tris.len() as u32).to_le_bytes());
+
+    for tri in tris {
+        let v0 = if tri[0] < verts.len() { verts[tri[0]] } else { [0.0; 3] };
+        let v1 = if tri[1] < verts.len() { verts[tri[1]] } else { [0.0; 3] };
+        let v2 = if tri[2] < verts.len() { verts[tri[2]] } else { [0.0; 3] };
+
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let mut nx = e1[1] * e2[2] - e1[2] * e2[1];
+        let mut ny = e1[2] * e2[0] - e1[0] * e2[2];
+        let mut nz = e1[0] * e2[1] - e1[1] * e2[0];
+        let len = (nx * nx + ny * ny + nz * nz).sqrt();
+        if len > 1e-9 {
+            nx /= len;
+            ny /= len;
+            nz /= len;
+        } else {
+            nx = 0.0;
+            ny = 0.0;
+            nz = 1.0;
+        }
+
+        buf.extend_from_slice(&(nx as f32).to_le_bytes());
+        buf.extend_from_slice(&(ny as f32).to_le_bytes());
+        buf.extend_from_slice(&(nz as f32).to_le_bytes());
+
+        buf.extend_from_slice(&(v0[0] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v0[1] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v0[2] as f32).to_le_bytes());
+
+        buf.extend_from_slice(&(v1[0] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v1[1] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v1[2] as f32).to_le_bytes());
+
+        buf.extend_from_slice(&(v2[0] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v2[1] as f32).to_le_bytes());
+        buf.extend_from_slice(&(v2[2] as f32).to_le_bytes());
+
+        buf.extend_from_slice(&0u16.to_le_bytes());
+    }
+
+    buf
+}
+
+/// Serializes 3D triangular mesh into human-readable ASCII STL format.
+pub fn export_stl_ascii(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> String {
+    let mut out = format!("solid {}\n", name);
+    for tri in tris {
+        let v0 = if tri[0] < verts.len() { verts[tri[0]] } else { [0.0; 3] };
+        let v1 = if tri[1] < verts.len() { verts[tri[1]] } else { [0.0; 3] };
+        let v2 = if tri[2] < verts.len() { verts[tri[2]] } else { [0.0; 3] };
+
+        let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
+        let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
+        let mut nx = e1[1] * e2[2] - e1[2] * e2[1];
+        let mut ny = e1[2] * e2[0] - e1[0] * e2[2];
+        let mut nz = e1[0] * e2[1] - e1[1] * e2[0];
+        let len = (nx * nx + ny * ny + nz * nz).sqrt();
+        if len > 1e-9 {
+            nx /= len;
+            ny /= len;
+            nz /= len;
+        } else {
+            nx = 0.0;
+            ny = 0.0;
+            nz = 1.0;
+        }
+
+        out.push_str(&format!("  facet normal {:.6e} {:.6e} {:.6e}\n", nx, ny, nz));
+        out.push_str("    outer loop\n");
+        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v0[0], v0[1], v0[2]));
+        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v1[0], v1[1], v1[2]));
+        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v2[0], v2[1], v2[2]));
+        out.push_str("    endloop\n");
+        out.push_str("  endfacet\n");
+    }
+    out.push_str(&format!("endsolid {}\n", name));
+    out
+}
+
+/// Serializes 3D triangular mesh into Wavefront OBJ format.
+pub fn export_obj(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> String {
+    let mut out = format!("# Wavefront OBJ exported by URAE Notebook\n# Model: {}\n\no {}\n", name, name);
+    for v in verts {
+        out.push_str(&format!("v {:.6} {:.6} {:.6}\n", v[0], v[1], v[2]));
+    }
+    for t in tris {
+        out.push_str(&format!("f {} {} {}\n", t[0] + 1, t[1] + 1, t[2] + 1));
+    }
+    out
+}
+
+/// Serializes 3D triangular mesh into ISO 10303-21 STEP Brep faceted representation.
+pub fn export_step(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> String {
+    let mut out = String::new();
+    out.push_str("ISO-10303-21;\nHEADER;\n");
+    out.push_str("FILE_DESCRIPTION(('URAE 3D CAD Tessellated Facet Export'),'2;1');\n");
+    out.push_str(&format!("FILE_NAME('{}.step','2026-09-03',('Liam'),('URAE'),'URAE Step Serializer','URAE 0.2.0','');\n", name));
+    out.push_str("FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\n");
+    out.push_str("ENDSEC;\nDATA;\n");
+    out.push_str("#1 = APPLICATION_CONTEXT('core data for automotive design');\n");
+    out.push_str("#2 = APPLICATION_PROTOCOL_DEFINITION('international standard','automotive_design',2000,#1);\n");
+    out.push_str("#3 = PRODUCT_CONTEXT('',#1,'mechanical');\n");
+    out.push_str(&format!("#4 = PRODUCT('{name}','{name}','',(#3));\n"));
+    out.push_str("#5 = PRODUCT_DEFINITION_FORMATION('','',#4);\n");
+    out.push_str("#6 = PRODUCT_DEFINITION('design','',#5,#3);\n");
+    out.push_str("#7 = PRODUCT_DEFINITION_SHAPE('','',#6);\n");
+    out.push_str("#8 = GEOMETRIC_REPRESENTATION_CONTEXT(3);\n");
+
+    let mut id = 10;
+    let mut vert_ids = Vec::with_capacity(verts.len());
+    for v in verts {
+        out.push_str(&format!("#{id} = CARTESIAN_POINT('',({:.6},{:.6},{:.6}));\n", v[0], v[1], v[2]));
+        vert_ids.push(id);
+        id += 1;
+    }
+
+    let mut face_ids = Vec::with_capacity(tris.len());
+    for t in tris {
+        let p0 = if t[0] < vert_ids.len() { vert_ids[t[0]] } else { 10 };
+        let p1 = if t[1] < vert_ids.len() { vert_ids[t[1]] } else { 10 };
+        let p2 = if t[2] < vert_ids.len() { vert_ids[t[2]] } else { 10 };
+
+        let loop_id = id;
+        id += 1;
+        out.push_str(&format!("#{loop_id} = POLY_LOOP('',(#{p0},#{p1},#{p2}));\n"));
+
+        let face_bound_id = id;
+        id += 1;
+        out.push_str(&format!("#{face_bound_id} = FACE_OUTER_BOUND('',#{loop_id},.T.);\n"));
+
+        let face_id = id;
+        id += 1;
+        out.push_str(&format!("#{face_id} = FACE_SURFACE('',(#{face_bound_id}),#{p0},.T.);\n"));
+        face_ids.push(face_id);
+    }
+
+    let faces_str = face_ids.iter().map(|f| format!("#{f}")).collect::<Vec<_>>().join(",");
+    let shell_id = id;
+    id += 1;
+    out.push_str(&format!("#{shell_id} = CLOSED_SHELL('',({faces_str}));\n"));
+
+    let brep_id = id;
+    id += 1;
+    out.push_str(&format!("#{brep_id} = FACETED_BREP('{name}',#{shell_id});\n"));
+
+    let shape_rep_id = id;
+    id += 1;
+    out.push_str(&format!("#{shape_rep_id} = MANIFOLD_SURFACE_SHAPE_REPRESENTATION('{name}',(#{brep_id}),#8);\n"));
+    out.push_str(&format!("#{id} = SHAPE_DEFINITION_REPRESENTATION(#7,#{shape_rep_id});\n"));
+    out.push_str("ENDSEC;\nEND-ISO-10303-21;\n");
+
+    out
 }

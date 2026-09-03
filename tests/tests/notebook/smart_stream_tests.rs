@@ -513,3 +513,99 @@ fn test_function_tooltip_vm_and_symbolic_features() {
         panic!("Expected ObjectKind::Function, got {:?}", card_g.object_kind);
     }
 }
+
+#[test]
+fn test_numeric_literal_scrubbing_extraction() {
+    use urae_notebook::app::find_numeric_literal_at;
+
+    // 1. Plain integer
+    let text = "a = 42";
+    let res = find_numeric_literal_at(text, 4).expect("Should find 42");
+    assert_eq!(&text[res.0..res.1], "42");
+    assert_eq!(res.2, 42.0);
+    assert!(!res.3); // no decimal
+    assert_eq!(res.4, 0);
+
+    // 2. Negative float with decimals
+    let text2 = "f(x) = -3.1415 * x";
+    let res2 = find_numeric_literal_at(text2, 9).expect("Should find -3.1415");
+    assert_eq!(&text2[res2.0..res2.1], "-3.1415");
+    assert!((res2.2 - (-3.1415)).abs() < 1e-6);
+    assert!(res2.3); // has decimal
+    assert_eq!(res2.4, 4); // 4 decimal places
+
+    // 3. Subtraction distinction: "10 - 5" -> clicking on 5 should give 5, not -5
+    let text3 = "y = 10 - 5";
+    let res3 = find_numeric_literal_at(text3, 9).expect("Should find 5");
+    assert_eq!(&text3[res3.0..res3.1], "5");
+    assert_eq!(res3.2, 5.0);
+
+    // 4. Non-number token
+    let text4 = "sin(x)";
+    assert!(find_numeric_literal_at(text4, 1).is_none());
+}
+
+#[test]
+fn test_3d_mesh_exporters() {
+    use urae_notebook::ui::viewport3d::{
+        export_obj, export_step, export_stl_ascii, export_stl_binary,
+    };
+
+    // Define a simple unit triangle in 3D
+    let verts = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+    let tris = vec![[0, 1, 2]];
+
+    // 1. Binary STL
+    let bin_stl = export_stl_binary(&verts, &tris);
+    assert_eq!(bin_stl.len(), 84 + 50); // 80 header + 4 count + 50 bytes/tri
+    assert_eq!(&bin_stl[0..4], b"URAE");
+    let num_tris = u32::from_le_bytes(bin_stl[80..84].try_into().unwrap());
+    assert_eq!(num_tris, 1);
+
+    // 2. ASCII STL
+    let asc_stl = export_stl_ascii(&verts, &tris, "unit_tri");
+    assert!(asc_stl.starts_with("solid unit_tri\n"));
+    assert!(asc_stl.contains("facet normal"));
+    assert!(asc_stl.contains("outer loop"));
+    assert!(asc_stl.ends_with("endsolid unit_tri\n"));
+
+    // 3. Wavefront OBJ
+    let obj = export_obj(&verts, &tris, "unit_tri");
+    assert!(obj.contains("v 0.000000 0.000000 0.000000"));
+    assert!(obj.contains("v 1.000000 0.000000 0.000000"));
+    assert!(obj.contains("f 1 2 3"));
+
+    // 4. ISO 10303-21 STEP
+    let step = export_step(&verts, &tris, "unit_tri");
+    assert!(step.starts_with("ISO-10303-21;\n"));
+    assert!(step.contains("AUTOMOTIVE_DESIGN"));
+    assert!(step.contains("CARTESIAN_POINT"));
+    assert!(step.contains("FACETED_BREP"));
+    assert!(step.ends_with("END-ISO-10303-21;\n"));
+}
+
+#[test]
+fn test_accessibility_themes_and_workspace_modes() {
+    use urae_notebook::ui::theme::ThemeKind;
+    use urae_notebook::ui::workspace::{WorkspaceLayoutPreset, WorkspaceState};
+
+    // 1. High contrast themes
+    let hc_dark = ThemeKind::HighContrastDark;
+    assert!(hc_dark.is_dark());
+    let p_dark = hc_dark.palette();
+    assert_eq!(p_dark.bg_app, urae_notebook::egui::Color32::BLACK);
+    assert_eq!(p_dark.text_primary, urae_notebook::egui::Color32::WHITE);
+
+    let hc_light = ThemeKind::HighContrastLight;
+    assert!(!hc_light.is_dark());
+    let p_light = hc_light.palette();
+    assert_eq!(p_light.bg_app, urae_notebook::egui::Color32::WHITE);
+    assert_eq!(p_light.text_primary, urae_notebook::egui::Color32::BLACK);
+
+    // 2. Workspace simplified single tab
+    let mut ws = WorkspaceState::default();
+    assert!(!ws.simplified_single_tab);
+    ws.set_layout(WorkspaceLayoutPreset::SimplifiedSingleTab);
+    assert!(ws.simplified_single_tab);
+    assert_eq!(ws.split_ratio, 1.0);
+}

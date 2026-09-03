@@ -18,6 +18,8 @@ pub enum ThemeKind {
     SolarizedDark,
     SolarizedLight,
     Cyberpunk,
+    HighContrastDark,
+    HighContrastLight,
 }
 
 impl ThemeKind {
@@ -32,6 +34,8 @@ impl ThemeKind {
             ThemeKind::SolarizedDark,
             ThemeKind::SolarizedLight,
             ThemeKind::Cyberpunk,
+            ThemeKind::HighContrastDark,
+            ThemeKind::HighContrastLight,
         ]
     }
 
@@ -46,12 +50,14 @@ impl ThemeKind {
             Self::SolarizedDark => "🌌 Solarized Dark",
             Self::SolarizedLight => "📜 Solarized Light",
             Self::Cyberpunk => "⚡ Cyberpunk Matrix",
+            Self::HighContrastDark => "👁️ High Contrast Dark (WCAG AAA)",
+            Self::HighContrastLight => "👓 High Contrast Light (WCAG AAA)",
         }
     }
 
     /// Check if the theme is dark.
     pub fn is_dark(&self) -> bool {
-        !matches!(self, Self::Light | Self::SolarizedLight)
+        !matches!(self, Self::Light | Self::SolarizedLight | Self::HighContrastLight)
     }
 }
 
@@ -309,6 +315,62 @@ impl ThemeKind {
                     Color32::from_rgb(255, 230, 0),
                     Color32::from_rgb(180, 0, 255),
                     Color32::from_rgb(255, 80, 0),
+                ],
+            },
+            Self::HighContrastDark => ThemePalette {
+                bg_app: Color32::BLACK,
+                bg_panel: Color32::from_rgb(12, 12, 12),
+                bg_card: Color32::from_rgb(20, 20, 20),
+                bg_input: Color32::BLACK,
+                border: Color32::WHITE,
+                accent_primary: Color32::from_rgb(0, 255, 255),
+                accent_secondary: Color32::from_rgb(255, 255, 0),
+                text_primary: Color32::WHITE,
+                text_muted: Color32::from_rgb(200, 200, 200),
+                text_success: Color32::from_rgb(0, 255, 0),
+                text_warning: Color32::from_rgb(255, 255, 0),
+                text_error: Color32::from_rgb(255, 50, 50),
+                math_var: Color32::from_rgb(0, 255, 255),
+                math_number: Color32::from_rgb(255, 255, 0),
+                math_operator: Color32::WHITE,
+                math_keyword: Color32::from_rgb(255, 100, 255),
+                math_result: Color32::from_rgb(0, 255, 0),
+                math_comment: Color32::from_rgb(160, 160, 160),
+                plot_palette: [
+                    Color32::from_rgb(0, 255, 255),
+                    Color32::from_rgb(255, 255, 0),
+                    Color32::from_rgb(0, 255, 0),
+                    Color32::from_rgb(255, 100, 255),
+                    Color32::WHITE,
+                    Color32::from_rgb(255, 128, 0),
+                ],
+            },
+            Self::HighContrastLight => ThemePalette {
+                bg_app: Color32::WHITE,
+                bg_panel: Color32::from_rgb(245, 245, 245),
+                bg_card: Color32::WHITE,
+                bg_input: Color32::WHITE,
+                border: Color32::BLACK,
+                accent_primary: Color32::from_rgb(0, 0, 200),
+                accent_secondary: Color32::from_rgb(160, 0, 160),
+                text_primary: Color32::BLACK,
+                text_muted: Color32::from_rgb(60, 60, 60),
+                text_success: Color32::from_rgb(0, 140, 0),
+                text_warning: Color32::from_rgb(180, 100, 0),
+                text_error: Color32::from_rgb(200, 0, 0),
+                math_var: Color32::from_rgb(0, 0, 200),
+                math_number: Color32::from_rgb(160, 60, 0),
+                math_operator: Color32::BLACK,
+                math_keyword: Color32::from_rgb(140, 0, 140),
+                math_result: Color32::from_rgb(0, 130, 0),
+                math_comment: Color32::from_rgb(90, 90, 90),
+                plot_palette: [
+                    Color32::from_rgb(0, 0, 200),
+                    Color32::from_rgb(200, 0, 0),
+                    Color32::from_rgb(0, 140, 0),
+                    Color32::from_rgb(160, 0, 160),
+                    Color32::BLACK,
+                    Color32::from_rgb(200, 100, 0),
                 ],
             },
         }

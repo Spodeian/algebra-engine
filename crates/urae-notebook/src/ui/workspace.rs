@@ -54,6 +54,7 @@ pub enum WorkspaceLayoutPreset {
     SplitDual,
     TripleIDE,
     ZenMode,
+    SimplifiedSingleTab,
 }
 
 impl WorkspaceLayoutPreset {
@@ -63,6 +64,7 @@ impl WorkspaceLayoutPreset {
             Self::SplitDual => "Dual Split (Editor + Visualizer)",
             Self::TripleIDE => "Triple IDE (Editor + Plots + Terminal)",
             Self::ZenMode => "Zen Mode (Full Screen Canvas)",
+            Self::SimplifiedSingleTab => "Single Tab (Simplified Canvas)",
         }
     }
 }
@@ -76,6 +78,7 @@ pub struct WorkspaceState {
     pub split_ratio: f32,
     pub show_sidebar: bool,
     pub show_bottom_panel: bool,
+    pub simplified_single_tab: bool,
     pub pinned_tabs: Vec<WorkspaceTab>,
 }
 
@@ -88,6 +91,7 @@ impl Default for WorkspaceState {
             split_ratio: 0.55,
             show_sidebar: true,
             show_bottom_panel: false,
+            simplified_single_tab: false,
             pinned_tabs: vec![
                 WorkspaceTab::MathDocument,
                 WorkspaceTab::Plot2D,
@@ -117,21 +121,31 @@ impl WorkspaceState {
             WorkspaceLayoutPreset::FluidNotepad => {
                 self.show_sidebar = true;
                 self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
                 self.split_ratio = 0.60;
             }
             WorkspaceLayoutPreset::SplitDual => {
                 self.show_sidebar = true;
                 self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
                 self.split_ratio = 0.50;
             }
             WorkspaceLayoutPreset::TripleIDE => {
                 self.show_sidebar = true;
                 self.show_bottom_panel = true;
+                self.simplified_single_tab = false;
                 self.split_ratio = 0.50;
             }
             WorkspaceLayoutPreset::ZenMode => {
                 self.show_sidebar = false;
                 self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
+                self.split_ratio = 1.0;
+            }
+            WorkspaceLayoutPreset::SimplifiedSingleTab => {
+                self.show_sidebar = true;
+                self.show_bottom_panel = false;
+                self.simplified_single_tab = true;
                 self.split_ratio = 1.0;
             }
         }
