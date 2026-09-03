@@ -1,8 +1,8 @@
 //! `egui` Multiplatform UI Application for URAE Continuous Mathematics Notepad.
 
 use crate::notebook::{
-    generate_branch_cut_syntax, generate_interval_syntax, generate_matrix_syntax,
-    generate_ode_bc_syntax, generate_physical_unit_syntax, CardDisplayMode, LineKind,
+    generate_branch_cut_syntax, generate_matrix_syntax, generate_ode_bc_syntax,
+    generate_parameter_builder_syntax, generate_physical_unit_syntax, CardDisplayMode, LineKind,
     MatrixPresetKind, NotebookState, ReactiveComputeMode, SymbolMetadata, SymbolRole,
 };
 use eframe::egui;
@@ -10,7 +10,7 @@ use egui_plot::{Line, Plot, PlotPoints};
 use std::collections::HashSet;
 use urae::calculus::SymbolicCalculus;
 use urae::format::Formatter;
-use urae::geometry::{ArbitraryCurvilinearSystem, CoordinateSystem};
+use urae::geometry::CoordinateSystem;
 use base64::Engine;
 
 pub fn format_latex_as_pretty_unicode(latex_str: &str) -> String {
@@ -128,6 +128,17 @@ pub struct UraeNotebookApp {
     pub domain_picker_max: f64,
     pub domain_picker_inc_min: bool,
     pub domain_picker_inc_max: bool,
+
+    // Parameter & Variable Builder State
+    pub param_builder_var: String,
+    pub param_builder_is_param: bool,
+    pub param_builder_mode: usize, // 0 = Adjoin, 1 = Cayley-Dickson
+    pub param_builder_adjoin_i: bool,
+    pub param_builder_adjoin_eps: bool,
+    pub param_builder_adjoin_j: bool,
+    pub param_builder_adjoin_clifford: bool,
+    pub param_builder_cayley_depth: usize,
+    pub param_builder_coords: Vec<(String, f64, f64, bool)>,
 
     pub branch_cut_fn: String,
     pub branch_cut_sheet: i32,
@@ -259,6 +270,21 @@ impl Default for UraeNotebookApp {
             domain_picker_max: 5.0,
             domain_picker_inc_min: true,
             domain_picker_inc_max: true,
+
+            param_builder_var: "z".to_string(),
+            param_builder_is_param: false,
+            param_builder_mode: 0,
+            param_builder_adjoin_i: true,
+            param_builder_adjoin_eps: false,
+            param_builder_adjoin_j: false,
+            param_builder_adjoin_clifford: false,
+            param_builder_cayley_depth: 1,
+            param_builder_coords: vec![
+                ("Re".to_string(), -5.0, 5.0, true),
+                ("Im".to_string(), -5.0, 5.0, true),
+                ("Dual".to_string(), -1.0, 1.0, false),
+                ("j".to_string(), -1.0, 1.0, false),
+            ],
 
             branch_cut_fn: "log".to_string(),
             branch_cut_sheet: 0,
@@ -1149,43 +1175,6 @@ impl eframe::App for UraeNotebookApp {
                         self.state.save_session();
                         ui.close_menu();
                     }
-                    ui.separator();
-                    ui.menu_button("Workspace Presets", |ui| {
-                        if ui.selectable_label(self.workspace.layout_preset == crate::ui::WorkspaceLayoutPreset::FluidNotepad, "📝 Fluid Notepad (Clean)").clicked() {
-                            self.workspace.set_layout(crate::ui::WorkspaceLayoutPreset::FluidNotepad);
-                            self.show_left_sidebar = false;
-                            self.show_right_sidebar = true;
-                            self.state.session.settings.workspace_preset = self.workspace.layout_preset;
-                            self.state.save_session();
-                            ui.close_menu();
-                        }
-                        if ui.selectable_label(self.workspace.layout_preset == crate::ui::WorkspaceLayoutPreset::SplitDual, "📊 Split Dual (Full Stream)").clicked() {
-                            self.workspace.set_layout(crate::ui::WorkspaceLayoutPreset::SplitDual);
-                            self.show_left_sidebar = true;
-                            self.show_right_sidebar = true;
-                            self.state.session.settings.workspace_preset = self.workspace.layout_preset;
-                            self.state.save_session();
-                            ui.close_menu();
-                        }
-                        if ui.selectable_label(self.workspace.layout_preset == crate::ui::WorkspaceLayoutPreset::TripleIDE, "🎛 Triple Studio (IDE)").clicked() {
-                            self.workspace.set_layout(crate::ui::WorkspaceLayoutPreset::TripleIDE);
-                            self.show_left_sidebar = true;
-                            self.show_right_sidebar = true;
-                            self.show_cli_terminal = true;
-                            self.show_viewport_3d = true;
-                            self.state.session.settings.workspace_preset = self.workspace.layout_preset;
-                            self.state.save_session();
-                            ui.close_menu();
-                        }
-                        if ui.selectable_label(self.workspace.layout_preset == crate::ui::WorkspaceLayoutPreset::ZenMode, "🧘 Zen Focus (No Bars)").clicked() {
-                            self.workspace.set_layout(crate::ui::WorkspaceLayoutPreset::ZenMode);
-                            self.show_left_sidebar = false;
-                            self.show_right_sidebar = false;
-                            self.state.session.settings.workspace_preset = self.workspace.layout_preset;
-                            self.state.save_session();
-                            ui.close_menu();
-                        }
-                    });
                 });
 
                 // 4. Windows & Tools Menu Dropdown (for opening sub-windows)
@@ -1217,16 +1206,16 @@ impl eframe::App for UraeNotebookApp {
 
                 // 5. Builders Menu Dropdown
                 ui.menu_button("🛠 Builders", |ui| {
+                    if ui.button("📐 Parameter & Variable Builder").clicked() {
+                        self.show_domain_picker = true;
+                        ui.close_menu();
+                    }
                     if ui.button("⚙ Parametric CAD Machinery").clicked() {
                         self.show_cad_machinery_palette = true;
                         ui.close_menu();
                     }
                     if ui.button("🧮 Matrix & Tensor Builder").clicked() {
                         self.show_matrix_builder = true;
-                        ui.close_menu();
-                    }
-                    if ui.button("📏 Domain & Interval Picker").clicked() {
-                        self.show_domain_picker = true;
                         ui.close_menu();
                     }
                     if ui.button("✂ Riemann Branch Cut Configurator").clicked() {
@@ -1241,30 +1230,6 @@ impl eframe::App for UraeNotebookApp {
                         self.show_units_palette = true;
                         ui.close_menu();
                     }
-                });
-
-                // 6. Math Context Menu Dropdown
-                ui.menu_button("📐 Context", |ui| {
-                    ui.menu_button(format!("Coordinate: {:?}", self.active_coord_system), |ui| {
-                        ui.selectable_value(&mut self.active_coord_system, CoordinateSystem::Cartesian, "Cartesian (x, y, z)");
-                        ui.selectable_value(&mut self.active_coord_system, CoordinateSystem::Polar, "Polar (r, θ)");
-                        ui.selectable_value(&mut self.active_coord_system, CoordinateSystem::Cylindrical, "Cylindrical (r, θ, z)");
-                        ui.selectable_value(&mut self.active_coord_system, CoordinateSystem::Spherical, "Spherical (r, θ, φ)");
-                        if ui.button("Arbitrary Curvilinear (u1, u2, u3)").clicked() {
-                            self.active_coord_system = CoordinateSystem::Arbitrary(ArbitraryCurvilinearSystem::spherical_3d(&self.state.graph));
-                            ui.close_menu();
-                        }
-                    });
-                    ui.separator();
-                    ui.menu_button(format!("Domain: {:?}", self.active_math_context.algebra_domain), |ui| {
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Generic, "Generic / Unconstrained");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Reals, "ℝ (Real Field)");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Complex, "ℂ (Complex Field)");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Hypercomplex { dimension: 4 }, "ℍ (Quaternion Non-Commutative)");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Hypercomplex { dimension: 8 }, "O (Octonion)");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Matrix { rows: 2, cols: 2, element_domain: Box::new(urae::Domain::Reals) }, "M₂x₂(ℝ) Matrix Algebra");
-                        ui.selectable_value(&mut self.active_math_context.algebra_domain, urae::Domain::Boolean, "Boolean Logic Domain");
-                    });
                 });
 
                 // 7. Theme Menu Dropdown
@@ -3869,71 +3834,180 @@ impl UraeNotebookApp {
         }
     }
 
-    /// Render Interactive Domain & Set Picker Modal
+    /// Render Interactive Parameter & Variable Builder Modal
     fn render_domain_picker_modal(&mut self, ctx: &egui::Context) {
         if self.show_domain_picker {
             let mut is_open = self.show_domain_picker;
-            egui::Window::new("Domain & Interval Picker")
+            egui::Window::new("📐 Parameter & Variable Builder")
                 .open(&mut is_open)
-                .default_size([400.0, 280.0])
+                .default_size([460.0, 480.0])
                 .resizable(true)
                 .show(ctx, |ui| {
-                    ui.subheading("Variable & Domain Boundaries");
+                    ui.subheading("Symbol Declaration & Number Specification");
+
+                    // 1. Symbol Name and Role
                     ui.horizontal(|ui| {
-                        ui.label("Variable:");
-                        ui.text_edit_singleline(&mut self.domain_picker_var);
-                        ui.label("Domain:");
-                        egui::ComboBox::from_id_salt("domain_picker_domain_combo")
-                            .selected_text(&self.domain_picker_domain)
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.domain_picker_domain,
-                                    "Reals".to_string(),
-                                    "Reals (ℝ)",
-                                );
-                                ui.selectable_value(
-                                    &mut self.domain_picker_domain,
-                                    "Complex".to_string(),
-                                    "Complex (ℂ)",
-                                );
-                                ui.selectable_value(
-                                    &mut self.domain_picker_domain,
-                                    "Integers".to_string(),
-                                    "Integers (ℤ)",
-                                );
-                                ui.selectable_value(
-                                    &mut self.domain_picker_domain,
-                                    "Quaternion".to_string(),
-                                    "Quaternion (ℍ)",
-                                );
-                                ui.selectable_value(
-                                    &mut self.domain_picker_domain,
-                                    "Grassmann".to_string(),
-                                    "Grassmann (Λ(V))",
-                                );
+                        ui.label("Symbol Name:");
+                        ui.text_edit_singleline(&mut self.param_builder_var);
+
+                        ui.separator();
+                        ui.label("Role:");
+                        if ui.selectable_label(!self.param_builder_is_param, "Variable").clicked() {
+                            self.param_builder_is_param = false;
+                        }
+                        if ui.selectable_label(self.param_builder_is_param, "Parameter (Slider)").clicked() {
+                            self.param_builder_is_param = true;
+                        }
+                    });
+
+                    ui.add_space(4.0);
+                    ui.separator();
+
+                    // 2. Construction Paradigm
+                    ui.subheading("Algebra Construction Paradigm");
+                    ui.horizontal(|ui| {
+                        if ui.selectable_label(self.param_builder_mode == 0, "Adjoin Generators / Units").clicked() {
+                            self.param_builder_mode = 0;
+                        }
+                        if ui.selectable_label(self.param_builder_mode == 1, "Cayley-Dickson Class & Depth").clicked() {
+                            self.param_builder_mode = 1;
+                        }
+                    });
+
+                    ui.add_space(4.0);
+
+                    // 3. Mode-specific specifications
+                    if self.param_builder_mode == 0 {
+                        ui.group(|ui| {
+                            ui.label(egui::RichText::new("Adjoin Elements to Base Field ℝ:").strong());
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut self.param_builder_adjoin_i, "i (Imaginary: i² = -1)");
+                                ui.checkbox(&mut self.param_builder_adjoin_eps, "ε (Dual: ε² = 0)");
                             });
-                    });
+                            ui.horizontal(|ui| {
+                                ui.checkbox(&mut self.param_builder_adjoin_j, "j (Split-Complex: j² = +1)");
+                                ui.checkbox(&mut self.param_builder_adjoin_clifford, "e₁, e₂ (Grassmann/Clifford)");
+                            });
 
-                    ui.horizontal(|ui| {
-                        ui.label("Min Bound:");
-                        ui.add(egui::DragValue::new(&mut self.domain_picker_min).speed(0.1));
-                        ui.checkbox(&mut self.domain_picker_inc_min, "Inclusive (≤)");
-                    });
+                            let derived_algebra = match (
+                                self.param_builder_adjoin_i,
+                                self.param_builder_adjoin_eps,
+                                self.param_builder_adjoin_j,
+                                self.param_builder_adjoin_clifford,
+                            ) {
+                                (true, false, false, false) => "ℂ (Complex Field, dim 2)",
+                                (false, true, false, false) => "𝔻 (Dual Numbers for AutoDiff, dim 2)",
+                                (true, true, false, false) => "Dual-Imaginary / Dual-Complex (Kinematics & Screw Theory, dim 4)",
+                                (false, false, true, false) => "ℝ[j] (Split-Complex / Hyperbolic Numbers, dim 2)",
+                                (false, false, false, true) => "Clifford Cl(2, 0) Multivector Algebra",
+                                (true, false, true, false) => "Bicomplex Commutative Quaternions",
+                                _ => "ℝ (Real Field, dim 1)",
+                            };
 
-                    ui.horizontal(|ui| {
-                        ui.label("Max Bound:");
-                        ui.add(egui::DragValue::new(&mut self.domain_picker_max).speed(0.1));
-                        ui.checkbox(&mut self.domain_picker_inc_max, "Inclusive (≤)");
+                            ui.weak(format!("Resulting Algebra: {}", derived_algebra));
+                        });
+                    } else {
+                        ui.group(|ui| {
+                            ui.label(egui::RichText::new("Cayley-Dickson Algebra Family:").strong());
+                            ui.horizontal(|ui| {
+                                ui.label("Integer Depth:");
+                                ui.add(egui::Slider::new(&mut self.param_builder_cayley_depth, 0..=4).text("Depth"));
+                            });
+
+                            let (name, dim, notes) = match self.param_builder_cayley_depth {
+                                0 => ("ℝ (Reals)", 1, "Commutative, Associative, Ordered Field"),
+                                1 => ("ℂ (Complex)", 2, "Commutative, Associative, Algebraically Closed"),
+                                2 => ("ℍ (Quaternions)", 4, "Non-Commutative Division Ring (3D Rotations)"),
+                                3 => ("O (Octonions)", 8, "Non-Associative Alternative Division Algebra"),
+                                _ => ("S (Sedenions)", 16, "Non-Alternative, Contains Zero Divisors"),
+                            };
+
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(format!("Class: {} (Dimension: {})", name, dim)).strong());
+                            });
+                            ui.weak(format!("Properties: {}", notes));
+                        });
+                    }
+
+                    ui.add_space(4.0);
+
+                    // 4. Coordinate-Relative Symbolic Bounds
+                    ui.subheading("Coordinate-Relative Interval & Symbolic Bounds");
+                    ui.group(|ui| {
+                        // Ensure coords vector has at least 4 items
+                        while self.param_builder_coords.len() < 4 {
+                            self.param_builder_coords.push(("Coord".to_string(), -5.0, 5.0, false));
+                        }
+
+                        // Update coordinate labels based on active class/mode
+                        if self.param_builder_mode == 0 {
+                            self.param_builder_coords[0].0 = "Re".to_string();
+                            self.param_builder_coords[1].0 = if self.param_builder_adjoin_eps { "Dual".to_string() } else { "Im".to_string() };
+                            self.param_builder_coords[2].0 = "Coord2".to_string();
+                            self.param_builder_coords[3].0 = "Coord3".to_string();
+                        } else {
+                            match self.param_builder_cayley_depth {
+                                0 => {
+                                    self.param_builder_coords[0].0 = "x0".to_string();
+                                }
+                                1 => {
+                                    self.param_builder_coords[0].0 = "Re".to_string();
+                                    self.param_builder_coords[1].0 = "Im".to_string();
+                                }
+                                2 => {
+                                    self.param_builder_coords[0].0 = "Scalar".to_string();
+                                    self.param_builder_coords[1].0 = "Vector".to_string();
+                                    self.param_builder_coords[2].0 = "j_part".to_string();
+                                    self.param_builder_coords[3].0 = "k_part".to_string();
+                                }
+                                _ => {
+                                    self.param_builder_coords[0].0 = "Scalar".to_string();
+                                    self.param_builder_coords[1].0 = "NonScalar".to_string();
+                                }
+                            }
+                        }
+
+                        let active_count = if self.param_builder_mode == 0 {
+                            if self.param_builder_adjoin_i && self.param_builder_adjoin_eps { 3 }
+                            else if self.param_builder_adjoin_i || self.param_builder_adjoin_eps || self.param_builder_adjoin_j { 2 }
+                            else { 1 }
+                        } else {
+                            match self.param_builder_cayley_depth {
+                                0 => 1,
+                                1 => 2,
+                                2 => 2,
+                                _ => 2,
+                            }
+                        };
+
+                        for i in 0..active_count.min(self.param_builder_coords.len()) {
+                            let (label, min_v, max_v, enabled) = &mut self.param_builder_coords[i];
+                            ui.horizontal(|ui| {
+                                ui.checkbox(enabled, format!("{}:", label));
+                                if *enabled {
+                                    ui.label("Range [");
+                                    ui.add(egui::DragValue::new(min_v).speed(0.1));
+                                    ui.label(",");
+                                    ui.add(egui::DragValue::new(max_v).speed(0.1));
+                                    ui.label("]");
+                                }
+                            });
+                        }
                     });
 
                     ui.separator();
-                    let syntax = generate_interval_syntax(
-                        &self.domain_picker_var,
-                        &self.domain_picker_domain,
-                        self.domain_picker_min,
-                        self.domain_picker_max,
-                        self.domain_picker_inc_min,
-                        self.domain_picker_inc_max,
+
+                    // 5. Live Syntax Preview
+                    let syntax = generate_parameter_builder_syntax(
+                        &self.param_builder_var,
+                        self.param_builder_is_param,
+                        self.param_builder_mode,
+                        self.param_builder_adjoin_i,
+                        self.param_builder_adjoin_eps,
+                        self.param_builder_adjoin_j,
+                        self.param_builder_adjoin_clifford,
+                        self.param_builder_cayley_depth,
+                        &self.param_builder_coords,
                     );
 
                     ui.label("Live Syntax Preview:");
@@ -3945,7 +4019,7 @@ impl UraeNotebookApp {
 
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        if ui.button("Insert at Active Line").clicked() {
+                        if ui.button("➕ Insert at Active Line").clicked() {
                             self.state.insert_text_at_active_line(&syntax);
                             self.show_domain_picker = false;
                         }

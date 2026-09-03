@@ -56,9 +56,9 @@ pub use app::{UraeNotebookApp, ViewMode};
 pub use examples::{ExampleCategory, ExampleNotebook, ExampleRegistry};
 pub use notebook::{
     generate_branch_cut_syntax, generate_interval_syntax, generate_matrix_syntax,
-    generate_ode_bc_syntax, generate_physical_unit_syntax, CellBlock, CellBlockKind,
-    HistorySnapshot, MatrixPresetKind, NotebookSettings, NotebookState, ReactiveComputeMode,
-    SessionData, SymbolInfoCard, SymbolMetadata, SymbolRole, UndoRedoHistory,
+    generate_ode_bc_syntax, generate_parameter_builder_syntax, generate_physical_unit_syntax,
+    CellBlock, CellBlockKind, HistorySnapshot, MatrixPresetKind, NotebookSettings, NotebookState,
+    ReactiveComputeMode, SessionData, SymbolInfoCard, SymbolMetadata, SymbolRole, UndoRedoHistory,
 };
 pub use ui::{
     CommandItem, CommandPalette, CommandPaletteState, PalettesUi, ThemeKind, ThemePalette,

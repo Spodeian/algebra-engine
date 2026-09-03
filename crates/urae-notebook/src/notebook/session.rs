@@ -193,6 +193,73 @@ pub fn generate_interval_syntax(
     )
 }
 
+/// Interactive code generator for Parameter & Variable Builder with adjoined algebras and Cayley-Dickson depth.
+pub fn generate_parameter_builder_syntax(
+    var: &str,
+    is_param: bool,
+    mode: usize,
+    adjoin_i: bool,
+    adjoin_eps: bool,
+    adjoin_j: bool,
+    adjoin_clifford: bool,
+    cayley_depth: usize,
+    coords: &[(String, f64, f64, bool)],
+) -> String {
+    let clean_var = if var.trim().is_empty() { "x" } else { var.trim() };
+    let role_str = if is_param { "Parameter" } else { "Variable" };
+
+    if mode == 0 {
+        // Mode 0: Adjoin Elements / Generators
+        let algebra_desc = match (adjoin_i, adjoin_eps, adjoin_j, adjoin_clifford) {
+            (true, false, false, false) => "Complex",
+            (false, true, false, false) => "Dual(1, epsilon)",
+            (true, true, false, false) => "DualComplex(1, i, epsilon)",
+            (false, false, true, false) => "SplitComplex(1, j)",
+            (false, false, false, true) => "Clifford(e1, e2)",
+            (true, false, true, false) => "Bicomplex(1, i, j)",
+            _ => "Reals",
+        };
+
+        let mut bound_parts = Vec::new();
+        for (coord_name, min_v, max_v, enabled) in coords {
+            if *enabled {
+                bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+            }
+        }
+
+        if bound_parts.is_empty() {
+            format!("{}: {} in {}", clean_var, role_str, algebra_desc)
+        } else {
+            format!("{}: {} in {} where {}", clean_var, role_str, algebra_desc, bound_parts.join(", "))
+        }
+    } else {
+        // Mode 1: Cayley-Dickson Algebra Class with Depth
+        let class_name = match cayley_depth {
+            0 => "Reals",
+            1 => "Complex",
+            2 => "Quaternion",
+            3 => "Octonion",
+            _ => "Sedenion",
+        };
+
+        let mut bound_parts = Vec::new();
+        for (coord_name, min_v, max_v, enabled) in coords {
+            if *enabled {
+                bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+            }
+        }
+
+        if bound_parts.is_empty() {
+            format!("{}: {} in CayleyDickson(depth={}) /* {} */", clean_var, role_str, cayley_depth, class_name)
+        } else {
+            format!(
+                "{}: {} in CayleyDickson(depth={}) /* {} */ where {}",
+                clean_var, role_str, cayley_depth, class_name, bound_parts.join(", ")
+            )
+        }
+    }
+}
+
 /// Palette code generator for Riemann branch cuts.
 pub fn generate_branch_cut_syntax(fn_name: &str, sheet_k: i32, cut_pos: &str) -> String {
     format!(

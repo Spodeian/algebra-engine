@@ -25,9 +25,9 @@ pub use plot_eval::{
 pub use session::{
     default_logging_level, export_session_to_compressed_bson, generate_branch_cut_syntax,
     generate_interval_syntax, generate_matrix_syntax, generate_ode_bc_syntax,
-    generate_physical_unit_syntax, import_session_from_compressed_bson, CardDisplayMode,
-    MatrixPresetKind, NotebookSettings, ReactiveComputeMode, SessionData, SymbolMetadata,
-    SymbolRole, SESSION_FILE_NAME,
+    generate_parameter_builder_syntax, generate_physical_unit_syntax,
+    import_session_from_compressed_bson, CardDisplayMode, MatrixPresetKind, NotebookSettings,
+    ReactiveComputeMode, SessionData, SymbolMetadata, SymbolRole, SESSION_FILE_NAME,
 };
 pub use worker::{
     BackgroundEvaluator, CancellationToken, DependencyGraph, EvaluationRequest, EvaluationResponse,

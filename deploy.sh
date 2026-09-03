@@ -161,7 +161,7 @@ DIST_DIR="crates/urae-wasm/public"
 
 # Run wasm-opt pass on generated wasm artifact with full performance optimizations
 WASM_OPT_FLAGS=(
-    "-O3"
+    "-Oz"
     "--enable-bulk-memory"
     "--enable-bulk-memory-opt"
     "--enable-mutable-globals"
