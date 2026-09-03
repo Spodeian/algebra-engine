@@ -46,6 +46,12 @@
     <canvas id="urae_canvas" tabindex="0"></canvas>
   </div>
 
+  <div id="urae_update_toast" style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 999999; background: #161b22; color: #f0f6fc; border: 1px solid #30363d; border-radius: 8px; padding: 12px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); font-size: 13px; align-items: center; gap: 12px;">
+    <span>⚡ <strong>Update ready</strong> — A new version of URAE was downloaded in the background.</span>
+    <button id="urae_update_reload_btn" style="background: #238636; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 12px;">Reload</button>
+    <button id="urae_update_dismiss_btn" style="background: transparent; color: #8b949e; border: none; font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>
+  </div>
+
   <script>
     // PWA & StorageManager Lifecycle Management
     window.__pwaInstallPrompt = null;
@@ -285,12 +291,34 @@
           });
         }
 
-        // 4. Register PWA Service Worker for offline resilience and force update check
+        // 4. Register PWA Service Worker for offline resilience and background update check
         if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
           navigator.serviceWorker.register('./sw.js').then(reg => {
+            // Check for network updates in the background
             reg.update();
+
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    const toast = document.getElementById('urae_update_toast');
+                    if (toast) toast.style.display = 'flex';
+                  }
+                });
+              }
+            });
           }).catch(err => {
             console.debug('ServiceWorker registration optional notice:', err);
+          });
+
+          document.getElementById('urae_update_reload_btn')?.addEventListener('click', () => {
+            window.location.reload();
+          });
+
+          document.getElementById('urae_update_dismiss_btn')?.addEventListener('click', () => {
+            const toast = document.getElementById('urae_update_toast');
+            if (toast) toast.style.display = 'none';
           });
         }
       } catch (err) {

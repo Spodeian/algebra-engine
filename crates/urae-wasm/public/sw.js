@@ -1,22 +1,26 @@
-// Service Worker for URAE — Atomic Serverless Deployment Caching Strategy
+// Service Worker for URAE — Atomic Cache-First with Background Network Revalidation
 const CACHE_NAME = 'urae-algebra-engine-cache-v2';
 
-// Static assets to pre-cache on install
+// Core assets to pre-cache on install to guarantee complete atomic offline capability
 const PRECACHE_ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './favicon.ico',
+  './pkg/urae_wasm.js',
+  './pkg/urae_wasm_bg.wasm'
 ];
 
-// Pre-cache on install and activate immediately
+// 1. Pre-cache all matching assets on install and activate immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_ASSETS);
+    }).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-// Purge all legacy caches on activation
+// 2. Purge all legacy caches on activation and claim clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -27,7 +31,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch router tailored for atomic immutable serverless deployments
+// 3. Fetch Router: Atomic Cache-First Execution
 self.addEventListener('fetch', (event) => {
   // Only handle local same-origin GET requests
   if (event.request.method !== 'GET' || !event.request.url.startsWith(self.location.origin)) {
@@ -46,48 +50,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const isNavigation = event.request.mode === 'navigate' || event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname === '/';
-  const isCodeAsset = url.pathname.includes('/pkg/') || url.pathname.endsWith('.wasm') || url.pathname.endsWith('.js');
+  // Never cache the service worker itself so browser can check for updates in the background
+  if (url.pathname.endsWith('/sw.js')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
-  if (isNavigation || isCodeAsset) {
-    // Network-First for HTML, WASM binaries, and JS wrappers:
-    // Always fetch newest deployment assets from edge CDN when online so JS and WASM are always in lockstep;
-    // fallback to cache when offline.
-    event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return networkResponse;
-        })
-        .catch(() => caches.match(event.request).then((cached) => {
-          if (cached) return cached;
-          if (isNavigation) return caches.match('./index.html') || caches.match('./');
-          return Promise.reject('Resource offline');
-        }))
-    );
-  } else {
-    // Cache-First for static media, icons, and fonts
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
+  // Atomic Cache-First Strategy:
+  // Instantly serve from the active cache bucket so all assets in a session (JS, WASM, HTML)
+  // are guaranteed to share the exact same build version without ABI skew.
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.match(event.request).then((cachedResponse) => {
         if (cachedResponse) {
           return cachedResponse;
         }
-        return fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              const copy = networkResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-            }
-            return networkResponse;
-          })
-          .catch((err) => {
-            console.warn('SW fetch failed for asset:', event.request.url, err);
-            throw err;
-          });
-      })
-    );
-  }
+
+        // Cache miss: fetch from network and populate active cache
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        }).catch((err) => {
+          if (event.request.mode === 'navigate') {
+            return cache.match('./index.html') || cache.match('./');
+          }
+          throw err;
+        });
+      });
+    })
+  );
 });
