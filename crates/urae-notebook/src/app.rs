@@ -645,7 +645,7 @@ impl UraeNotebookApp {
             ui.scope(|ui| {
                 egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(180, 40, 40, 45))
-                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 60, 60)))
+                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 60, 60)))
                     .corner_radius(6)
                     .inner_margin(8)
                     .show(ui, |ui| {
@@ -674,7 +674,7 @@ impl UraeNotebookApp {
             ui.scope(|ui| {
                 egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 160, 30)))
+                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
                     .corner_radius(6)
                     .inner_margin(8)
                     .show(ui, |ui| {

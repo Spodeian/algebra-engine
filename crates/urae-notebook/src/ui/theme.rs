@@ -399,36 +399,36 @@ impl ThemeKind {
         visuals.menu_corner_radius = CornerRadius::same(6);
 
         // Window & Dialog Strokes
-        visuals.window_stroke = Stroke::new(1.0, p.border);
+        visuals.window_stroke = Stroke::new(1.0_f32, p.border);
 
         // Widget Normal State
         visuals.widgets.noninteractive.bg_fill = p.bg_panel;
-        visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.border);
-        visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.text_primary);
+        visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, p.border);
+        visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, p.text_primary);
         visuals.widgets.noninteractive.corner_radius = CornerRadius::same(6);
 
         visuals.widgets.inactive.bg_fill = p.bg_card;
-        visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, p.border);
-        visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, p.text_primary);
+        visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
+        visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.text_primary);
         visuals.widgets.inactive.corner_radius = CornerRadius::same(6);
 
         // Widget Hover State
         visuals.widgets.hovered.bg_fill = p.accent_primary.linear_multiply(0.25);
-        visuals.widgets.hovered.bg_stroke = Stroke::new(1.5, p.accent_primary);
-        visuals.widgets.hovered.fg_stroke = Stroke::new(1.5, p.text_primary);
+        visuals.widgets.hovered.bg_stroke = Stroke::new(1.5_f32, p.accent_primary);
+        visuals.widgets.hovered.fg_stroke = Stroke::new(1.5_f32, p.text_primary);
         visuals.widgets.hovered.corner_radius = CornerRadius::same(6);
-        visuals.widgets.hovered.expansion = 1.0;
+        visuals.widgets.hovered.expansion = 1.0_f32;
 
         // Widget Active / Clicked State
         visuals.widgets.active.bg_fill = p.accent_primary.linear_multiply(0.4);
-        visuals.widgets.active.bg_stroke = Stroke::new(2.0, p.accent_primary);
-        visuals.widgets.active.fg_stroke = Stroke::new(2.0, Color32::WHITE);
+        visuals.widgets.active.bg_stroke = Stroke::new(2.0_f32, p.accent_primary);
+        visuals.widgets.active.fg_stroke = Stroke::new(2.0_f32, Color32::WHITE);
         visuals.widgets.active.corner_radius = CornerRadius::same(6);
-        visuals.widgets.active.expansion = 0.5;
+        visuals.widgets.active.expansion = 0.5_f32;
 
         // Selection Highlighting
         visuals.selection.bg_fill = p.accent_primary.linear_multiply(0.35);
-        visuals.selection.stroke = Stroke::new(1.5, p.accent_primary);
+        visuals.selection.stroke = Stroke::new(1.5_f32, p.accent_primary);
 
         visuals
     }

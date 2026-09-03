@@ -73,10 +73,35 @@ else
     fi
 fi
 
-# 3. wasm-pack & Trunk Asset Bundler (Check Cache & Validate Execution)
-if ! command -v wasm-pack &> /dev/null && [ ! -f "$CARGO_HOME/bin/wasm-pack" ]; then
-    echo "Downloading and caching wasm-pack binary..."
-    curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh -s -- -y || cargo install wasm-pack --root "$CARGO_HOME"
+# 3. wasm-bindgen CLI Installation (Matches Cargo.lock exact version for zero linker errors)
+WASM_BINDGEN_VERSION=$(grep -A 1 'name = "wasm-bindgen"' Cargo.lock 2>/dev/null | grep 'version =' | head -n 1 | cut -d '"' -f 2 || echo "0.2.115")
+if [ -z "$WASM_BINDGEN_VERSION" ]; then
+    WASM_BINDGEN_VERSION="0.2.115"
+fi
+
+WASM_BINDGEN_BIN="$CARGO_HOME/bin/wasm-bindgen"
+if [ -x "$WASM_BINDGEN_BIN" ] && "$WASM_BINDGEN_BIN" --version 2>&1 | grep -q "$WASM_BINDGEN_VERSION"; then
+    echo "Cached wasm-bindgen detected: $("$WASM_BINDGEN_BIN" --version)"
+elif command -v wasm-bindgen &> /dev/null && wasm-bindgen --version 2>&1 | grep -q "$WASM_BINDGEN_VERSION"; then
+    echo "System wasm-bindgen detected: $(wasm-bindgen --version)"
+    WASM_BINDGEN_BIN="wasm-bindgen"
+else
+    echo "Downloading and caching wasm-bindgen v${WASM_BINDGEN_VERSION} CLI binary..."
+    temp_wb="/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}.tar.gz"
+    wget -qO "$temp_wb" "https://github.com/rustwasm/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" || \
+    wget -qO "$temp_wb" "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" || true
+    if [ -f "$temp_wb" ] && [ -s "$temp_wb" ]; then
+        tar -xzf "$temp_wb" -C /tmp
+        find /tmp -name "wasm-bindgen" -type f -exec mv {} "$CARGO_HOME/bin/wasm-bindgen" \;
+        chmod +x "$CARGO_HOME/bin/wasm-bindgen"
+        rm -rf "$temp_wb" /tmp/wasm-bindgen*
+    fi
+    if [ ! -x "$CARGO_HOME/bin/wasm-bindgen" ]; then
+        echo "Precompiled binary unavailable. Installing wasm-bindgen-cli via cargo..."
+        cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --root "$CARGO_HOME"
+    fi
+    WASM_BINDGEN_BIN="$CARGO_HOME/bin/wasm-bindgen"
+    echo "wasm-bindgen installed: $("$WASM_BINDGEN_BIN" --version || echo 'Ready')"
 fi
 
 # 4. Binaryen (wasm-opt) (Check Cache & Validate Execution)
@@ -105,10 +130,18 @@ fi
 echo "Purging previous build distribution caches..."
 rm -rf crates/urae-wasm/public/pkg crates/urae-wasm/pkg dist
 
-echo "Compiling and bundling WebAssembly release..."
-cd crates/urae-wasm
-wasm-pack build --target web --out-dir public/pkg --release
-cd ../..
+echo "Compiling WebAssembly release with Cargo..."
+cargo build --target wasm32-unknown-unknown -p urae-wasm --release
+
+echo "Generating WebAssembly bindings via wasm-bindgen..."
+mkdir -p crates/urae-wasm/public/pkg
+if [ -x "$WASM_BINDGEN_BIN" ] || command -v wasm-bindgen &> /dev/null; then
+    "${WASM_BINDGEN_BIN:-wasm-bindgen}" target/wasm32-unknown-unknown/release/urae_wasm.wasm --target web --out-dir crates/urae-wasm/public/pkg
+else
+    cd crates/urae-wasm
+    wasm-pack build --target web --out-dir public/pkg --release
+    cd ../..
+fi
 
 DIST_DIR="crates/urae-wasm/public"
 
