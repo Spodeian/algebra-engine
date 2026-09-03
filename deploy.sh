@@ -58,17 +58,23 @@ elif [ -f "$HOME/.cargo/env" ]; then
 fi
 
 # 2. Rust Toolchain & Target Verification
+RUST_TOOLCHAIN="1.95.0"
+
 if ! command -v rustup &> /dev/null && [ ! -f "$CARGO_HOME/bin/rustup" ]; then
-    echo "Rust compiler not detected. Installing Rust stable toolchain..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --target wasm32-unknown-unknown
+    echo "Rust compiler not detected. Installing Rust $RUST_TOOLCHAIN minimal toolchain..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
     if [ -f "$CARGO_HOME/env" ]; then
         . "$CARGO_HOME/env"
     fi
 else
     echo "Rust toolchain detected: $(rustc --version || echo 'Active')"
     if command -v rustup &> /dev/null; then
+        rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown 2>/dev/null || true
+        rustup default "$RUST_TOOLCHAIN" 2>/dev/null || true
         rustup target add wasm32-unknown-unknown 2>/dev/null || true
     elif [ -f "$CARGO_HOME/bin/rustup" ]; then
+        "$CARGO_HOME/bin/rustup" toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown 2>/dev/null || true
+        "$CARGO_HOME/bin/rustup" default "$RUST_TOOLCHAIN" 2>/dev/null || true
         "$CARGO_HOME/bin/rustup" target add wasm32-unknown-unknown 2>/dev/null || true
     fi
 fi
@@ -130,8 +136,14 @@ fi
 echo "Purging previous build distribution caches..."
 rm -rf crates/urae-wasm/public/pkg crates/urae-wasm/pkg dist
 
-echo "Compiling WebAssembly release with Cargo..."
-cargo build --target wasm32-unknown-unknown -p urae-wasm --release
+echo "Compiling WebAssembly release with Cargo (toolchain: $RUST_TOOLCHAIN)..."
+if command -v rustup &> /dev/null; then
+    rustup run "$RUST_TOOLCHAIN" cargo build --target wasm32-unknown-unknown -p urae-wasm --release
+elif [ -f "$CARGO_HOME/bin/rustup" ]; then
+    "$CARGO_HOME/bin/rustup" run "$RUST_TOOLCHAIN" cargo build --target wasm32-unknown-unknown -p urae-wasm --release
+else
+    cargo build --target wasm32-unknown-unknown -p urae-wasm --release
+fi
 
 echo "Generating WebAssembly bindings via wasm-bindgen..."
 mkdir -p crates/urae-wasm/public/pkg

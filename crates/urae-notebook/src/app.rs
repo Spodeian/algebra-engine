@@ -697,7 +697,7 @@ impl UraeNotebookApp {
             ui.scope(|ui| {
                 egui::Frame::NONE
                     .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                    .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(220, 160, 30)))
+                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
                     .corner_radius(6)
                     .inner_margin(8)
                     .show(ui, |ui| {
@@ -2661,7 +2661,7 @@ impl UraeNotebookApp {
                                                     seg.into_iter().collect();
                                                 let line = Line::new(plot_points)
                                                     .color(egui::Color32::from_rgb(100, 180, 240))
-                                                    .width(2.0);
+                                                    .width(2.0_f32);
                                                 plot_ui.line(line);
                                             }
                                         }
@@ -2907,7 +2907,7 @@ impl UraeNotebookApp {
                                                                 .color(egui::Color32::from_rgb(
                                                                     240, 160, 50,
                                                                 ))
-                                                                .width(2.0);
+                                                                .width(2.0_f32);
                                                             plot_ui.line(line);
                                                         }
                                                     }
@@ -3007,7 +3007,7 @@ impl UraeNotebookApp {
                                                             .color(egui::Color32::from_rgb(
                                                                 120, 200, 255,
                                                             ))
-                                                            .width(2.0);
+                                                            .width(2.0_f32);
                                                         plot_ui.line(line);
                                                     }
                                                 }
@@ -3353,7 +3353,7 @@ impl UraeNotebookApp {
                                         egui::Color32::TRANSPARENT
                                     };
                                     let frame_stroke = if is_dep_highlighted {
-                                        egui::Stroke::new(1.0, palette.accent_primary.linear_multiply(0.7))
+                                        egui::Stroke::new(1.0_f32, palette.accent_primary.linear_multiply(0.7))
                                     } else {
                                         egui::Stroke::NONE
                                     };
@@ -3564,7 +3564,7 @@ impl UraeNotebookApp {
                                                                                 let plot_points: PlotPoints = seg.into_iter().collect();
                                                                                 let line = Line::new(plot_points)
                                                                                     .color(palette.accent_primary)
-                                                                                    .width(2.0);
+                                                                                    .width(2.0_f32);
                                                                                 plot_ui.line(line);
                                                                             }
                                                                         }
@@ -4270,13 +4270,13 @@ impl UraeNotebookApp {
                                     let card_frame = if is_selected {
                                         egui::Frame::NONE
                                             .fill(egui::Color32::from_rgba_premultiplied(40, 90, 160, 45))
-                                            .stroke(egui::Stroke::new(1.5, egui::Color32::from_rgb(100, 180, 255)))
+                                            .stroke(egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(100, 180, 255)))
                                             .corner_radius(6)
                                             .inner_margin(6)
                                     } else {
                                         egui::Frame::NONE
                                             .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 30))
-                                            .stroke(egui::Stroke::new(1.0, egui::Color32::from_rgb(70, 70, 70)))
+                                            .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(70, 70, 70)))
                                             .corner_radius(6)
                                             .inner_margin(6)
                                     };
@@ -4382,7 +4382,7 @@ impl UraeNotebookApp {
                 .frame(
                     egui::Frame::window(&ctx.style())
                         .fill(palette.bg_card)
-                        .stroke(egui::Stroke::new(1.0, palette.accent_primary))
+                        .stroke(egui::Stroke::new(1.0_f32, palette.accent_primary))
                         .corner_radius(8)
                         .inner_margin(egui::Margin::symmetric(10, 8)),
                 );

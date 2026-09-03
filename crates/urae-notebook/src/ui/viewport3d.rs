@@ -269,7 +269,7 @@ impl Viewport3D {
             painter.rect_stroke(
                 rect,
                 8.0,
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(51, 65, 85)),
+                egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(51, 65, 85)),
                 egui::StrokeKind::Inside,
             );
 
@@ -346,7 +346,7 @@ impl Viewport3D {
                         vec![p0, p1, p2],
                         fill_color,
                         egui::Stroke::new(
-                            0.5,
+                            0.5_f32,
                             egui::Color32::from_rgba_premultiplied(200, 240, 255, 60),
                         ),
                     );
@@ -354,15 +354,15 @@ impl Viewport3D {
                 } else {
                     painter.line_segment(
                         [p0, p1],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(56, 189, 248)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(56, 189, 248)),
                     );
                     painter.line_segment(
                         [p1, p2],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(56, 189, 248)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(56, 189, 248)),
                     );
                     painter.line_segment(
                         [p2, p0],
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(56, 189, 248)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(56, 189, 248)),
                     );
                 }
             }
