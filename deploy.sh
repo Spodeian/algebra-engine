@@ -136,7 +136,9 @@ fi
 echo "Purging previous build distribution caches..."
 rm -rf crates/urae-wasm/public/pkg crates/urae-wasm/pkg dist
 
-echo "Compiling WebAssembly release with Cargo (toolchain: $RUST_TOOLCHAIN)..."
+export RUSTFLAGS="-C target-feature=+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext ${RUSTFLAGS:-}"
+
+echo "Compiling WebAssembly release with Cargo (toolchain: $RUST_TOOLCHAIN, bulk-memory enabled)..."
 if command -v rustup &> /dev/null; then
     rustup run "$RUST_TOOLCHAIN" cargo build --target wasm32-unknown-unknown -p urae-wasm --release
 elif [ -f "$CARGO_HOME/bin/rustup" ]; then
@@ -157,12 +159,25 @@ fi
 
 DIST_DIR="crates/urae-wasm/public"
 
-# Run wasm-opt pass on generated wasm artifact
+# Run wasm-opt pass on generated wasm artifact with full performance optimizations
+WASM_OPT_FLAGS=(
+    "-O3"
+    "--enable-bulk-memory"
+    "--enable-bulk-memory-opt"
+    "--enable-mutable-globals"
+    "--enable-sign-ext"
+    "--enable-nontrapping-float-to-int"
+    "--enable-reference-types"
+    "--enable-multivalue"
+    "--strip-debug"
+    "--strip-producers"
+)
+
 if [ -x "$WASM_OPT_BIN" ] || command -v wasm-opt &> /dev/null; then
     for wasm_file in "$DIST_DIR"/pkg/*.wasm; do
         if [ -f "$wasm_file" ]; then
-            echo "Optimizing WASM with wasm-opt: $wasm_file"
-            "$WASM_OPT_BIN" -Oz "$wasm_file" -o "$wasm_file" || true
+            echo "Optimizing WASM with wasm-opt (bulk-memory, fast math & performance flags): $wasm_file"
+            "$WASM_OPT_BIN" "${WASM_OPT_FLAGS[@]}" "$wasm_file" -o "$wasm_file" || "$WASM_OPT_BIN" -Oz "$wasm_file" -o "$wasm_file" || true
         fi
     done
 fi
