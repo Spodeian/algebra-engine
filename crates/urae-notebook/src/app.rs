@@ -3125,7 +3125,20 @@ impl UraeNotebookApp {
                                                 text_color,
                                             );
                                             if resp.clicked() {
-                                                self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                let token = format!("${}", logical_line_idx);
+                                                if let Some(pos) = self.state.cursor_char_idx {
+                                                    let doc = &mut self.state.session.raw_document_text;
+                                                    let clamped = pos.min(doc.len());
+                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
+                                                        format!(" {}", token)
+                                                    } else {
+                                                        token.clone()
+                                                    };
+                                                    doc.insert_str(clamped, &insert_str);
+                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
+                                                } else {
+                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                }
                                                 self.is_edit_dirty = true;
                                                 self.last_keystroke_time = web_time::Instant::now();
                                                 state_changed = true;
@@ -3138,7 +3151,20 @@ impl UraeNotebookApp {
                                         } else {
                                             // Wrapped continuation lines do NOT receive a line number
                                             if resp.clicked() {
-                                                self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                let token = format!("${}", logical_line_idx);
+                                                if let Some(pos) = self.state.cursor_char_idx {
+                                                    let doc = &mut self.state.session.raw_document_text;
+                                                    let clamped = pos.min(doc.len());
+                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
+                                                        format!(" {}", token)
+                                                    } else {
+                                                        token.clone()
+                                                    };
+                                                    doc.insert_str(clamped, &insert_str);
+                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
+                                                } else {
+                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                }
                                                 self.is_edit_dirty = true;
                                                 self.last_keystroke_time = web_time::Instant::now();
                                                 state_changed = true;
@@ -3169,6 +3195,16 @@ impl UraeNotebookApp {
                         .lock_focus(true);
 
                     let edit_resp = ui.add(text_edit);
+                    if let Some(text_state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id) {
+                        if let Some(char_range) = text_state.cursor.char_range() {
+                            let char_idx = char_range.primary.index;
+                            let text = &self.state.session.raw_document_text;
+                            let clamped = char_idx.min(text.len());
+                            let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
+                            self.state.focused_line = Some(current_line_idx);
+                            self.state.cursor_char_idx = Some(clamped);
+                        }
+                    }
                     if edit_resp.changed() {
                         self.is_edit_dirty = true;
                         self.last_keystroke_time = web_time::Instant::now();

@@ -46,6 +46,7 @@ pub struct NotebookState {
     pub unicode_formatter: urae::format::UnicodeFormatter,
     pub show_settings_modal: bool,
     pub focused_line: Option<usize>,
+    pub cursor_char_idx: Option<usize>,
     pub line_edit_buffer: String,
     pub is_scrubbing: bool,
     pub measured_eval_latency_ms: f64,
@@ -66,6 +67,7 @@ impl Default for NotebookState {
             unicode_formatter: urae::format::UnicodeFormatter,
             show_settings_modal: false,
             focused_line: None,
+            cursor_char_idx: None,
             line_edit_buffer: String::new(),
             is_scrubbing: false,
             measured_eval_latency_ms: 0.0,
@@ -92,6 +94,7 @@ impl NotebookState {
             unicode_formatter: urae::format::UnicodeFormatter,
             show_settings_modal: false,
             focused_line: None,
+            cursor_char_idx: None,
             line_edit_buffer: String::new(),
             is_scrubbing: false,
             measured_eval_latency_ms: 0.0,
@@ -2244,25 +2247,76 @@ impl NotebookState {
         }
     }
 
-    /// Insert generated syntax from builder palettes at the active cursor line.
+    /// Insert generated syntax from builder palettes at the active cursor location.
     pub fn insert_text_at_active_line(&mut self, text_to_insert: &str) {
-        self.record_snapshot("Insert syntax");
+        self.record_snapshot("Insert syntax at cursor");
+
+        // 1. If we have a precise cursor character index in the document
+        if let Some(char_idx) = self.cursor_char_idx {
+            let doc = &self.session.raw_document_text;
+            let clamped = char_idx.min(doc.len());
+
+            let before = &doc[..clamped];
+            let after = &doc[clamped..];
+
+            let line_start = before.rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+            let line_end = clamped + after.find('\n').unwrap_or(after.len());
+            let current_line = &doc[line_start..line_end];
+
+            let mut new_doc = String::new();
+            let new_cursor_pos;
+
+            if current_line.trim().is_empty() {
+                // Current line is blank: replace this line with text_to_insert
+                new_doc.push_str(&doc[..line_start]);
+                new_doc.push_str(text_to_insert);
+                new_cursor_pos = new_doc.len();
+                new_doc.push_str(&doc[line_end..]);
+            } else {
+                // Current line has text: insert a new line right after it!
+                new_doc.push_str(&doc[..line_end]);
+                new_doc.push('\n');
+                new_doc.push_str(text_to_insert);
+                new_cursor_pos = new_doc.len();
+                new_doc.push_str(&doc[line_end..]);
+            }
+
+            self.session.raw_document_text = new_doc;
+            self.cursor_char_idx = Some(new_cursor_pos);
+            let new_line_idx = self.session.raw_document_text[..new_cursor_pos]
+                .chars()
+                .filter(|&c| c == '\n')
+                .count();
+            self.focused_line = Some(new_line_idx);
+            self.evaluate_all();
+            return;
+        }
+
+        // 2. Fallback to focused_line if cursor_char_idx was not yet captured
         let mut lines: Vec<String> = self
             .session
             .raw_document_text
             .lines()
             .map(|s| s.to_string())
             .collect();
+
         if let Some(target_idx) = self.focused_line {
             if target_idx < lines.len() {
-                lines[target_idx] = text_to_insert.to_string();
+                if lines[target_idx].trim().is_empty() {
+                    lines[target_idx] = text_to_insert.to_string();
+                } else {
+                    lines.insert(target_idx + 1, text_to_insert.to_string());
+                    self.focused_line = Some(target_idx + 1);
+                }
             } else {
                 lines.push(text_to_insert.to_string());
+                self.focused_line = Some(lines.len().saturating_sub(1));
             }
         } else {
             lines.push(text_to_insert.to_string());
             self.focused_line = Some(lines.len().saturating_sub(1));
         }
+
         self.session.raw_document_text = lines.join("\n");
         self.evaluate_all();
     }
@@ -2393,5 +2447,33 @@ mod tests {
         assert!(state.can_redo());
         assert!(state.redo());
         assert!(state.session.raw_document_text.contains("z = 99"));
+    }
+
+    #[test]
+    fn test_insert_text_at_cursor_and_focused_line() {
+        let mut state = NotebookState::new_clean();
+        state.session.raw_document_text = "line1 = 1\nline2 = 2\nline3 = 3".to_string();
+        state.evaluate_all();
+
+        // 1. With focused_line = 0 (first line with content)
+        state.focused_line = Some(0);
+        state.cursor_char_idx = None;
+        state.insert_text_at_active_line("inserted_after_1 = 100");
+
+        let lines: Vec<&str> = state.session.raw_document_text.lines().collect();
+        assert_eq!(lines[0], "line1 = 1");
+        assert_eq!(lines[1], "inserted_after_1 = 100");
+        assert_eq!(lines[2], "line2 = 2");
+
+        // 2. With cursor_char_idx in the middle of line2
+        // Find position of "line2"
+        let line2_pos = state.session.raw_document_text.find("line2").unwrap();
+        state.cursor_char_idx = Some(line2_pos + 2);
+        state.insert_text_at_active_line("inserted_after_line2 = 200");
+
+        let lines2: Vec<&str> = state.session.raw_document_text.lines().collect();
+        assert_eq!(lines2[2], "line2 = 2");
+        assert_eq!(lines2[3], "inserted_after_line2 = 200");
+        assert_eq!(lines2[4], "line3 = 3");
     }
 }
