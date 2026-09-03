@@ -2573,11 +2573,19 @@ impl UraeNotebookApp {
                                 .height(140.0)
                                 .allow_drag(true)
                                 .allow_zoom(true)
-                                .allow_scroll(true)
+                                .allow_scroll(false)
                                 .include_x(smart_min)
                                 .include_x(smart_max)
                                 .auto_bounds(egui::Vec2b::new(false, true))
                                 .show(ui, |plot_ui| {
+                                    let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                    let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                    let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
+                                    if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
+                                        let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
+                                        plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
+                                    }
+
                                     let bounds = plot_ui.plot_bounds();
                                     min_r = bounds.min()[0];
                                     max_r = bounds.max()[0];
@@ -2812,11 +2820,19 @@ impl UraeNotebookApp {
                                             .height(260.0)
                                             .allow_drag(true)
                                             .allow_zoom(true)
-                                            .allow_scroll(true)
+                                            .allow_scroll(false)
                                             .include_x(smart_min)
                                             .include_x(smart_max)
                                             .auto_bounds(egui::Vec2b::new(false, true))
                                             .show(ui, |plot_ui| {
+                                                let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                                let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                                let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
+                                                if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
+                                                    let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
+                                                    plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
+                                                }
+
                                                 let bounds = plot_ui.plot_bounds();
                                                 local_min_r = bounds.min()[0];
                                                 local_max_r = bounds.max()[0];
@@ -2913,11 +2929,19 @@ impl UraeNotebookApp {
                                         .height(220.0)
                                         .allow_drag(true)
                                         .allow_zoom(true)
-                                        .allow_scroll(true)
+                                        .allow_scroll(false)
                                         .include_x(smart_min)
                                         .include_x(smart_max)
                                         .auto_bounds(egui::Vec2b::new(false, true))
                                         .show(ui, |plot_ui| {
+                                            let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                            let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                            let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
+                                            if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
+                                                let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
+                                                plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
+                                            }
+
                                             let bounds = plot_ui.plot_bounds();
                                             local_min_r = bounds.min()[0];
                                             local_max_r = bounds.max()[0];
@@ -3519,11 +3543,19 @@ impl UraeNotebookApp {
                                                                 .width((gutter_width - 24.0).max(140.0))
                                                                 .allow_drag(true)
                                                                 .allow_zoom(true)
-                                                                .allow_scroll(true)
+                                                                .allow_scroll(false)
                                                                 .include_x(smart_min)
                                                                 .include_x(smart_max)
                                                                 .auto_bounds(egui::Vec2b::new(false, true))
                                                                 .show(ui, |plot_ui| {
+                                                                    let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                                                    let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                                                    let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
+                                                                    if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
+                                                                        let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
+                                                                        plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
+                                                                    }
+
                                                                     let bounds = plot_ui.plot_bounds();
                                                                     min_r = bounds.min()[0];
                                                                     max_r = bounds.max()[0];
