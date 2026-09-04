@@ -425,3 +425,131 @@ impl DurandKernerSolver {
         (cur_re, cur_im)
     }
 }
+
+/// A segment in the Newton Polygon lower convex hull.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PolygonSegment {
+    pub start_k: usize,
+    pub start_val: f64,
+    pub end_k: usize,
+    pub end_val: f64,
+    pub slope: f64,
+    pub root_count: usize,
+    pub root_valuation: f64,
+}
+
+/// Non-Archimedean Newton Polygon for polynomials over $\mathbb{Q}_p$.
+///
+/// By Kapranov's theorem, the slopes of the lower convex hull of points $(k, v_p(c_k))$
+/// directly determine the $p$-adic valuations of all roots in $\bar{\mathbb{Q}}_p$.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewtonPolygon {
+    pub prime: u64,
+    pub vertices: Vec<(usize, f64)>,
+    pub segments: Vec<PolygonSegment>,
+}
+
+impl NewtonPolygon {
+    /// Construct Newton Polygon from integer coefficients $c_0 + c_1 x + \dots + c_n x^n$.
+    pub fn from_integer_coeffs(coeffs: &[i64], p: u64) -> Self {
+        let mut points = Vec::new();
+        for (k, &c) in coeffs.iter().enumerate() {
+            if c != 0 {
+                let val = Self::integer_p_valuation(c, p);
+                points.push((k, val as f64));
+            }
+        }
+        Self::from_points(points, p)
+    }
+
+    /// Construct lower convex hull using Monotone Chain algorithm.
+    pub fn from_points(mut points: Vec<(usize, f64)>, p: u64) -> Self {
+        if points.is_empty() {
+            return Self {
+                prime: p,
+                vertices: Vec::new(),
+                segments: Vec::new(),
+            };
+        }
+
+        points.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Lower convex hull
+        let mut hull: Vec<(usize, f64)> = Vec::new();
+        for pt in points {
+            while hull.len() >= 2 {
+                let p1 = hull[hull.len() - 2];
+                let p2 = hull[hull.len() - 1];
+                let slope1 = (p2.1 - p1.1) / ((p2.0 - p1.0) as f64);
+                let slope2 = (pt.1 - p2.1) / ((pt.0 - p2.0) as f64);
+                // Lower convex hull requires strictly increasing slopes
+                if slope1 >= slope2 - 1e-12 {
+                    hull.pop();
+                } else {
+                    break;
+                }
+            }
+            hull.push(pt);
+        }
+
+        let mut segments = Vec::new();
+        for i in 0..hull.len().saturating_sub(1) {
+            let p1 = hull[i];
+            let p2 = hull[i + 1];
+            let dx = (p2.0 - p1.0) as f64;
+            let dy = p2.1 - p1.1;
+            let slope = dy / dx;
+            let root_count = p2.0 - p1.0;
+            let root_valuation = -slope;
+
+            segments.push(PolygonSegment {
+                start_k: p1.0,
+                start_val: p1.1,
+                end_k: p2.0,
+                end_val: p2.1,
+                slope,
+                root_count,
+                root_valuation,
+            });
+        }
+
+        Self {
+            prime: p,
+            vertices: hull,
+            segments,
+        }
+    }
+
+    /// Tropical evaluation $\mathrm{trop}(f)(w) = \min_k (v_p(c_k) + k \cdot w)$ using MinPlus semiring.
+    pub fn eval_tropical(&self, w: f64) -> crate::tropical::MinPlus {
+        use crate::tropical::MinPlus;
+        let mut min_val = MinPlus::zero();
+        for &(k, val) in &self.vertices {
+            let term = MinPlus::val(val + (k as f64) * w);
+            min_val = min_val + term;
+        }
+        min_val
+    }
+
+    /// Returns list of (root_valuation, multiplicity) in $\bar{\mathbb{Q}}_p$.
+    pub fn padic_root_valuations(&self) -> Vec<(f64, usize)> {
+        self.segments
+            .iter()
+            .map(|s| (s.root_valuation, s.root_count))
+            .collect()
+    }
+
+    fn integer_p_valuation(mut val: i64, p: u64) -> i64 {
+        if val == 0 {
+            return 1000;
+        }
+        let p_i = p as i64;
+        let mut count = 0;
+        while val % p_i == 0 {
+            val /= p_i;
+            count += 1;
+        }
+        count
+    }
+}
+

@@ -53,3 +53,20 @@ fn test_equivalence_classifier() {
     assert!(classifier.check_isomorphism("Quaternion", "M_2(C)"));
     assert!(classifier.check_isomorphism("Complex", "Matrix2x2Real"));
 }
+
+#[test]
+fn test_simplification_functor() {
+    use algebra_advanced::morphism::{Functor, SimplificationFunctor};
+
+    let graph = ExprGraph::new();
+    let functor = SimplificationFunctor::new(&graph);
+
+    // x + 0 -> maps under functor to x
+    let x = graph.symbol("x");
+    let zero = graph.integer(0);
+    let x_plus_0 = graph.add([x, zero]);
+
+    let simplified = functor.map_object(&x_plus_0);
+    assert_eq!(simplified, x);
+}
+

@@ -484,3 +484,101 @@ impl AlmkvistZeilberger {
         (ode_op, "-y * exp(-x * y^2)".to_string())
     }
 }
+
+/// A holonomic function that is annihilated by a non-zero linear differential operator in the Weyl algebra $A_1$.
+pub trait HolonomicFunction {
+    /// Returns the annihilating differential operator $L(x, \partial_x) \in A_1$ such that $L \cdot f = 0$.
+    fn annihilator(&self) -> WeylOperator;
+}
+
+/// Bessel function of the first kind $J_\nu(x)$.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BesselJ {
+    pub nu: f64,
+}
+
+impl HolonomicFunction for BesselJ {
+    /// Annihilating ODE: $x^2 \partial_x^2 + x \partial_x + (x^2 - \nu^2) = 0$.
+    fn annihilator(&self) -> WeylOperator {
+        let mut op = WeylOperator::zero(1);
+        // x^2 d^2
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![2])));
+        // x d
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![1], vec![1])));
+        // x^2
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![0])));
+        // -nu^2
+        if self.nu != 0.0 {
+            op.terms.push(WeylTerm::new(-self.nu * self.nu, WeylMonomial::new(vec![0], vec![0])));
+        }
+        op.normalize();
+        op
+    }
+}
+
+/// Hermite polynomial $H_n(x)$.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HermiteH {
+    pub n: usize,
+}
+
+impl HolonomicFunction for HermiteH {
+    /// Annihilating ODE: $\partial_x^2 - 2x \partial_x + 2n = 0$.
+    fn annihilator(&self) -> WeylOperator {
+        let mut op = WeylOperator::zero(1);
+        // d^2
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        // -2 x d
+        op.terms.push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
+        // +2n
+        if self.n > 0 {
+            op.terms.push(WeylTerm::new(2.0 * self.n as f64, WeylMonomial::new(vec![0], vec![0])));
+        }
+        op.normalize();
+        op
+    }
+}
+
+/// Legendre polynomial $P_n(x)$.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LegendreP {
+    pub n: usize,
+}
+
+impl HolonomicFunction for LegendreP {
+    /// Annihilating ODE: $(1 - x^2) \partial_x^2 - 2x \partial_x + n(n+1) = 0$.
+    fn annihilator(&self) -> WeylOperator {
+        let mut op = WeylOperator::zero(1);
+        // d^2
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        // -x^2 d^2
+        op.terms.push(WeylTerm::new(-1.0, WeylMonomial::new(vec![2], vec![2])));
+        // -2x d
+        op.terms.push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
+        // n(n+1)
+        let lambda = (self.n * (self.n + 1)) as f64;
+        if lambda > 0.0 {
+            op.terms.push(WeylTerm::new(lambda, WeylMonomial::new(vec![0], vec![0])));
+        }
+        op.normalize();
+        op
+    }
+}
+
+/// Gauss error function $\operatorname{erf}(x)$.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ErrorFunctionErf;
+
+impl HolonomicFunction for ErrorFunctionErf {
+    /// Annihilating ODE: $\partial_x^2 + 2x \partial_x = 0$.
+    fn annihilator(&self) -> WeylOperator {
+        let mut op = WeylOperator::zero(1);
+        // d^2
+        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        // 2 x d
+        op.terms.push(WeylTerm::new(2.0, WeylMonomial::new(vec![1], vec![1])));
+        op.normalize();
+        op
+    }
+}
+

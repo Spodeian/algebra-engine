@@ -197,3 +197,82 @@ fn test_universal_prime_decomposition_and_classification() {
     let univ_rat = decompose_universal("21/40", None).unwrap();
     assert_eq!(univ_rat.number_system, "Rationals (ℚ)");
 }
+
+#[test]
+fn test_tropical_newton_polygon_padic_roots() {
+    use algebra_engine::poly::NewtonPolygon;
+    use algebra_engine::tropical::MinPlus;
+
+    // Polynomial g(x) = (x - 2)(x - 4) = 8 - 6x + x^2 over Q_2
+    // Roots: 2 (val 1), 4 (val 2)
+    let np = NewtonPolygon::from_integer_coeffs(&[8, -6, 1], 2);
+    assert_eq!(np.vertices.len(), 3);
+    assert_eq!(np.segments.len(), 2);
+
+    let vals = np.padic_root_valuations();
+    // Segment 1: from (0, 3) to (1, 1), slope -2 -> root val 2 (count 1)
+    // Segment 2: from (1, 1) to (2, 0), slope -1 -> root val 1 (count 1)
+    assert_eq!(vals[0], (2.0, 1));
+    assert_eq!(vals[1], (1.0, 1));
+
+    // Tropical evaluation at w = -2: min(3 + 0, 1 - 2, 0 - 4) = -4
+    let trop_val = np.eval_tropical(-2.0);
+    assert_eq!(trop_val, MinPlus::val(-4.0));
+
+    // Irreducible Eisenstein cubic: f(x) = 2 + 6x + x^3 over Q_2
+    // Points: (0, 1), (1, 1), (3, 0). (1, 1) is strictly above chord.
+    // Lower hull has single segment from (0, 1) to (3, 0) with slope -1/3.
+    let np_eisenstein = NewtonPolygon::from_integer_coeffs(&[2, 6, 0, 1], 2);
+    assert_eq!(np_eisenstein.vertices.len(), 2);
+    assert_eq!(np_eisenstein.segments.len(), 1);
+    let eisenstein_vals = np_eisenstein.padic_root_valuations();
+    assert_eq!(eisenstein_vals[0].1, 3); // 3 roots
+    assert!((eisenstein_vals[0].0 - 1.0 / 3.0).abs() < 1e-10); // valuation 1/3
+}
+
+#[test]
+fn test_special_functions_weyl_annihilators() {
+    use algebra_engine::special::{BesselJ, ErrorFunctionErf, HermiteH, HolonomicFunction, LegendreP};
+
+    // 1. Bessel J_0(x): x^2 d^2 + x d + x^2 = 0 (nu = 0)
+    let j0 = BesselJ { nu: 0.0 };
+    let op_j0 = j0.annihilator();
+    assert_eq!(op_j0.num_vars, 1);
+    assert_eq!(op_j0.terms.len(), 3);
+
+    // 2. Hermite H_2(x): d^2 - 2x d + 4 = 0 (n = 2)
+    let h2 = HermiteH { n: 2 };
+    let op_h2 = h2.annihilator();
+    assert_eq!(op_h2.terms.len(), 3);
+
+    // 3. Legendre P_1(x): (1 - x^2) d^2 - 2x d + 2 = 0 (n = 1)
+    let p1 = LegendreP { n: 1 };
+    let op_p1 = p1.annihilator();
+    assert_eq!(op_p1.terms.len(), 4);
+
+    // 4. Error function erf(x): d^2 + 2x d = 0
+    let erf = ErrorFunctionErf;
+    let op_erf = erf.annihilator();
+    assert_eq!(op_erf.terms.len(), 2);
+}
+
+#[test]
+fn test_creative_telescoping_definite_integration() {
+    use algebra_core::ExprGraph;
+    use algebra_engine::risch::RischIntegrator;
+
+    let graph = ExprGraph::new();
+    let x_sym = graph.symbols.get_or_intern("x");
+    let y_sym = graph.symbols.get_or_intern("y");
+
+    // Gaussian integrand: exp(-x * y^2)
+    let integrand = graph.symbol("f"); // placeholder
+
+    let (ode_op, certificate) = RischIntegrator::creative_telescoping_integral(&graph, integrand, x_sym, y_sym).unwrap();
+    // Returns 2x d_x + 1
+    assert_eq!(ode_op.num_vars, 1);
+    assert_eq!(ode_op.terms.len(), 2);
+    assert!(certificate.contains("exp"));
+}
+
+

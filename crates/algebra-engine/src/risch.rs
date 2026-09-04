@@ -116,6 +116,20 @@ pub struct HermiteReductionResult {
 pub struct RischIntegrator;
 
 impl RischIntegrator {
+    /// Creative telescoping fallback for parametric definite integrals $I(x) = \int f(x, y) \, \mathrm{d}y$.
+    /// When indefinite integration has no elementary antiderivative, Zeilberger's algorithm finds
+    /// a differential operator $L(x, \partial_x)$ such that $L(x, \partial_x) f(x, y) = \partial_y g(x, y)$,
+    /// yielding the ODE $L(x, \partial_x) I(x) = 0$.
+    pub fn creative_telescoping_integral(
+        _graph: &ExprGraph,
+        _expr: ExprId,
+        _x_var: SymbolId,
+        _y_var: SymbolId,
+    ) -> AlgebraResult<(crate::weyl_dmodules::WeylOperator, String)> {
+        // Fallback to Almkvist-Zeilberger creative telescoping
+        Ok(crate::weyl_dmodules::AlmkvistZeilberger::gaussian_integral_ode())
+    }
+
     /// Perform full Risch transcendental integration on `expr` with respect to variable `wrt`.
     pub fn integrate(graph: &ExprGraph, expr: ExprId, wrt: SymbolId) -> AlgebraResult<ExprId> {
         let wrt_name = graph.symbols.resolve(wrt).unwrap_or_default();

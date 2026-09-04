@@ -47,6 +47,7 @@ pub use step::{MathStep, StepByStepResult};
 pub use symbol::SymbolTable;
 pub use traits::{
     AbelianGroup, CommutativeRing, DifferentialRing, Field, Group, HeytingAlgebra, LieAlgebra,
-    Magma, MathSet, Monoid, Ring, Semigroup, TensorAlgebra, TropicalSemiring, VectorSpace,
+    Magma, MathSet, Monoid, Ring, Semigroup, TensorAlgebra, TropicalSemiring, ValuationProvider,
+    VectorSpace,
 };
 pub use vm::{BytecodeProgram, BytecodeVM, Instruction, VmCompiler, VmError};

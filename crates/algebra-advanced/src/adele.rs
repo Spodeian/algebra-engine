@@ -11,6 +11,7 @@
 
 use crate::padic::PadicNumber;
 use algebra_core::error::{AlgebraError, AlgebraResult};
+use algebra_core::traits::ValuationProvider;
 use std::fmt;
 
 /// Classification of a global field valuation place.
@@ -32,7 +33,8 @@ pub struct Adele {
 }
 
 impl Adele {
-    /// Embeds a global rational number $x = n / d \in \mathbb{Q}$ diagonally into the Adele Ring $\mathbb{A}_\mathbb{Q}$.
+    /// Embeds a global rational number $x = n / d \in \mathbb{Q}$ diagonally into the Adele Ring $\mathbb{A}_\mathbb{Q}$
+    /// at specified prime places.
     pub fn from_rational(n: i64, d: i64, primes: &[u64], precision: usize) -> AlgebraResult<Self> {
         if d == 0 {
             return Err(AlgebraError::DivisionByZero {
@@ -51,6 +53,11 @@ impl Adele {
             archimedean,
             finite_places,
         })
+    }
+
+    /// Construct an Adele from a GlobalValuationProfile.
+    pub fn from_valuation_profile(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Self> {
+        ArtinProduct::to_adele_vector(profile, precision)
     }
 
     /// Addition of adeles.
@@ -107,50 +114,56 @@ impl Idele {
     }
 }
 
+pub trait AdeleEmbedding {
+    /// Verifies the Global Product Formula $\prod_{v \le \infty} |x|_v = 1$ for a non-zero rational $x = n / d$.
+    fn verify_artin_product(profile: &impl ValuationProvider) -> bool;
+    
+    /// Embeds a global rational number $x = n / d \in \mathbb{Q}$ diagonally into the Adele Ring $\mathbb{A}_\mathbb{Q}$.
+    fn to_adele_vector(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Adele>;
+}
+
 /// Global Artin Product Formula Verifier.
 pub struct ArtinProduct;
 
 impl ArtinProduct {
-    /// Verifies the Global Product Formula $\prod_{v \le \infty} |x|_v = 1$ for a non-zero rational $x = n / d$.
+    /// Convenience method: verifies the Global Product Formula for $n / d$ by constructing a `GlobalValuationProfile`.
     pub fn verify_product_formula(n: i64, d: i64) -> AlgebraResult<bool> {
-        if n == 0 || d == 0 {
-            return Err(AlgebraError::EvaluationError("Number must be in Q*".into()));
+        let profile = algebra_engine::numbertheory::GlobalValuationProfile::from_rational(n, d)
+            .ok_or_else(|| AlgebraError::EvaluationError("Number must be non-zero rational in Q*".into()))?;
+        Ok(<Self as AdeleEmbedding>::verify_artin_product(&profile))
+    }
+}
+
+impl AdeleEmbedding for ArtinProduct {
+    fn verify_artin_product(profile: &impl ValuationProvider) -> bool {
+        let arch_norm = profile.infinite_place_abs();
+        if arch_norm == 0.0 {
+            return false;
         }
 
-        let arch_norm = (n as f64 / d as f64).abs();
-        let primes = Self::prime_factors(n.unsigned_abs() * d.unsigned_abs());
-
         let mut finite_product = 1.0;
-        for p in primes {
-            let padic = PadicNumber::from_rational(n, d, p, 10)?;
-            finite_product *= padic.norm();
+        for (p, val) in profile.finite_places() {
+            // Norm of p in Q_p is p^{-val}
+            finite_product *= (p as f64).powi(-val);
         }
 
         let total_product = arch_norm * finite_product;
-        Ok((total_product - 1.0).abs() < 1e-9)
+        (total_product - 1.0).abs() < 1e-9
     }
 
-    #[allow(clippy::manual_is_multiple_of)]
-    fn prime_factors(mut val: u64) -> Vec<u64> {
-        let mut factors = Vec::new();
-        if val <= 1 {
-            return factors;
+    fn to_adele_vector(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Adele> {
+        let archimedean = profile.num as f64 / profile.den as f64;
+        let mut finite_places = Vec::with_capacity(profile.finite_places.len());
+
+        for (&p, _) in &profile.finite_places {
+            let padic = PadicNumber::from_rational(profile.num, profile.den, p, precision)?;
+            finite_places.push((p, padic));
         }
 
-        let mut d = 2;
-        while d * d <= val {
-            if val % d == 0 {
-                factors.push(d);
-                while val % d == 0 {
-                    val /= d;
-                }
-            }
-            d += if d == 2 { 1 } else { 2 };
-        }
-        if val > 1 {
-            factors.push(val);
-        }
-        factors
+        Ok(Adele {
+            archimedean,
+            finite_places,
+        })
     }
 }
 

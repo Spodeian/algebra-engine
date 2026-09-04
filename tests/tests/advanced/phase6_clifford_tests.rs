@@ -87,3 +87,45 @@ fn test_free_tensor_outer_product_and_trace() {
     assert_eq!(contracted.rank, 0);
     assert_eq!(contracted.data, vec![11.0]);
 }
+
+#[test]
+fn test_clifford_pauli_dirac_isomorphisms() {
+    let sig3 = CliffordSignature::pga3d(); // Cl(3,0,0)
+    let e1 = CliffordMultivector::basis_vector(0, sig3).unwrap();
+    let e2 = CliffordMultivector::basis_vector(1, sig3).unwrap();
+    let e3 = CliffordMultivector::basis_vector(2, sig3).unwrap();
+
+    // Test Pauli matrix representation
+    // sigma_x = e1
+    let pauli_e1 = e1.to_pauli_spinor_2x2().unwrap();
+    assert_eq!(pauli_e1, [[(0.0, 0.0), (1.0, 0.0)], [(1.0, 0.0), (0.0, 0.0)]]);
+
+    // sigma_y = e2
+    let pauli_e2 = e2.to_pauli_spinor_2x2().unwrap();
+    assert_eq!(pauli_e2, [[(0.0, 0.0), (0.0, -1.0)], [(0.0, 1.0), (0.0, 0.0)]]);
+
+    // sigma_z = e3
+    let pauli_e3 = e3.to_pauli_spinor_2x2().unwrap();
+    assert_eq!(pauli_e3, [[(1.0, 0.0), (0.0, 0.0)], [(0.0, 0.0), (-1.0, 0.0)]]);
+
+    // Even subalgebra to Quaternion
+    // Rotor R = cos(pi/4) - sin(pi/4) e12 = 1/sqrt(2) (1 - e12)
+    let e12 = e1.wedge(&e2).unwrap();
+    let rotor = CliffordMultivector::make_rotor_3d(&e12, std::f64::consts::PI / 2.0).unwrap();
+    let (w, x, y, z) = rotor.to_quaternion().unwrap();
+    assert!((w - (std::f64::consts::PI / 4.0).cos()).abs() < 1e-10);
+    assert_eq!(x, 0.0);
+    assert_eq!(y, 0.0);
+    assert!((z - (std::f64::consts::PI / 4.0).sin()).abs() < 1e-10);
+
+    // Spacetime Algebra Cl(1,3,0) to Dirac matrices
+    let sta = CliffordSignature::spacetime();
+    let gamma0 = CliffordMultivector::basis_vector(0, sta).unwrap();
+    let dirac0 = gamma0.to_dirac_gamma_4x4().unwrap();
+    // gamma^0 = diag(1, 1, -1, -1)
+    assert_eq!(dirac0[0][0].0, 1.0);
+    assert_eq!(dirac0[1][1].0, 1.0);
+    assert_eq!(dirac0[2][2].0, -1.0);
+    assert_eq!(dirac0[3][3].0, -1.0);
+}
+

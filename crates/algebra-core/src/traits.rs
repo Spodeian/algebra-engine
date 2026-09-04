@@ -211,3 +211,13 @@ pub trait HopfAlgebra<F: Field>: VectorSpace<F> {
     /// Antipode map $S: H \to H$.
     fn antipode(&self, a: &Self::Vector) -> AlgebraResult<Self::Vector>;
 }
+
+/// Abstract provider for global valuation profiles.
+/// Used to decouple engine factoring algorithms from advanced Adele/Padic implementations.
+pub trait ValuationProvider {
+    /// Returns the finite $p$-adic valuations $v_p(q)$ for all primes $p$ where $v_p(q) \neq 0$.
+    fn finite_places(&self) -> std::collections::BTreeMap<u64, i32>;
+
+    /// Returns the Archimedean absolute value $|q|_\infty$.
+    fn infinite_place_abs(&self) -> f64;
+}

@@ -4,6 +4,7 @@
 //! Riemann Zeta $\zeta(s)$, Dirac Delta $\delta(x)$, and Error function $\text{erf}(x)$.
 
 use algebra_core::{AlgebraResult, ExprGraph, ExprId};
+pub use crate::weyl_dmodules::{BesselJ, ErrorFunctionErf, HermiteH, HolonomicFunction, LegendreP};
 
 /// Special functions constructors for symbolic expressions.
 pub trait SpecialFunctions {

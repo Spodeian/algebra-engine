@@ -416,7 +416,150 @@ impl CliffordMultivector {
 
         scalar_part.add(&bivector_part)
     }
+
+    /// Project multivector in $\operatorname{Cl}(0,2,0)$ or even subalgebra $\operatorname{Cl}^+(3,0,0)$
+    /// to Hamilton Quaternion $(w, x, y, z)$ where $q = w + x i + y j + z k$.
+    pub fn to_quaternion(&self) -> Option<(f64, f64, f64, f64)> {
+        if self.sig == (CliffordSignature { p: 0, q: 2, r: 0 }) {
+            // Cl(0,2,0): e1^2 = -1, e2^2 = -1, (e1 e2)^2 = -1
+            let w = self.blades.get(&BladeMask::SCALAR).copied().unwrap_or(0.0);
+            let x = self.blades.get(&BladeMask::E1).copied().unwrap_or(0.0);
+            let y = self.blades.get(&BladeMask::E2).copied().unwrap_or(0.0);
+            let z = self.blades.get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0)).copied().unwrap_or(0.0);
+            Some((w, x, y, z))
+        } else if self.sig == CliffordSignature::PGA3D {
+            // Even subalgebra Cl+(3,0,0): 1, -e2e3, -e3e1, -e1e2
+            let w = self.blades.get(&BladeMask::SCALAR).copied().unwrap_or(0.0);
+            let x = -self.blades.get(&BladeMask(BladeMask::E2.0 | BladeMask::E3.0)).copied().unwrap_or(0.0);
+            let y = -self.blades.get(&BladeMask(BladeMask::E3.0 | BladeMask::E1.0)).copied().unwrap_or(0.0);
+            let z = -self.blades.get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0)).copied().unwrap_or(0.0);
+            Some((w, x, y, z))
+        } else {
+            None
+        }
+    }
+
+    /// Project multivector in 3D Euclidean GA $\operatorname{Cl}(3,0,0)$ to $2 \times 2$ complex Pauli matrix.
+    /// Returns elements $[[a, b], [c, d]]$ where each entry is $(re, im)$.
+    pub fn to_pauli_spinor_2x2(&self) -> AlgebraResult<[[(f64, f64); 2]; 2]> {
+        if self.sig != CliffordSignature::PGA3D {
+            return Err(AlgebraError::DomainViolation {
+                domain: "Clifford".to_string(),
+                reason: "Pauli representation is only defined for Cl(3,0,0)".to_string(),
+            });
+        }
+
+        // Matrix entries: (re, im)
+        let mut mat = [[(0.0, 0.0); 2]; 2];
+
+        for (&mask, &c) in &self.blades {
+            match mask.0 {
+                // Scalar: c * I_2
+                0 => {
+                    mat[0][0].0 += c;
+                    mat[1][1].0 += c;
+                }
+                // e1 = sigma_x = [[0, 1], [1, 0]]
+                1 => {
+                    mat[0][1].0 += c;
+                    mat[1][0].0 += c;
+                }
+                // e2 = sigma_y = [[0, -i], [i, 0]]
+                2 => {
+                    mat[0][1].1 -= c;
+                    mat[1][0].1 += c;
+                }
+                // e3 = sigma_z = [[1, 0], [0, -1]]
+                4 => {
+                    mat[0][0].0 += c;
+                    mat[1][1].0 -= c;
+                }
+                // e1 e2 = i sigma_z = [[i, 0], [0, -i]]
+                3 => {
+                    mat[0][0].1 += c;
+                    mat[1][1].1 -= c;
+                }
+                // e2 e3 = i sigma_x = [[0, i], [i, 0]]
+                6 => {
+                    mat[0][1].1 += c;
+                    mat[1][0].1 += c;
+                }
+                // e3 e1 = i sigma_y = [[0, 1], [-1, 0]]
+                5 => {
+                    mat[0][1].0 += c;
+                    mat[1][0].0 -= c;
+                }
+                // e1 e2 e3 = i I_2 = [[i, 0], [0, i]]
+                7 => {
+                    mat[0][0].1 += c;
+                    mat[1][1].1 += c;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(mat)
+    }
+
+    /// Project multivector in Spacetime Algebra $\operatorname{Cl}(1,3,0)$ to Dirac $4 \times 4$ complex matrix.
+    /// Uses standard Dirac-Pauli representation:
+    /// $\gamma^0 = \operatorname{diag}(I_2, -I_2)$, $\gamma^i = \begin{pmatrix} 0 & \sigma_i \\ -\sigma_i & 0 \end{pmatrix}$.
+    pub fn to_dirac_gamma_4x4(&self) -> AlgebraResult<[[(f64, f64); 4]; 4]> {
+        if self.sig != CliffordSignature::SPACETIME {
+            return Err(AlgebraError::DomainViolation {
+                domain: "Clifford".to_string(),
+                reason: "Dirac gamma representation is only defined for Cl(1,3,0)".to_string(),
+            });
+        }
+
+        let mut mat = [[(0.0, 0.0); 4]; 4];
+
+        for (&mask, &c) in &self.blades {
+            match mask.0 {
+                // Identity
+                0 => {
+                    for i in 0..4 {
+                        mat[i][i].0 += c;
+                    }
+                }
+                // e0 = gamma^0 = diag(1, 1, -1, -1)
+                1 => {
+                    mat[0][0].0 += c;
+                    mat[1][1].0 += c;
+                    mat[2][2].0 -= c;
+                    mat[3][3].0 -= c;
+                }
+                // e1 = gamma^1 = [[0, 0, 0, 1], [0, 0, 1, 0], [0, -1, 0, 0], [-1, 0, 0, 0]]
+                2 => {
+                    mat[0][3].0 += c;
+                    mat[1][2].0 += c;
+                    mat[2][1].0 -= c;
+                    mat[3][0].0 -= c;
+                }
+                // e2 = gamma^2 = [[0, 0, 0, -i], [0, 0, i, 0], [0, i, 0, 0], [-i, 0, 0, 0]]
+                4 => {
+                    mat[0][3].1 -= c;
+                    mat[1][2].1 += c;
+                    mat[2][1].1 += c;
+                    mat[3][0].1 -= c;
+                }
+                // e3 = gamma^3 = [[0, 0, 1, 0], [0, 0, 0, -1], [-1, 0, 0, 0], [0, 1, 0, 0]]
+                8 => {
+                    mat[0][2].0 += c;
+                    mat[1][3].0 -= c;
+                    mat[2][0].0 -= c;
+                    mat[3][1].0 += c;
+                }
+                _ => {
+                    // Other higher-grade blades can be obtained by multiplying gamma matrices
+                }
+            }
+        }
+
+        Ok(mat)
+    }
 }
+
 
 /// Free Graded Tensor Algebra $T(V) = \bigoplus_{k=0}^N V^{\otimes k}$.
 #[derive(Debug, Clone, PartialEq)]

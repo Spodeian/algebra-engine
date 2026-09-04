@@ -21,7 +21,8 @@ use std::collections::BTreeMap;
 pub use grobner::GrobnerBasis;
 pub use multivariate::{MonomialOrder, MultiPoly, Term};
 pub use roots::{
-    BringRadical, CardanoSolver, ComplexRoot, DurandKernerSolver, FerrariSolver, SturmSequence,
+    BringRadical, CardanoSolver, ComplexRoot, DurandKernerSolver, FerrariSolver, NewtonPolygon,
+    PolygonSegment, SturmSequence,
 };
 
 /// Sparse Monomial exponent vector mapping variable symbols to exponent powers.

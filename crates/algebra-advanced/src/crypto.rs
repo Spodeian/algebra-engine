@@ -52,6 +52,120 @@ impl EllipticCurve {
     }
 }
 
+/// Reduction type of an elliptic curve modulo a prime place $p$.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReductionType {
+    /// Non-singular reduction ($p \nmid \Delta$).
+    Good,
+    /// Multiplicative (nodal) reduction ($p \mid \Delta$ and $p \nmid c_4$).
+    Multiplicative { split: bool },
+    /// Additive (cuspidal) reduction ($p \mid \Delta$ and $p \mid c_4$).
+    Additive,
+}
+
+/// Elliptic curve defined over $\mathbb{Q}$ via Weierstrass equation $y^2 = x^3 + ax + b$ with $a, b \in \mathbb{Z}$.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RationalEllipticCurve {
+    pub a: i64,
+    pub b: i64,
+}
+
+impl RationalEllipticCurve {
+    pub fn new(a: i64, b: i64) -> AlgebraResult<Self> {
+        let disc = Self::compute_discriminant(a, b);
+        if disc == 0 {
+            return Err(AlgebraError::DomainViolation {
+                domain: "RationalEllipticCurve".to_string(),
+                reason: "Discriminant Delta = -16(4a^3 + 27b^2) is zero (curve is singular over Q)".to_string(),
+            });
+        }
+        Ok(Self { a, b })
+    }
+
+    /// Compute discriminant $\Delta = -16(4a^3 + 27b^2)$.
+    pub fn discriminant(&self) -> i128 {
+        Self::compute_discriminant(self.a, self.b)
+    }
+
+    fn compute_discriminant(a: i64, b: i64) -> i128 {
+        let a = a as i128;
+        let b = b as i128;
+        -16 * (4 * a * a * a + 27 * b * b)
+    }
+
+    /// Compute invariants $c_4 = -48a$.
+    pub fn c4(&self) -> i128 {
+        -48 * (self.a as i128)
+    }
+
+    /// Identify the bad reduction places (primes dividing $\Delta$) using prime factorization.
+    pub fn bad_reduction_places(&self) -> Vec<u64> {
+        let disc_abs = self.discriminant().unsigned_abs();
+        if disc_abs <= 1 {
+            return Vec::new();
+        }
+        let factors = algebra_engine::numbertheory::integer_prime_factors(disc_abs as u64);
+        factors.into_iter().map(|(p, _)| p).collect()
+    }
+
+    /// Determine the reduction type at a given prime place $p$.
+    pub fn reduction_at(&self, p: u64) -> ReductionType {
+        let disc = self.discriminant();
+        let p_i128 = p as i128;
+        if disc % p_i128 != 0 {
+            ReductionType::Good
+        } else {
+            let c4 = self.c4();
+            if c4 % p_i128 != 0 {
+                // Multiplicative reduction: check if split (tangents in F_p)
+                // For y^2 = x^3 + ax + b, at nodal singularity (x0, 0),
+                // root of 3x0^2 + a in F_p is quadratic residue
+                let split = p > 2 && algebra_engine::numbertheory::legendre_symbol(-2 * self.a, p) == 1;
+                ReductionType::Multiplicative { split }
+            } else {
+                ReductionType::Additive
+            }
+        }
+    }
+
+    /// Compute the Frobenius trace $a_p = p + 1 - \#E(\mathbb{F}_p) = -\sum_{x=0}^{p-1} \left(\frac{x^3+ax+b}{p}\right)$
+    /// for an odd prime $p$.
+    pub fn frobenius_trace(&self, p: u64) -> Option<i64> {
+        if p == 2 {
+            // Manual count for F_2:
+            let mut count = 1i64; // point at infinity
+            for x in 0..2 {
+                let rhs = (x * x * x + (self.a % 2 + 2) % 2 * x + (self.b % 2 + 2) % 2) % 2;
+                if rhs == 0 {
+                    count += 1; // (x, 0)
+                }
+            }
+            return Some((p as i64) + 1 - count);
+        }
+
+        let mut sum_legendre = 0i64;
+        let a_mod = ((self.a % p as i64) + p as i64) % p as i64;
+        let b_mod = ((self.b % p as i64) + p as i64) % p as i64;
+
+        for x in 0..p as i64 {
+            let x3 = (x * x % p as i64) * x % p as i64;
+            let rhs = (x3 + a_mod * x + b_mod) % p as i64;
+            let leg = algebra_engine::numbertheory::legendre_symbol(rhs, p);
+            sum_legendre += leg as i64;
+        }
+
+        Some(-sum_legendre)
+    }
+
+    /// Reduce the curve modulo $p$ into an `EllipticCurve` over $\mathbb{F}_p$.
+    pub fn reduce_mod_p(&self, p: u64) -> AlgebraResult<EllipticCurve> {
+        let p_big = BigInt::from(p);
+        let a_mod = (BigInt::from(self.a) % &p_big + &p_big) % &p_big;
+        let b_mod = (BigInt::from(self.b) % &p_big + &p_big) % &p_big;
+        EllipticCurve::new(a_mod, b_mod, p_big)
+    }
+}
+
 /// Reed-Solomon Code generator structure over finite field.
 #[derive(Debug, Clone)]
 pub struct ReedSolomonCode {

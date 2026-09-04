@@ -9,6 +9,59 @@
 
 use num_bigint::BigUint;
 use num_traits::One;
+use std::collections::BTreeMap;
+use algebra_core::traits::ValuationProvider;
+
+/// A global valuation profile over $\mathbb{Q}$, storing all non-zero $p$-adic valuations and the Archimedean absolute value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GlobalValuationProfile {
+    pub num: i64,
+    pub den: i64,
+    pub finite_places: BTreeMap<u64, i32>,
+    pub infinite_place_abs: f64,
+}
+
+impl GlobalValuationProfile {
+    /// Creates a valuation profile by fully factoring the rational $num/den$.
+    pub fn from_rational(num: i64, den: i64) -> Option<Self> {
+        if num == 0 || den == 0 {
+            return None;
+        }
+        let abs_num = num.unsigned_abs();
+        let abs_den = den.unsigned_abs();
+
+        let num_factors = integer_prime_factors(abs_num);
+        let den_factors = integer_prime_factors(abs_den);
+
+        let mut finite_places = BTreeMap::new();
+        for (p, exp) in num_factors {
+            *finite_places.entry(p).or_insert(0) += exp as i32;
+        }
+        for (p, exp) in den_factors {
+            *finite_places.entry(p).or_insert(0) -= exp as i32;
+        }
+        finite_places.retain(|_, v| *v != 0);
+
+        let infinite_place_abs = (num as f64 / den as f64).abs();
+
+        Some(Self {
+            num,
+            den,
+            finite_places,
+            infinite_place_abs,
+        })
+    }
+}
+
+impl ValuationProvider for GlobalValuationProfile {
+    fn finite_places(&self) -> BTreeMap<u64, i32> {
+        self.finite_places.clone()
+    }
+
+    fn infinite_place_abs(&self) -> f64 {
+        self.infinite_place_abs
+    }
+}
 
 /// Continued Fraction expansion representation $[a_0; a_1, a_2, \dots, a_n]$.
 #[derive(Debug, Clone, PartialEq, Eq)]

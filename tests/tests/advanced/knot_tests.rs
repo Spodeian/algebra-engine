@@ -55,3 +55,25 @@ fn test_figure_eight_bracket() {
     assert_eq!(*bracket.terms.get(&0).unwrap_or(&0.0), 1.0);
     assert_eq!(*bracket.terms.get(&-8).unwrap_or(&0.0), 1.0);
 }
+
+#[test]
+fn test_braid_simplicial_complex_and_hyperbolic_volume() {
+    let trefoil = BraidWord::trefoil();
+    let simplices = trefoil.to_simplicial_complex();
+    assert!(!simplices.is_empty());
+    // 0-simplices exist
+    assert!(simplices.iter().any(|s| s.dimension == 0));
+    // 1-simplices exist
+    assert!(simplices.iter().any(|s| s.dimension == 1));
+    // 2-simplices exist
+    assert!(simplices.iter().any(|s| s.dimension == 2));
+
+    // Trefoil is a torus knot -> hyperbolic volume = 0
+    assert_eq!(trefoil.hyperbolic_volume(), 0.0);
+
+    // Figure-eight knot is hyperbolic -> volume ~ 2.02988
+    let fig8 = BraidWord::figure_eight();
+    let vol = fig8.hyperbolic_volume();
+    assert!((vol - 2.0298832).abs() < 1e-5);
+}
+

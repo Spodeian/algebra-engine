@@ -231,3 +231,22 @@ impl StructureMatrixRepresentation {
         promoted
     }
 }
+
+/// Simplification Functor mapping expression objects in Category $\mathbf{Expr}$
+/// to simplified normal forms via rewrite rules and e-graphs, preserving algebraic equivalence.
+pub struct SimplificationFunctor<'a> {
+    pub graph: &'a ExprGraph,
+}
+
+impl<'a> SimplificationFunctor<'a> {
+    pub fn new(graph: &'a ExprGraph) -> Self {
+        Self { graph }
+    }
+}
+
+impl<'a> Functor<ExprId, ExprId> for SimplificationFunctor<'a> {
+    fn map_object(&self, obj: &ExprId) -> ExprId {
+        algebra_engine::simplify::Simplifier::simplify(self.graph, *obj).unwrap_or(*obj)
+    }
+}
+
