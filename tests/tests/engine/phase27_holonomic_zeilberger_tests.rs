@@ -83,12 +83,12 @@ fn test_weyl_grobner_left_reduction() {
     let d = WeylOperator::d(1, 0, 1);
 
     // Generator F = d
-    let gen = vec![d.clone()];
+    let generators = vec![d.clone()];
 
     // Reduce P = d x = x d + 1 modulo <d>
     // P = x * d + 1 -> remainder should be 1.0
     let dx = d.mul(&x);
-    let reduced = WeylGrobnerBasis::reduce_left(&dx, &gen);
+    let reduced = WeylGrobnerBasis::reduce_left(&dx, &generators);
     assert_eq!(reduced.terms.len(), 1);
     assert_eq!(reduced.terms[0].coeff, 1.0);
     assert_eq!(reduced.terms[0].monomial.total_degree(), 0);
