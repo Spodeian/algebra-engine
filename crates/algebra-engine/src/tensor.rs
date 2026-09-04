@@ -131,7 +131,7 @@ impl TensorSumBridge {
         if let algebra_core::ExprKind::TensorContraction {
             tensor_a,
             tensor_b,
-            ref contracted_indices,
+            contracted_indices,
         } = &node.kind
         {
             let dummy_sym = contracted_indices

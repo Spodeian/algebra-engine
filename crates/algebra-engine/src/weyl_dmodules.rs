@@ -270,8 +270,8 @@ impl WeylGrobnerBasis {
             changed = false;
             let lt_rem = rem.terms[0].clone();
 
-            for gen in generators {
-                if let Some(lt_gen) = Self::leading_term(gen) {
+            for generator in generators {
+                if let Some(lt_gen) = Self::leading_term(generator) {
                     // Check if lt_gen divides lt_rem in multi-index
                     let divides = lt_gen
                         .monomial
@@ -311,7 +311,7 @@ impl WeylGrobnerBasis {
                             )],
                         };
 
-                        let sub_op = multiplier.mul(gen);
+                        let sub_op = multiplier.mul(generator);
                         rem = rem.sub(&sub_op);
                         changed = true;
                         break;

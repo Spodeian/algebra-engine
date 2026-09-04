@@ -144,21 +144,21 @@ impl BraidWord {
         }
 
         // 1-simplices (edges) and 2-simplices
-        for (step, gen) in self.word.iter().enumerate() {
+        for (step, generator) in self.word.iter().enumerate() {
             let t = step;
             let next_t = t + 1;
 
             // Across straight strands
             for s in 0..n {
-                if s + 1 != gen.index && s != gen.index {
+                if s + 1 != generator.index && s != generator.index {
                     simplices.push(Simplex::new(vec![vertex_id(s, t), vertex_id(s, next_t)], t as f64));
                 }
             }
 
             // Crossing strands: i and i+1
-            if gen.index > 0 && gen.index < n {
-                let s1 = gen.index - 1;
-                let s2 = gen.index;
+            if generator.index > 0 && generator.index < n {
+                let s1 = generator.index - 1;
+                let s2 = generator.index;
                 let u1 = vertex_id(s1, t);
                 let u2 = vertex_id(s2, t);
                 let v1 = vertex_id(s1, next_t);

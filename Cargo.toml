@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/algebra-core",
     "crates/algebra-engine",
@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.2.1"
 authors = ["Liam <spodeian@gmail.com>"]
-edition = "2021"
+edition = "2024"
 license = "Proprietary"
 repository = "https://github.com/Spodeian/algebra-engine"
 homepage = "https://github.com/Spodeian/algebra-engine"

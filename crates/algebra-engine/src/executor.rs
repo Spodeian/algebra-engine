@@ -175,7 +175,7 @@ impl OperationExecutor {
                             }
                         }
 
-                        if let Some(ref var_str) = variable {
+                        if let Some(var_str) = variable {
                             let wrt_sym = graph.symbols.get_or_intern(var_str);
                             let mut cur_id = subbed_id;
                             for _ in 0..*order {
@@ -247,7 +247,7 @@ impl OperationExecutor {
                             }
                         }
 
-                        if let Some(ref var_str) = variable {
+                        if let Some(var_str) = variable {
                             let wrt_sym = graph.symbols.get_or_intern(var_str);
                             match graph.integrate(subbed_id, wrt_sym) {
                                 Ok(int_id) => {

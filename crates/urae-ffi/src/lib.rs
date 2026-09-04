@@ -5,7 +5,7 @@
 //! Allows embedding the Universal Rust Algebra Engine into C, C++, Python, WebAssembly (WASM),
 //! and other native host environments.
 
-#![allow(unsafe_code)]
+#![allow(unsafe_code, unsafe_op_in_unsafe_fn)]
 
 use algebra_core::format::{Formatter, LatexFormatter};
 use algebra_core::parser::ExprParser;
@@ -18,7 +18,7 @@ use std::os::raw::c_char;
 ///
 /// # Safety
 /// Caller must free returned pointer using `urae_graph_free`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_graph_create() -> *mut ExprGraph {
     Box::into_raw(Box::new(ExprGraph::new()))
 }
@@ -27,7 +27,7 @@ pub unsafe extern "C" fn urae_graph_create() -> *mut ExprGraph {
 ///
 /// # Safety
 /// `graph` must be a valid pointer created by `urae_graph_create`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_graph_free(graph: *mut ExprGraph) {
     if !graph.is_null() {
         drop(Box::from_raw(graph));
@@ -38,7 +38,7 @@ pub unsafe extern "C" fn urae_graph_free(graph: *mut ExprGraph) {
 ///
 /// # Safety
 /// `s` must be a valid pointer allocated by URAE C ABI functions or null.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_free_string(s: *mut c_char) {
     if !s.is_null() {
         drop(CString::from_raw(s));
@@ -50,7 +50,7 @@ pub unsafe extern "C" fn urae_free_string(s: *mut c_char) {
 /// # Safety
 /// `graph` and `input_str` must be valid, null-terminated pointers.
 /// Returned string pointer must be freed using `urae_free_string`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_parse_and_format_latex(
     graph: *mut ExprGraph,
     input_str: *const c_char,
@@ -85,7 +85,7 @@ pub unsafe extern "C" fn urae_parse_and_format_latex(
 /// # Safety
 /// `graph`, `input_str`, and `var_str` must be valid pointers.
 /// Returned pointer must be freed using `urae_free_string`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_differentiate_and_format_latex(
     graph: *mut ExprGraph,
     input_str: *const c_char,
@@ -130,7 +130,7 @@ use algebra_engine::session::UraeSession;
 ///
 /// # Safety
 /// Caller must free returned pointer using `urae_session_free`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_session_create() -> *mut UraeSession {
     Box::into_raw(Box::new(UraeSession::new()))
 }
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn urae_session_create() -> *mut UraeSession {
 ///
 /// # Safety
 /// `session` must be a valid pointer created by `urae_session_create`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_session_free(session: *mut UraeSession) {
     if !session.is_null() {
         drop(Box::from_raw(session));
@@ -151,7 +151,7 @@ pub unsafe extern "C" fn urae_session_free(session: *mut UraeSession) {
 /// # Safety
 /// `session` and `input_str` must be valid, non-null pointers.
 /// Returned string pointer must be freed using `urae_free_string`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn urae_session_execute(
     session: *mut UraeSession,
     input_str: *const c_char,
