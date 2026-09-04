@@ -514,7 +514,7 @@ pub fn export_step(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> Strin
     let mut out = String::new();
     out.push_str("ISO-10303-21;\nHEADER;\n");
     out.push_str("FILE_DESCRIPTION(('URAE 3D CAD Tessellated Facet Export'),'2;1');\n");
-    out.push_str(&format!("FILE_NAME('{}.step','2026-09-03',('Liam'),('URAE'),'URAE Step Serializer','URAE 0.2.0','');\n", name));
+    out.push_str(&format!("FILE_NAME('{}.step','2026-09-03',('Liam'),('URAE'),'URAE Step Serializer','URAE {}','');\n", name, env!("CARGO_PKG_VERSION")));
     out.push_str("FILE_SCHEMA(('AUTOMOTIVE_DESIGN { 1 0 10303 214 1 1 1 1 }'));\n");
     out.push_str("ENDSEC;\nDATA;\n");
     out.push_str("#1 = APPLICATION_CONTEXT('core data for automotive design');\n");

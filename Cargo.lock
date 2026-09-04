@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "algebra-advanced"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash 0.8.12",
  "algebra-core",
@@ -96,7 +96,7 @@ dependencies = [
 
 [[package]]
 name = "algebra-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash 0.8.12",
  "bnum",
@@ -118,7 +118,7 @@ dependencies = [
 
 [[package]]
 name = "algebra-engine"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash 0.8.12",
  "algebra-core",
@@ -3694,7 +3694,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urae"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "algebra-advanced",
  "algebra-core",
@@ -3705,7 +3705,7 @@ dependencies = [
 
 [[package]]
 name = "urae-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "algebra-advanced",
  "algebra-core",
@@ -3719,7 +3719,7 @@ dependencies = [
 
 [[package]]
 name = "urae-ffi"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "algebra-core",
  "algebra-engine",
@@ -3728,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "urae-kernel"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3738,7 +3738,7 @@ dependencies = [
 
 [[package]]
 name = "urae-lsp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3748,7 +3748,7 @@ dependencies = [
 
 [[package]]
 name = "urae-notebook"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "bson",
@@ -3775,7 +3775,7 @@ dependencies = [
 
 [[package]]
 name = "urae-py"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3785,7 +3785,7 @@ dependencies = [
 
 [[package]]
 name = "urae-tests"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ahash 0.8.12",
  "algebra-advanced",
@@ -3812,7 +3812,7 @@ dependencies = [
 
 [[package]]
 name = "urae-wasm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "algebra-core",
  "algebra-engine",

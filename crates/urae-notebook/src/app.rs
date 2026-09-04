@@ -1085,7 +1085,7 @@ impl eframe::App for UraeNotebookApp {
 
             ui.horizontal_wrapped(|ui| {
                 ui.heading("URAE");
-                ui.colored_label(palette.accent_secondary, "v0.2.0");
+                ui.colored_label(palette.accent_secondary, concat!("v", env!("CARGO_PKG_VERSION")));
                 ui.separator();
 
                 // 1. File Menu Dropdown
