@@ -282,6 +282,24 @@ pub struct DomainBound {
 }
 
 impl DomainBound {
+    /// Check whether this domain represents a discrete mathematical number system.
+    pub fn is_discrete(&self) -> bool {
+        matches!(
+            self.domain_type.as_str(),
+            "Integers"
+                | "Naturals"
+                | "Modulo"
+                | "ModuloUnits"
+                | "GaloisField"
+                | "Boolean"
+                | "GaussianIntegers"
+                | "EisensteinIntegers"
+                | "BitVector"
+                | "EvenIntegers"
+                | "OddIntegers"
+        )
+    }
+
     /// Check whether a given real value falls within this domain boundary.
     pub fn contains_f64(&self, val: f64) -> bool {
         if !val.is_finite() {
@@ -293,7 +311,10 @@ impl DomainBound {
         if self.domain_type == "NonNegative" && val < 0.0 {
             return false;
         }
-        if self.domain_type == "Integers" && val.fract().abs() > 1e-9 {
+        if self.is_discrete() && val.fract().abs() > 1e-9 {
+            return false;
+        }
+        if (self.domain_type == "Naturals" || self.domain_type == "Modulo") && val < 0.0 {
             return false;
         }
         if let Some(min) = self.min_val {

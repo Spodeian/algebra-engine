@@ -151,6 +151,17 @@ pub struct UraeNotebookApp {
     pub param_builder_matrix_cols: usize,
     pub param_builder_matrix_domain: String,
     pub param_builder_tensor_rank: u32,
+    pub param_builder_discrete_kind: usize, // 0 = Modulo, 1 = Integers/Step, 2 = GaloisField, 3 = Gaussian/Eisenstein, 4 = Boolean/BitVector
+    pub param_builder_modulo_rep: usize, // 0 = Canonical [0, n-1], 1 = Balanced [-n/2, n/2], 2 = Units (Z/nZ)*
+    pub param_builder_congruence_rem: i64,
+    pub param_builder_congruence_mod: u64,
+    pub param_builder_has_congruence: bool,
+    pub param_builder_integer_step: u64,
+    pub param_builder_integer_parity: usize, // 0 = Any, 1 = Even (2Z), 2 = Odd (2Z+1), 3 = Multiple of k
+    pub param_builder_integer_multiple: u64,
+    pub param_builder_lattice_kind: usize, // 0 = Gaussian Z[i], 1 = Eisenstein Z[omega]
+    pub param_builder_bit_width: u32,
+    pub param_builder_bit_signed: bool,
     pub param_builder_coords: Vec<(String, f64, f64, bool)>,
 
     pub branch_cut_fn: String,
@@ -304,6 +315,17 @@ impl Default for UraeNotebookApp {
             param_builder_matrix_cols: 3,
             param_builder_matrix_domain: "Reals".to_string(),
             param_builder_tensor_rank: 2,
+            param_builder_discrete_kind: 0,
+            param_builder_modulo_rep: 0,
+            param_builder_congruence_rem: 0,
+            param_builder_congruence_mod: 1,
+            param_builder_has_congruence: false,
+            param_builder_integer_step: 1,
+            param_builder_integer_parity: 0,
+            param_builder_integer_multiple: 2,
+            param_builder_lattice_kind: 0,
+            param_builder_bit_width: 8,
+            param_builder_bit_signed: false,
             param_builder_coords: vec![
                 ("Re".to_string(), -5.0, 5.0, true),
                 ("Im".to_string(), -5.0, 5.0, true),
@@ -1582,6 +1604,140 @@ impl eframe::App for UraeNotebookApp {
                                                     }
                                                 });
                                             }
+                                        }
+                                        "Boolean" => {
+                                            let mut is_true = *self
+                                                .state
+                                                .session
+                                                .slider_values
+                                                .get(sym)
+                                                .unwrap_or(&mut_meta.cur_val)
+                                                > 0.5;
+                                            ui.horizontal(|ui| {
+                                                ui.weak("Bool:");
+                                                let lbl = if is_true { "1 (True)" } else { "0 (False)" };
+                                                if ui.checkbox(&mut is_true, lbl).changed() {
+                                                    let val = if is_true { 1.0 } else { 0.0 };
+                                                    self.state
+                                                        .session
+                                                        .slider_values
+                                                        .insert(sym.clone(), val);
+                                                    mut_meta.cur_val = val;
+                                                    state_changed = true;
+                                                }
+                                            });
+                                        }
+                                        "GaussianIntegers" | "EisensteinIntegers" => {
+                                            let lattice_name = if mut_meta.domain_type == "GaussianIntegers" {
+                                                "ℤ[i]"
+                                            } else {
+                                                "ℤ[ω]"
+                                            };
+                                            ui.weak(format!("Lattice {} (Re + Im):", lattice_name));
+                                            let real_key = format!("{}_real", sym);
+                                            let imag_key = format!("{}_imag", sym);
+                                            let mut r_val = self
+                                                .state
+                                                .session
+                                                .slider_values
+                                                .get(&real_key)
+                                                .copied()
+                                                .unwrap_or(mut_meta.cur_val)
+                                                .round();
+                                            let mut i_val = self
+                                                .state
+                                                .session
+                                                .slider_values
+                                                .get(&imag_key)
+                                                .copied()
+                                                .unwrap_or(0.0)
+                                                .round();
+
+                                            ui.horizontal(|ui| {
+                                                ui.weak("Re:");
+                                                if ui
+                                                    .add(
+                                                        egui::Slider::new(
+                                                            &mut r_val,
+                                                            mut_meta.min_val.round()
+                                                                ..=mut_meta.max_val.round(),
+                                                        )
+                                                        .step_by(1.0)
+                                                        .integer(),
+                                                    )
+                                                    .changed()
+                                                {
+                                                    self.state
+                                                        .session
+                                                        .slider_values
+                                                        .insert(real_key, r_val);
+                                                    mut_meta.cur_val = r_val;
+                                                    state_changed = true;
+                                                }
+                                            });
+                                            ui.horizontal(|ui| {
+                                                ui.weak("Im:");
+                                                if ui
+                                                    .add(
+                                                        egui::Slider::new(
+                                                            &mut i_val,
+                                                            mut_meta.min_val.round()
+                                                                ..=mut_meta.max_val.round(),
+                                                        )
+                                                        .step_by(1.0)
+                                                        .integer(),
+                                                    )
+                                                    .changed()
+                                                {
+                                                    self.state
+                                                        .session
+                                                        .slider_values
+                                                        .insert(imag_key, i_val);
+                                                    state_changed = true;
+                                                }
+                                            });
+                                        }
+                                        "Integers" | "Integer" | "Naturals" | "Modulo" | "ModuloUnits"
+                                        | "BitVector" | "EvenIntegers" | "OddIntegers" | "GaloisField" => {
+                                            let mut val = self
+                                                .state
+                                                .session
+                                                .slider_values
+                                                .get(sym)
+                                                .copied()
+                                                .unwrap_or(mut_meta.cur_val)
+                                                .round();
+                                            let step = if mut_meta.domain_type == "EvenIntegers"
+                                                || mut_meta.domain_type == "OddIntegers"
+                                            {
+                                                2.0
+                                            } else {
+                                                1.0
+                                            };
+                                            ui.horizontal(|ui| {
+                                                if ui
+                                                    .add(
+                                                        egui::Slider::new(
+                                                            &mut val,
+                                                            mut_meta.min_val.round()
+                                                                ..=mut_meta.max_val.round(),
+                                                        )
+                                                        .step_by(step)
+                                                        .integer(),
+                                                    )
+                                                    .changed()
+                                                {
+                                                    self.state
+                                                        .session
+                                                        .slider_values
+                                                        .insert(sym.clone(), val);
+                                                    mut_meta.cur_val = val;
+                                                    state_changed = true;
+                                                }
+                                                if let Some(unit) = &mut_meta.unit_str {
+                                                    ui.weak(format!("[{}]", unit));
+                                                }
+                                            });
                                         }
                                         _ => {
                                             let mut val = *self
@@ -3479,7 +3635,13 @@ impl UraeNotebookApp {
                                                 LineKind::SliderDef { name, val, unit } => {
                                                     ui.horizontal_wrapped(|ui| {
                                                         let (min_v, max_v, step_v) = if let Some(m) = self.state.session.symbol_metadata.get(name) {
-                                                            let step = if m.domain_type == "Integer" || m.domain_type == "Integers" { 1.0 } else { 0.05 };
+                                                            let step = match m.domain_type.as_str() {
+                                                                "EvenIntegers" | "OddIntegers" => 2.0,
+                                                                "Integer" | "Integers" | "Naturals" | "Modulo"
+                                                                | "ModuloUnits" | "BitVector" | "GaussianIntegers"
+                                                                | "EisensteinIntegers" | "GaloisField" | "Boolean" => 1.0,
+                                                                _ => 0.05,
+                                                            };
                                                             (m.min_val, m.max_val, step)
                                                         } else {
                                                             (-10.0, 10.0, 0.05)
@@ -4112,33 +4274,132 @@ impl UraeNotebookApp {
                             });
                         }
                         4 => {
-                            // Modular & Finite Fields
+                            // Discrete Number Systems & Modulo Arithmetic
                             ui.group(|ui| {
-                                ui.label(egui::RichText::new("Modular Rings & Finite Galois Fields:").strong());
-                                ui.horizontal(|ui| {
-                                    if ui.selectable_label(self.param_builder_standard_kind == 0, "Modulo Ring (ℤ/nℤ)").clicked() {
-                                        self.param_builder_standard_kind = 0;
-                                    }
-                                    if ui.selectable_label(self.param_builder_standard_kind == 1, "Galois Field GF(pᵏ)").clicked() {
-                                        self.param_builder_standard_kind = 1;
+                                ui.label(egui::RichText::new("Discrete Number Systems & Modulo Arithmetic:").strong());
+                                ui.horizontal_wrapped(|ui| {
+                                    let options = [
+                                        ("Modulo (ℤ/nℤ)", 0),
+                                        ("Integers & Step (ℤ, kℤ)", 1),
+                                        ("Galois Field (GF)", 2),
+                                        ("Lattices (ℤ[i], ℤ[ω])", 3),
+                                        ("Boolean & Words (𝔹)", 4),
+                                    ];
+                                    for (lbl, idx) in options {
+                                        if ui.selectable_label(self.param_builder_discrete_kind == idx, lbl).clicked() {
+                                            self.param_builder_discrete_kind = idx;
+                                        }
                                     }
                                 });
 
-                                if self.param_builder_standard_kind == 0 {
-                                    ui.horizontal(|ui| {
-                                        ui.label("Modulus n:");
-                                        ui.add(egui::DragValue::new(&mut self.param_builder_modulo_n).range(2..=65536));
-                                    });
-                                    ui.weak(format!("Residue classes modulo {}: elements in {{0, ..., {}}}", self.param_builder_modulo_n, self.param_builder_modulo_n.saturating_sub(1)));
-                                } else {
-                                    ui.horizontal(|ui| {
-                                        ui.label("Prime Characteristic p:");
-                                        ui.add(egui::DragValue::new(&mut self.param_builder_galois_prime).range(2..=257));
-                                        ui.label("Power k:");
-                                        ui.add(egui::DragValue::new(&mut self.param_builder_galois_power).range(1..=16));
-                                    });
-                                    let order = self.param_builder_galois_prime.saturating_pow(self.param_builder_galois_power);
-                                    ui.weak(format!("Galois field GF({}^{}) of order q = {}", self.param_builder_galois_prime, self.param_builder_galois_power, order));
+                                match self.param_builder_discrete_kind {
+                                    0 => {
+                                        // Modulo arithmetic
+                                        ui.horizontal(|ui| {
+                                            ui.label("Modulus n:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_modulo_n).range(2..=65536));
+                                            ui.separator();
+                                            ui.label("Representation:");
+                                            if ui.selectable_label(self.param_builder_modulo_rep == 0, "Canonical [0, n-1]").clicked() {
+                                                self.param_builder_modulo_rep = 0;
+                                            }
+                                            if ui.selectable_label(self.param_builder_modulo_rep == 1, "Balanced [-n/2, n/2]").clicked() {
+                                                self.param_builder_modulo_rep = 1;
+                                            }
+                                            if ui.selectable_label(self.param_builder_modulo_rep == 2, "Units (ℤ/nℤ)ˣ").clicked() {
+                                                self.param_builder_modulo_rep = 2;
+                                            }
+                                        });
+
+                                        ui.horizontal(|ui| {
+                                            ui.checkbox(&mut self.param_builder_has_congruence, "Congruence Condition:");
+                                            if self.param_builder_has_congruence {
+                                                ui.label("x ≡");
+                                                ui.add(egui::DragValue::new(&mut self.param_builder_congruence_rem));
+                                                ui.label("(mod");
+                                                ui.add(egui::DragValue::new(&mut self.param_builder_congruence_mod).range(2..=65536));
+                                                ui.label(")");
+                                            }
+                                        });
+                                        ui.weak(format!("Residue ring ℤ/{}ℤ with modular addition and multiplication", self.param_builder_modulo_n));
+                                    }
+                                    1 => {
+                                        // Integers & Progressions
+                                        ui.horizontal(|ui| {
+                                            ui.label("Step Size Δk:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_integer_step).range(1..=1000));
+                                            ui.separator();
+                                            ui.label("Parity / Divisibility:");
+                                            if ui.selectable_label(self.param_builder_integer_parity == 0, "All ℤ").clicked() {
+                                                self.param_builder_integer_parity = 0;
+                                            }
+                                            if ui.selectable_label(self.param_builder_integer_parity == 1, "Even (2ℤ)").clicked() {
+                                                self.param_builder_integer_parity = 1;
+                                            }
+                                            if ui.selectable_label(self.param_builder_integer_parity == 2, "Odd (2ℤ+1)").clicked() {
+                                                self.param_builder_integer_parity = 2;
+                                            }
+                                            if ui.selectable_label(self.param_builder_integer_parity == 3, "kℤ").clicked() {
+                                                self.param_builder_integer_parity = 3;
+                                            }
+                                        });
+
+                                        if self.param_builder_integer_parity == 3 {
+                                            ui.horizontal(|ui| {
+                                                ui.label("Multiple Factor k:");
+                                                ui.add(egui::DragValue::new(&mut self.param_builder_integer_multiple).range(2..=1000));
+                                            });
+                                        }
+                                        ui.weak("Discrete integral domain ℤ with discrete step arithmetic");
+                                    }
+                                    2 => {
+                                        // Galois Field
+                                        ui.horizontal(|ui| {
+                                            ui.label("Prime Characteristic p:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_galois_prime).range(2..=257));
+                                            ui.label("Power k:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_galois_power).range(1..=16));
+                                        });
+                                        let order = self.param_builder_galois_prime.saturating_pow(self.param_builder_galois_power);
+                                        ui.weak(format!("Galois field GF({}^{}) of order q = {}", self.param_builder_galois_prime, self.param_builder_galois_power, order));
+                                    }
+                                    3 => {
+                                        // Complex Lattices (Gaussian / Eisenstein)
+                                        ui.horizontal(|ui| {
+                                            ui.label("Lattice Type:");
+                                            if ui.selectable_label(self.param_builder_lattice_kind == 0, "Gaussian Integers ℤ[i]").clicked() {
+                                                self.param_builder_lattice_kind = 0;
+                                            }
+                                            if ui.selectable_label(self.param_builder_lattice_kind == 1, "Eisenstein Integers ℤ[ω]").clicked() {
+                                                self.param_builder_lattice_kind = 1;
+                                            }
+                                        });
+                                        if self.param_builder_lattice_kind == 0 {
+                                            ui.weak("Square lattice ℤ[i] = { a + bi | a,b ∈ ℤ } with norm N(z) = a² + b²");
+                                        } else {
+                                            ui.weak("Triangular lattice ℤ[ω] = { a + bω | a,b ∈ ℤ, ω = e^(2πi/3) } with norm N(z) = a² - ab + b²");
+                                        }
+                                    }
+                                    _ => {
+                                        // Boolean & Bit-Vectors
+                                        ui.horizontal(|ui| {
+                                            ui.label("Bit Width:");
+                                            let widths = [1, 8, 16, 32, 64];
+                                            for w in widths {
+                                                if ui.selectable_label(self.param_builder_bit_width == w, format!("{}-bit", w)).clicked() {
+                                                    self.param_builder_bit_width = w;
+                                                }
+                                            }
+                                            if self.param_builder_bit_width > 1 {
+                                                ui.checkbox(&mut self.param_builder_bit_signed, "Signed (Two's Complement)");
+                                            }
+                                        });
+                                        if self.param_builder_bit_width == 1 {
+                                            ui.weak("Boolean 2-element lattice 𝔹 = {0, 1}");
+                                        } else {
+                                            ui.weak(format!("Word domain 𝔹^{} with bitwise logic and modular wrapping arithmetic", self.param_builder_bit_width));
+                                        }
+                                    }
                                 }
                             });
                         }
@@ -4245,8 +4506,14 @@ impl UraeNotebookApp {
                                 1
                             }
                             4 => {
-                                self.param_builder_coords[0].0 = "Residue".to_string();
-                                1
+                                if self.param_builder_discrete_kind == 3 {
+                                    self.param_builder_coords[0].0 = "Re".to_string();
+                                    self.param_builder_coords[1].0 = "Im".to_string();
+                                    2
+                                } else {
+                                    self.param_builder_coords[0].0 = "Integer Range".to_string();
+                                    1
+                                }
                             }
                             _ => {
                                 self.param_builder_coords[0].0 = "Elements".to_string();
@@ -4292,6 +4559,17 @@ impl UraeNotebookApp {
                         matrix_cols: self.param_builder_matrix_cols,
                         matrix_domain: &self.param_builder_matrix_domain,
                         tensor_rank: self.param_builder_tensor_rank,
+                        discrete_kind: self.param_builder_discrete_kind,
+                        modulo_rep: self.param_builder_modulo_rep,
+                        congruence_rem: self.param_builder_congruence_rem,
+                        congruence_mod: self.param_builder_congruence_mod,
+                        has_congruence: self.param_builder_has_congruence,
+                        integer_step: self.param_builder_integer_step,
+                        integer_parity: self.param_builder_integer_parity,
+                        integer_multiple: self.param_builder_integer_multiple,
+                        lattice_kind: self.param_builder_lattice_kind,
+                        bit_width: self.param_builder_bit_width,
+                        bit_signed: self.param_builder_bit_signed,
                         coords: &self.param_builder_coords,
                     };
                     let syntax = generate_universal_parameter_builder_syntax(&params);

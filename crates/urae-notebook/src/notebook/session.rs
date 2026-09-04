@@ -215,7 +215,56 @@ pub struct ParameterBuilderParams<'a> {
     pub matrix_cols: usize,
     pub matrix_domain: &'a str,
     pub tensor_rank: u32,
+    pub discrete_kind: usize, // 0 = Modulo, 1 = Integers/Step, 2 = GaloisField, 3 = Gaussian/Eisenstein, 4 = Boolean/BitVector
+    pub modulo_rep: usize, // 0 = Canonical [0, n-1], 1 = Balanced [-n/2, n/2], 2 = Units (Z/nZ)*
+    pub congruence_rem: i64,
+    pub congruence_mod: u64,
+    pub has_congruence: bool,
+    pub integer_step: u64,
+    pub integer_parity: usize, // 0 = Any, 1 = Even (2Z), 2 = Odd (2Z+1), 3 = Multiple of k
+    pub integer_multiple: u64,
+    pub lattice_kind: usize, // 0 = Gaussian Z[i], 1 = Eisenstein Z[omega]
+    pub bit_width: u32,
+    pub bit_signed: bool,
     pub coords: &'a [(String, f64, f64, bool)],
+}
+
+impl<'a> Default for ParameterBuilderParams<'a> {
+    fn default() -> Self {
+        Self {
+            var: "x",
+            is_param: true,
+            category: 0,
+            standard_kind: 0,
+            cayley_depth: 0,
+            adjoin_i: false,
+            adjoin_eps: false,
+            adjoin_j: false,
+            adjoin_clifford: false,
+            padic_prime: 7,
+            padic_valuation: 0,
+            surreal_generation: 4,
+            modulo_n: 12,
+            galois_prime: 2,
+            galois_power: 8,
+            matrix_rows: 3,
+            matrix_cols: 3,
+            matrix_domain: "Reals",
+            tensor_rank: 2,
+            discrete_kind: 0,
+            modulo_rep: 0,
+            congruence_rem: 0,
+            congruence_mod: 2,
+            has_congruence: false,
+            integer_step: 1,
+            integer_parity: 0,
+            integer_multiple: 2,
+            lattice_kind: 0,
+            bit_width: 8,
+            bit_signed: false,
+            coords: &[],
+        }
+    }
 }
 
 /// Universal code generator for Parameter & Variable Builder covering all mathematical number systems.
@@ -329,11 +378,95 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
             }
         }
         4 => {
-            // Category 4: Modular Rings & Finite Fields
-            if params.standard_kind == 0 {
-                format!("{}: {} in Modulo(n={}) where {} in [0, {}]", clean_var, role_str, params.modulo_n, clean_var, params.modulo_n.saturating_sub(1))
+            // Category 4: Discrete Number Systems & Modulo Arithmetic
+            let discrete_kind = if params.discrete_kind == 0 && params.standard_kind == 1 {
+                2
             } else {
-                format!("{}: {} in GaloisField(prime={}, power={})", clean_var, role_str, params.galois_prime, params.galois_power)
+                params.discrete_kind
+            };
+            match discrete_kind {
+                0 => {
+                    // Modular Arithmetic Z/nZ
+                    let mod_n = params.modulo_n.max(2);
+                    let cong_str = if params.has_congruence {
+                        format!(", {} == {} (mod {})", clean_var, params.congruence_rem, params.congruence_mod)
+                    } else {
+                        String::new()
+                    };
+
+                    match params.modulo_rep {
+                        0 => {
+                            // Canonical residue: [0, n-1]
+                            format!("{}: {} in Modulo(n={}) where {} in [0, {}]{}", clean_var, role_str, mod_n, clean_var, mod_n.saturating_sub(1), cong_str)
+                        }
+                        1 => {
+                            // Balanced / Symmetric residue: [-lower, upper]
+                            let upper = (mod_n as i64) / 2;
+                            let lower = -((mod_n as i64 - 1) / 2);
+                            format!("{}: {} in Modulo(n={}, symmetric=true) where {} in [{}, {}]{}", clean_var, role_str, mod_n, clean_var, lower, upper, cong_str)
+                        }
+                        _ => {
+                            // Units multiplicative group (Z/nZ)*
+                            format!("{}: {} in ModuloUnits(n={}) /* (Z/{}Z)* gcd({}, {})=1 */{}", clean_var, role_str, mod_n, mod_n, clean_var, mod_n, cong_str)
+                        }
+                    }
+                }
+                1 => {
+                    // Discrete Integers with step size and parity/divisibility
+                    let min_v = params.coords.first().map(|c| c.1 as i64).unwrap_or(0);
+                    let max_v = params.coords.first().map(|c| c.2 as i64).unwrap_or(100);
+                    match params.integer_parity {
+                        1 => {
+                            format!("{}: {} in EvenIntegers [{}, {}]", clean_var, role_str, min_v, max_v)
+                        }
+                        2 => {
+                            format!("{}: {} in OddIntegers [{}, {}]", clean_var, role_str, min_v, max_v)
+                        }
+                        3 => {
+                            let k = params.integer_multiple.max(2);
+                            format!("{}: {} in Integers where {} in {}*Integers [{}, {}]", clean_var, role_str, clean_var, k, min_v, max_v)
+                        }
+                        _ => {
+                            let step = params.integer_step.max(1);
+                            if step > 1 {
+                                format!("{}: {} in Integers [{}, {}] step {}", clean_var, role_str, min_v, max_v, step)
+                            } else {
+                                format!("{}: {} in Integers [{}, {}]", clean_var, role_str, min_v, max_v)
+                            }
+                        }
+                    }
+                }
+                2 => {
+                    // Finite Galois Field GF(p^k)
+                    format!("{}: {} in GaloisField(prime={}, power={})", clean_var, role_str, params.galois_prime, params.galois_power)
+                }
+                3 => {
+                    // Discrete Complex Lattices (Gaussian Z[i] & Eisenstein Z[omega])
+                    let min_re = params.coords.get(0).map(|c| c.1 as i64).unwrap_or(-5);
+                    let max_re = params.coords.get(0).map(|c| c.2 as i64).unwrap_or(5);
+                    let min_im = params.coords.get(1).map(|c| c.1 as i64).unwrap_or(-5);
+                    let max_im = params.coords.get(1).map(|c| c.2 as i64).unwrap_or(5);
+
+                    if params.lattice_kind == 0 {
+                        format!(
+                            "{}: {} in GaussianIntegers /* Z[i] */ where Re({}) in [{}, {}], Im({}) in [{}, {}]",
+                            clean_var, role_str, clean_var, min_re, max_re, clean_var, min_im, max_im
+                        )
+                    } else {
+                        format!(
+                            "{}: {} in EisensteinIntegers /* Z[omega] */ where Re({}) in [{}, {}], Im({}) in [{}, {}]",
+                            clean_var, role_str, clean_var, min_re, max_re, clean_var, min_im, max_im
+                        )
+                    }
+                }
+                _ => {
+                    // Boolean Logic & Bit-Vectors
+                    if params.bit_width <= 1 {
+                        format!("{}: {} in Boolean", clean_var, role_str)
+                    } else {
+                        format!("{}: {} in BitVector(width={}, signed={})", clean_var, role_str, params.bit_width, params.bit_signed)
+                    }
+                }
             }
         }
         _ => {
@@ -381,6 +514,17 @@ pub fn generate_parameter_builder_syntax(
         matrix_cols: 3,
         matrix_domain: "Reals",
         tensor_rank: 2,
+        discrete_kind: 0,
+        modulo_rep: 0,
+        congruence_rem: 0,
+        congruence_mod: 1,
+        has_congruence: false,
+        integer_step: 1,
+        integer_parity: 0,
+        integer_multiple: 2,
+        lattice_kind: 0,
+        bit_width: 8,
+        bit_signed: false,
         coords,
     };
     generate_universal_parameter_builder_syntax(&params)

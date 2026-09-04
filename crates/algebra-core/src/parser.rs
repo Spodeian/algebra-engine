@@ -1059,10 +1059,24 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
         domain_type = "Adeles".to_string();
     } else if rest_trimmed.starts_with("Surreals") || rest_trimmed.starts_with("Surreal") || rest_trimmed.starts_with("𝐍𝐨") {
         domain_type = "Surreals".to_string();
+    } else if rest_trimmed.starts_with("ModuloUnits") || rest_trimmed.starts_with("(ℤ/") {
+        domain_type = "ModuloUnits".to_string();
     } else if rest_trimmed.starts_with("Modulo") || rest_trimmed.starts_with("ℤ/") {
         domain_type = "Modulo".to_string();
     } else if rest_trimmed.starts_with("GaloisField") || rest_trimmed.starts_with("GF") || rest_trimmed.starts_with("𝔽") {
         domain_type = "GaloisField".to_string();
+    } else if rest_trimmed.starts_with("GaussianIntegers") || rest_trimmed.starts_with("ℤ[i]") {
+        domain_type = "GaussianIntegers".to_string();
+    } else if rest_trimmed.starts_with("EisensteinIntegers") || rest_trimmed.starts_with("ℤ[ω]") {
+        domain_type = "EisensteinIntegers".to_string();
+    } else if rest_trimmed.starts_with("Boolean") || rest_trimmed.starts_with("𝔹") {
+        domain_type = "Boolean".to_string();
+    } else if rest_trimmed.starts_with("BitVector") {
+        domain_type = "BitVector".to_string();
+    } else if rest_trimmed.starts_with("EvenIntegers") || rest_trimmed.starts_with("2ℤ") {
+        domain_type = "EvenIntegers".to_string();
+    } else if rest_trimmed.starts_with("OddIntegers") || rest_trimmed.starts_with("2ℤ+1") {
+        domain_type = "OddIntegers".to_string();
     } else if rest_trimmed.starts_with("Matrix") {
         domain_type = "Matrix".to_string();
     } else if rest_trimmed.starts_with("Tensor") {
