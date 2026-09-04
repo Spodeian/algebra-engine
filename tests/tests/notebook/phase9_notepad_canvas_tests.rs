@@ -73,14 +73,15 @@ fn test_phase9_insert_text_at_active_line() {
     state.start_editing_line(0);
     state.insert_text_at_active_line("a = 5.00 [m]");
 
-    assert_eq!(state.session.raw_document_text, "a = 5.00 [m]\nf(x) = x^2");
-    assert_eq!(state.parsed_lines[0].raw_text, "a = 5.00 [m]");
+    assert_eq!(state.session.raw_document_text, "x: Variable\na = 5.00 [m]\nf(x) = x^2");
+    assert_eq!(state.parsed_lines[1].raw_text, "a = 5.00 [m]");
 
     // Insert without focus (appends at end)
     state.focused_line = None;
+    state.cursor_char_idx = None;
     state.insert_text_at_active_line("g(x) = 2 * x");
-    assert_eq!(state.parsed_lines.len(), 3);
-    assert_eq!(state.parsed_lines[2].raw_text, "g(x) = 2 * x");
+    assert_eq!(state.parsed_lines.len(), 4);
+    assert_eq!(state.parsed_lines[3].raw_text, "g(x) = 2 * x");
 }
 
 #[test]
@@ -202,4 +203,170 @@ fn test_phase9_full_notepad_app_initialization() {
         app.state.session.symbol_metadata["x"].role,
         SymbolRole::Variable
     );
+}
+
+#[test]
+fn test_universal_parameter_builder_all_number_systems() {
+    use urae_notebook::notebook::{generate_universal_parameter_builder_syntax, ParameterBuilderParams};
+
+    // 1. Standard Reals with bound
+    let coords_scalar = vec![("Bound".to_string(), 0.0, 10.0, true)];
+    let p_reals = ParameterBuilderParams {
+        var: "x",
+        is_param: true,
+        category: 0,
+        standard_kind: 0,
+        cayley_depth: 0,
+        adjoin_i: false,
+        adjoin_eps: false,
+        adjoin_j: false,
+        adjoin_clifford: false,
+        padic_prime: 7,
+        padic_valuation: 0,
+        surreal_generation: 4,
+        modulo_n: 12,
+        galois_prime: 2,
+        galois_power: 8,
+        matrix_rows: 3,
+        matrix_cols: 3,
+        matrix_domain: "Reals",
+        tensor_rank: 2,
+        coords: &coords_scalar,
+    };
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_reals),
+        "x: Parameter in Reals [0.00, 10.00]"
+    );
+
+    // 2. Complex with Re and Im bounds
+    let coords_complex = vec![
+        ("Re".to_string(), -5.0, 5.0, true),
+        ("Im".to_string(), 0.0, 10.0, true),
+    ];
+    let mut p_complex = p_reals.clone();
+    p_complex.var = "z";
+    p_complex.is_param = false;
+    p_complex.standard_kind = 6;
+    p_complex.coords = &coords_complex;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_complex),
+        "z: Variable in Complex where Re(z) in [-5.00, 5.00], Im(z) in [0.00, 10.00]"
+    );
+
+    // 3. Cayley-Dickson depth 2 (Quaternion)
+    let coords_quat = vec![
+        ("Scalar".to_string(), 0.0, 1.0, true),
+        ("Vector".to_string(), -1.0, 1.0, true),
+    ];
+    let mut p_quat = p_reals.clone();
+    p_quat.var = "q";
+    p_quat.category = 1;
+    p_quat.cayley_depth = 2;
+    p_quat.coords = &coords_quat;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_quat),
+        "q: Parameter in CayleyDickson(depth=2) /* Quaternion */ where Scalar(q) in [0.00, 1.00], Vector(q) in [-1.00, 1.00]"
+    );
+
+    // 4. Adjoined Dual numbers (Forward-mode AutoDiff)
+    let coords_dual = vec![
+        ("Re".to_string(), -10.0, 10.0, true),
+        ("Dual".to_string(), -1.0, 1.0, true),
+    ];
+    let mut p_dual = p_reals.clone();
+    p_dual.var = "d";
+    p_dual.is_param = false;
+    p_dual.category = 2;
+    p_dual.adjoin_eps = true;
+    p_dual.coords = &coords_dual;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_dual),
+        "d: Variable in Dual(1, epsilon) where Re(d) in [-10.00, 10.00], Dual(d) in [-1.00, 1.00]"
+    );
+
+    // 5. Non-Archimedean p-Adics
+    let mut p_padic = p_reals.clone();
+    p_padic.var = "p";
+    p_padic.category = 3;
+    p_padic.standard_kind = 0;
+    p_padic.padic_prime = 7;
+    p_padic.padic_valuation = 0;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_padic),
+        "p: Parameter in PAdics(p=7) where valuation(p) >= 0"
+    );
+
+    // 6. Surreal numbers
+    let mut p_surreal = p_reals.clone();
+    p_surreal.var = "s";
+    p_surreal.category = 3;
+    p_surreal.standard_kind = 1;
+    p_surreal.surreal_generation = 4;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_surreal),
+        "s: Parameter in Surreals where generation(s) <= 4"
+    );
+
+    // 7. Modulo Ring Z/12Z
+    let mut p_mod = p_reals.clone();
+    p_mod.var = "m";
+    p_mod.category = 4;
+    p_mod.standard_kind = 0;
+    p_mod.modulo_n = 12;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_mod),
+        "m: Parameter in Modulo(n=12) where m in [0, 11]"
+    );
+
+    // 8. Finite Galois Field GF(2^8)
+    let mut p_gf = p_reals.clone();
+    p_gf.var = "F";
+    p_gf.category = 4;
+    p_gf.standard_kind = 1;
+    p_gf.galois_prime = 2;
+    p_gf.galois_power = 8;
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_gf),
+        "F: Parameter in GaloisField(prime=2, power=8)"
+    );
+
+    // 9. Matrix space
+    let mut p_mat = p_reals.clone();
+    p_mat.var = "A";
+    p_mat.category = 5;
+    p_mat.standard_kind = 0;
+    p_mat.matrix_rows = 3;
+    p_mat.matrix_cols = 3;
+    p_mat.matrix_domain = "Reals";
+    assert_eq!(
+        generate_universal_parameter_builder_syntax(&p_mat),
+        "A: Parameter in Matrix(rows=3, cols=3, domain=Reals)"
+    );
+}
+
+#[test]
+fn test_universal_domain_parsing_and_evaluation() {
+    let mut state = NotebookState::default();
+    state.session.raw_document_text = r#"
+z: Variable in Complex
+q: Parameter in Quaternion
+d in Dual
+p in PAdics
+s in Surreals
+m in Modulo
+F in GaloisField
+A in Matrix
+"#.trim().to_string();
+
+    state.evaluate_all();
+    assert_eq!(state.parsed_lines.len(), 8);
+
+    assert_eq!(state.parsed_lines[0].output_unicode, "∀ z ∈ ℂ");
+    assert_eq!(state.parsed_lines[1].output_unicode, "∀ q ∈ ℍ");
+    assert_eq!(state.parsed_lines[2].output_unicode, "∀ d ∈ 𝔻 (Dual)");
+    assert_eq!(state.parsed_lines[3].output_unicode, "∀ p ∈ ℚₚ (p-adic)");
+    assert_eq!(state.parsed_lines[4].output_unicode, "∀ s ∈ 𝐍𝐨 (Surreal)");
+    assert_eq!(state.parsed_lines[5].output_unicode, "∀ m ∈ ℤ/nℤ");
+    assert_eq!(state.parsed_lines[6].output_unicode, "∀ F ∈ GF(pᵏ)");
+    assert_eq!(state.parsed_lines[7].output_unicode, "∀ A ∈ Mₘₓₙ");
 }

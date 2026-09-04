@@ -989,13 +989,18 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
         return None;
     }
 
-    let (var_part, rest) = if let Some(p) = trimmed.split_once(" in ") {
+    let (raw_var_part, rest) = if let Some(p) = trimmed.split_once(" in ") {
         p
     } else {
         trimmed.split_once(" ∈ ")?
     };
 
-    let var_name = var_part.trim();
+    let var_name = if let Some((v, _)) = raw_var_part.split_once(':') {
+        v.trim()
+    } else {
+        raw_var_part.trim()
+    };
+
     if var_name.is_empty() || !var_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;
     }
@@ -1007,6 +1012,7 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
     let mut inclusive_min = true;
     let mut inclusive_max = true;
 
+    // Detect all supported number systems
     if rest_trimmed.starts_with("Positive") {
         domain_type = "Positive".to_string();
         min_val = Some(0.001);
@@ -1016,14 +1022,51 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
         domain_type = "NonNegative".to_string();
         min_val = Some(0.0);
         max_val = Some(100.0);
+    } else if rest_trimmed.starts_with("Naturals") || rest_trimmed.starts_with("ℕ") {
+        domain_type = "Naturals".to_string();
+        min_val = Some(0.0);
     } else if rest_trimmed.starts_with("Integers") || rest_trimmed.starts_with("ℤ") {
         domain_type = "Integers".to_string();
+    } else if rest_trimmed.starts_with("Rationals") || rest_trimmed.starts_with("ℚ") {
+        domain_type = "Rationals".to_string();
     } else if rest_trimmed.starts_with("Complex") || rest_trimmed.starts_with("ℂ") {
         domain_type = "Complex".to_string();
     } else if rest_trimmed.starts_with("Reals") || rest_trimmed.starts_with("ℝ") {
         domain_type = "Reals".to_string();
+    } else if rest_trimmed.starts_with("CayleyDickson") {
+        domain_type = "CayleyDickson".to_string();
     } else if rest_trimmed.starts_with("Quaternion") || rest_trimmed.starts_with("ℍ") {
         domain_type = "Quaternion".to_string();
+    } else if rest_trimmed.starts_with("Octonion") || rest_trimmed.starts_with("𝕆") {
+        domain_type = "Octonion".to_string();
+    } else if rest_trimmed.starts_with("Sedenion") || rest_trimmed.starts_with("𝕊") {
+        domain_type = "Sedenion".to_string();
+    } else if rest_trimmed.starts_with("DualComplex") {
+        domain_type = "DualComplex".to_string();
+    } else if rest_trimmed.starts_with("DualQuaternion") {
+        domain_type = "DualQuaternion".to_string();
+    } else if rest_trimmed.starts_with("Dual") || rest_trimmed.starts_with("𝔻") {
+        domain_type = "Dual".to_string();
+    } else if rest_trimmed.starts_with("SplitComplex") {
+        domain_type = "SplitComplex".to_string();
+    } else if rest_trimmed.starts_with("Bicomplex") {
+        domain_type = "Bicomplex".to_string();
+    } else if rest_trimmed.starts_with("Clifford") {
+        domain_type = "Clifford".to_string();
+    } else if rest_trimmed.starts_with("PAdics") || rest_trimmed.starts_with("Padics") || rest_trimmed.starts_with("ℚ_p") || rest_trimmed.starts_with("Q_p") {
+        domain_type = "PAdics".to_string();
+    } else if rest_trimmed.starts_with("Adeles") || rest_trimmed.starts_with("𝔸") {
+        domain_type = "Adeles".to_string();
+    } else if rest_trimmed.starts_with("Surreals") || rest_trimmed.starts_with("Surreal") || rest_trimmed.starts_with("𝐍𝐨") {
+        domain_type = "Surreals".to_string();
+    } else if rest_trimmed.starts_with("Modulo") || rest_trimmed.starts_with("ℤ/") {
+        domain_type = "Modulo".to_string();
+    } else if rest_trimmed.starts_with("GaloisField") || rest_trimmed.starts_with("GF") || rest_trimmed.starts_with("𝔽") {
+        domain_type = "GaloisField".to_string();
+    } else if rest_trimmed.starts_with("Matrix") {
+        domain_type = "Matrix".to_string();
+    } else if rest_trimmed.starts_with("Tensor") {
+        domain_type = "Tensor".to_string();
     }
 
     // Check for bracket interval `[min, max]` or `(min, max)`

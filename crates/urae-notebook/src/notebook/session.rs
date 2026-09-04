@@ -193,7 +193,163 @@ pub fn generate_interval_syntax(
     )
 }
 
-/// Interactive code generator for Parameter & Variable Builder with adjoined algebras and Cayley-Dickson depth.
+/// Specification parameter bundle for universal number system variable & parameter builder.
+#[derive(Debug, Clone)]
+pub struct ParameterBuilderParams<'a> {
+    pub var: &'a str,
+    pub is_param: bool,
+    pub category: usize, // 0 = Standard/Discrete, 1 = Cayley-Dickson, 2 = Adjoined, 3 = Non-Archimedean, 4 = Modular/Galois, 5 = Matrix/Tensor
+    pub standard_kind: usize, // 0 = Reals, 1 = Positive, 2 = NonNegative, 3 = Integers, 4 = Naturals, 5 = Rationals, 6 = Complex
+    pub cayley_depth: usize, // 0..=5
+    pub adjoin_i: bool,
+    pub adjoin_eps: bool,
+    pub adjoin_j: bool,
+    pub adjoin_clifford: bool,
+    pub padic_prime: u32,
+    pub padic_valuation: i32,
+    pub surreal_generation: u32,
+    pub modulo_n: u64,
+    pub galois_prime: u64,
+    pub galois_power: u32,
+    pub matrix_rows: usize,
+    pub matrix_cols: usize,
+    pub matrix_domain: &'a str,
+    pub tensor_rank: u32,
+    pub coords: &'a [(String, f64, f64, bool)],
+}
+
+/// Universal code generator for Parameter & Variable Builder covering all mathematical number systems.
+pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderParams) -> String {
+    let clean_var = if params.var.trim().is_empty() { "x" } else { params.var.trim() };
+    let role_str = if params.is_param { "Parameter" } else { "Variable" };
+
+    match params.category {
+        0 => {
+            // Category 0: Standard & Discrete Continuum
+            let domain_name = match params.standard_kind {
+                0 => "Reals",
+                1 => "Positive",
+                2 => "NonNegative",
+                3 => "Integers",
+                4 => "Naturals",
+                5 => "Rationals",
+                _ => "Complex",
+            };
+
+            if params.standard_kind == 6 {
+                // Complex number system with Re/Im coordinate bounds
+                let mut bound_parts = Vec::new();
+                for (coord_name, min_v, max_v, enabled) in params.coords {
+                    if *enabled {
+                        bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                    }
+                }
+                if bound_parts.is_empty() {
+                    format!("{}: {} in Complex", clean_var, role_str)
+                } else {
+                    format!("{}: {} in Complex where {}", clean_var, role_str, bound_parts.join(", "))
+                }
+            } else {
+                // Scalar domains (Reals, Integers, Positive, etc.)
+                if let Some((_, min_v, max_v, enabled)) = params.coords.first() {
+                    if *enabled {
+                        format!("{}: {} in {} [{:.2}, {:.2}]", clean_var, role_str, domain_name, min_v, max_v)
+                    } else {
+                        format!("{}: {} in {}", clean_var, role_str, domain_name)
+                    }
+                } else {
+                    format!("{}: {} in {}", clean_var, role_str, domain_name)
+                }
+            }
+        }
+        1 => {
+            // Category 1: Cayley-Dickson Algebra Class with Depth
+            let class_name = match params.cayley_depth {
+                0 => "Reals",
+                1 => "Complex",
+                2 => "Quaternion",
+                3 => "Octonion",
+                4 => "Sedenion",
+                _ => "Trigintaduonion",
+            };
+
+            let mut bound_parts = Vec::new();
+            for (coord_name, min_v, max_v, enabled) in params.coords {
+                if *enabled {
+                    bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                }
+            }
+
+            if bound_parts.is_empty() {
+                format!("{}: {} in CayleyDickson(depth={}) /* {} */", clean_var, role_str, params.cayley_depth, class_name)
+            } else {
+                format!(
+                    "{}: {} in CayleyDickson(depth={}) /* {} */ where {}",
+                    clean_var, role_str, params.cayley_depth, class_name, bound_parts.join(", ")
+                )
+            }
+        }
+        2 => {
+            // Category 2: Adjoin Elements / Generators to Base Field
+            let algebra_desc = match (params.adjoin_i, params.adjoin_eps, params.adjoin_j, params.adjoin_clifford) {
+                (true, false, false, false) => "Complex",
+                (false, true, false, false) => "Dual(1, epsilon)",
+                (true, true, false, false) => "DualComplex(1, i, epsilon)",
+                (false, false, true, false) => "SplitComplex(1, j)",
+                (false, false, false, true) => "Clifford(e1, e2)",
+                (true, false, true, false) => "Bicomplex(1, i, j)",
+                _ => "Reals",
+            };
+
+            let mut bound_parts = Vec::new();
+            for (coord_name, min_v, max_v, enabled) in params.coords {
+                if *enabled {
+                    bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                }
+            }
+
+            if bound_parts.is_empty() {
+                format!("{}: {} in {}", clean_var, role_str, algebra_desc)
+            } else {
+                format!("{}: {} in {} where {}", clean_var, role_str, algebra_desc, bound_parts.join(", "))
+            }
+        }
+        3 => {
+            // Category 3: Non-Archimedean & Infinitesimals (p-Adics, Surreals, Adeles)
+            match params.standard_kind {
+                0 => {
+                    format!("{}: {} in PAdics(p={}) where valuation({}) >= {}", clean_var, role_str, params.padic_prime, clean_var, params.padic_valuation)
+                }
+                1 => {
+                    format!("{}: {} in Surreals where generation({}) <= {}", clean_var, role_str, clean_var, params.surreal_generation)
+                }
+                _ => {
+                    format!("{}: {} in Adeles", clean_var, role_str)
+                }
+            }
+        }
+        4 => {
+            // Category 4: Modular Rings & Finite Fields
+            if params.standard_kind == 0 {
+                format!("{}: {} in Modulo(n={}) where {} in [0, {}]", clean_var, role_str, params.modulo_n, clean_var, params.modulo_n.saturating_sub(1))
+            } else {
+                format!("{}: {} in GaloisField(prime={}, power={})", clean_var, role_str, params.galois_prime, params.galois_power)
+            }
+        }
+        _ => {
+            // Category 5: Matrix & Multilinear Tensor Spaces
+            if params.standard_kind == 0 {
+                let dom = if params.matrix_domain.trim().is_empty() { "Reals" } else { params.matrix_domain.trim() };
+                format!("{}: {} in Matrix(rows={}, cols={}, domain={})", clean_var, role_str, params.matrix_rows, params.matrix_cols, dom)
+            } else {
+                let dom = if params.matrix_domain.trim().is_empty() { "Reals" } else { params.matrix_domain.trim() };
+                format!("{}: {} in Tensor(rank={}, domain={})", clean_var, role_str, params.tensor_rank, dom)
+            }
+        }
+    }
+}
+
+/// Interactive code generator for Parameter & Variable Builder (backwards-compatible wrapper).
 pub fn generate_parameter_builder_syntax(
     var: &str,
     is_param: bool,
@@ -205,59 +361,29 @@ pub fn generate_parameter_builder_syntax(
     cayley_depth: usize,
     coords: &[(String, f64, f64, bool)],
 ) -> String {
-    let clean_var = if var.trim().is_empty() { "x" } else { var.trim() };
-    let role_str = if is_param { "Parameter" } else { "Variable" };
-
-    if mode == 0 {
-        // Mode 0: Adjoin Elements / Generators
-        let algebra_desc = match (adjoin_i, adjoin_eps, adjoin_j, adjoin_clifford) {
-            (true, false, false, false) => "Complex",
-            (false, true, false, false) => "Dual(1, epsilon)",
-            (true, true, false, false) => "DualComplex(1, i, epsilon)",
-            (false, false, true, false) => "SplitComplex(1, j)",
-            (false, false, false, true) => "Clifford(e1, e2)",
-            (true, false, true, false) => "Bicomplex(1, i, j)",
-            _ => "Reals",
-        };
-
-        let mut bound_parts = Vec::new();
-        for (coord_name, min_v, max_v, enabled) in coords {
-            if *enabled {
-                bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
-            }
-        }
-
-        if bound_parts.is_empty() {
-            format!("{}: {} in {}", clean_var, role_str, algebra_desc)
-        } else {
-            format!("{}: {} in {} where {}", clean_var, role_str, algebra_desc, bound_parts.join(", "))
-        }
-    } else {
-        // Mode 1: Cayley-Dickson Algebra Class with Depth
-        let class_name = match cayley_depth {
-            0 => "Reals",
-            1 => "Complex",
-            2 => "Quaternion",
-            3 => "Octonion",
-            _ => "Sedenion",
-        };
-
-        let mut bound_parts = Vec::new();
-        for (coord_name, min_v, max_v, enabled) in coords {
-            if *enabled {
-                bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
-            }
-        }
-
-        if bound_parts.is_empty() {
-            format!("{}: {} in CayleyDickson(depth={}) /* {} */", clean_var, role_str, cayley_depth, class_name)
-        } else {
-            format!(
-                "{}: {} in CayleyDickson(depth={}) /* {} */ where {}",
-                clean_var, role_str, cayley_depth, class_name, bound_parts.join(", ")
-            )
-        }
-    }
+    let params = ParameterBuilderParams {
+        var,
+        is_param,
+        category: if mode == 0 { 2 } else { 1 },
+        standard_kind: 0,
+        cayley_depth,
+        adjoin_i,
+        adjoin_eps,
+        adjoin_j,
+        adjoin_clifford,
+        padic_prime: 7,
+        padic_valuation: 0,
+        surreal_generation: 4,
+        modulo_n: 12,
+        galois_prime: 2,
+        galois_power: 8,
+        matrix_rows: 3,
+        matrix_cols: 3,
+        matrix_domain: "Reals",
+        tensor_rank: 2,
+        coords,
+    };
+    generate_universal_parameter_builder_syntax(&params)
 }
 
 /// Palette code generator for Riemann branch cuts.

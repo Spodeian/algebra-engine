@@ -2,8 +2,9 @@
 
 use crate::notebook::{
     generate_branch_cut_syntax, generate_matrix_syntax, generate_ode_bc_syntax,
-    generate_parameter_builder_syntax, generate_physical_unit_syntax, CardDisplayMode, LineKind,
-    MatrixPresetKind, NotebookState, ReactiveComputeMode, SymbolMetadata, SymbolRole,
+    generate_physical_unit_syntax, generate_universal_parameter_builder_syntax, CardDisplayMode,
+    LineKind, MatrixPresetKind, NotebookState, ParameterBuilderParams, ReactiveComputeMode,
+    SymbolMetadata, SymbolRole,
 };
 use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
@@ -132,12 +133,24 @@ pub struct UraeNotebookApp {
     // Parameter & Variable Builder State
     pub param_builder_var: String,
     pub param_builder_is_param: bool,
+    pub param_builder_category: usize, // 0 = Standard, 1 = Cayley-Dickson, 2 = Adjoined, 3 = Non-Archimedean, 4 = Modular/Galois, 5 = Matrix/Tensor
+    pub param_builder_standard_kind: usize, // 0 = Reals, 1 = Positive, 2 = NonNegative, 3 = Integers, 4 = Naturals, 5 = Rationals, 6 = Complex
     pub param_builder_mode: usize, // 0 = Adjoin, 1 = Cayley-Dickson
     pub param_builder_adjoin_i: bool,
     pub param_builder_adjoin_eps: bool,
     pub param_builder_adjoin_j: bool,
     pub param_builder_adjoin_clifford: bool,
     pub param_builder_cayley_depth: usize,
+    pub param_builder_padic_prime: u32,
+    pub param_builder_padic_valuation: i32,
+    pub param_builder_surreal_generation: u32,
+    pub param_builder_modulo_n: u64,
+    pub param_builder_galois_prime: u64,
+    pub param_builder_galois_power: u32,
+    pub param_builder_matrix_rows: usize,
+    pub param_builder_matrix_cols: usize,
+    pub param_builder_matrix_domain: String,
+    pub param_builder_tensor_rank: u32,
     pub param_builder_coords: Vec<(String, f64, f64, bool)>,
 
     pub branch_cut_fn: String,
@@ -273,12 +286,24 @@ impl Default for UraeNotebookApp {
 
             param_builder_var: "z".to_string(),
             param_builder_is_param: false,
+            param_builder_category: 0,
+            param_builder_standard_kind: 0,
             param_builder_mode: 0,
             param_builder_adjoin_i: true,
             param_builder_adjoin_eps: false,
             param_builder_adjoin_j: false,
             param_builder_adjoin_clifford: false,
             param_builder_cayley_depth: 1,
+            param_builder_padic_prime: 7,
+            param_builder_padic_valuation: 0,
+            param_builder_surreal_generation: 4,
+            param_builder_modulo_n: 12,
+            param_builder_galois_prime: 2,
+            param_builder_galois_power: 8,
+            param_builder_matrix_rows: 3,
+            param_builder_matrix_cols: 3,
+            param_builder_matrix_domain: "Reals".to_string(),
+            param_builder_tensor_rank: 2,
             param_builder_coords: vec![
                 ("Re".to_string(), -5.0, 5.0, true),
                 ("Im".to_string(), -5.0, 5.0, true),
@@ -3906,12 +3931,12 @@ impl UraeNotebookApp {
     fn render_domain_picker_modal(&mut self, ctx: &egui::Context) {
         if self.show_domain_picker {
             let mut is_open = self.show_domain_picker;
-            egui::Window::new("📐 Parameter & Variable Builder")
+            egui::Window::new("🎛 Parameter & Variable Builder")
                 .open(&mut is_open)
-                .default_size([460.0, 480.0])
+                .default_size([520.0, 560.0])
                 .resizable(true)
                 .show(ctx, |ui| {
-                    ui.subheading("Symbol Declaration & Number Specification");
+                    ui.subheading("Symbol Declaration & Number System Specification");
 
                     // 1. Symbol Name and Role
                     ui.horizontal(|ui| {
@@ -3931,70 +3956,226 @@ impl UraeNotebookApp {
                     ui.add_space(4.0);
                     ui.separator();
 
-                    // 2. Construction Paradigm
-                    ui.subheading("Algebra Construction Paradigm");
-                    ui.horizontal(|ui| {
-                        if ui.selectable_label(self.param_builder_mode == 0, "Adjoin Generators / Units").clicked() {
-                            self.param_builder_mode = 0;
+                    // 2. Universal Number System Categories
+                    ui.subheading("Number System & Algebraic Category");
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.selectable_label(self.param_builder_category == 0, "Standard (ℝ, ℤ, ℂ)").clicked() {
+                            self.param_builder_category = 0;
                         }
-                        if ui.selectable_label(self.param_builder_mode == 1, "Cayley-Dickson Class & Depth").clicked() {
-                            self.param_builder_mode = 1;
+                        if ui.selectable_label(self.param_builder_category == 1, "Cayley-Dickson (ℝ..𝕊)").clicked() {
+                            self.param_builder_category = 1;
+                        }
+                        if ui.selectable_label(self.param_builder_category == 2, "Adjoined (i, ε, j, eₖ)").clicked() {
+                            self.param_builder_category = 2;
+                        }
+                        if ui.selectable_label(self.param_builder_category == 3, "Non-Archimedean (ℚₚ, 𝐍𝐨, 𝔸)").clicked() {
+                            self.param_builder_category = 3;
+                        }
+                        if ui.selectable_label(self.param_builder_category == 4, "Modular & Galois (ℤₙ, GF)").clicked() {
+                            self.param_builder_category = 4;
+                        }
+                        if ui.selectable_label(self.param_builder_category == 5, "Matrix & Tensor (Mₘₓₙ, Tʳ)").clicked() {
+                            self.param_builder_category = 5;
                         }
                     });
 
                     ui.add_space(4.0);
 
-                    // 3. Mode-specific specifications
-                    if self.param_builder_mode == 0 {
-                        ui.group(|ui| {
-                            ui.label(egui::RichText::new("Adjoin Elements to Base Field ℝ:").strong());
-                            ui.horizontal(|ui| {
-                                ui.checkbox(&mut self.param_builder_adjoin_i, "i (Imaginary: i² = -1)");
-                                ui.checkbox(&mut self.param_builder_adjoin_eps, "ε (Dual: ε² = 0)");
-                            });
-                            ui.horizontal(|ui| {
-                                ui.checkbox(&mut self.param_builder_adjoin_j, "j (Split-Complex: j² = +1)");
-                                ui.checkbox(&mut self.param_builder_adjoin_clifford, "e₁, e₂ (Grassmann/Clifford)");
-                            });
+                    // 3. Category-specific configuration panels
+                    match self.param_builder_category {
+                        0 => {
+                            // Standard & Discrete Continuum
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Classical Number Continuum & Discrete Subsets:").strong());
+                                ui.horizontal_wrapped(|ui| {
+                                    let options = [
+                                        ("ℝ Reals", 0),
+                                        ("ℝ⁺ Positive", 1),
+                                        ("ℝ⁺₀ NonNeg", 2),
+                                        ("ℤ Integers", 3),
+                                        ("ℕ Naturals", 4),
+                                        ("ℚ Rationals", 5),
+                                        ("ℂ Complex", 6),
+                                    ];
+                                    for (lbl, idx) in options {
+                                        if ui.selectable_label(self.param_builder_standard_kind == idx, lbl).clicked() {
+                                            self.param_builder_standard_kind = idx;
+                                        }
+                                    }
+                                });
 
-                            let derived_algebra = match (
-                                self.param_builder_adjoin_i,
-                                self.param_builder_adjoin_eps,
-                                self.param_builder_adjoin_j,
-                                self.param_builder_adjoin_clifford,
-                            ) {
-                                (true, false, false, false) => "ℂ (Complex Field, dim 2)",
-                                (false, true, false, false) => "𝔻 (Dual Numbers for AutoDiff, dim 2)",
-                                (true, true, false, false) => "Dual-Imaginary / Dual-Complex (Kinematics & Screw Theory, dim 4)",
-                                (false, false, true, false) => "ℝ[j] (Split-Complex / Hyperbolic Numbers, dim 2)",
-                                (false, false, false, true) => "Clifford Cl(2, 0) Multivector Algebra",
-                                (true, false, true, false) => "Bicomplex Commutative Quaternions",
-                                _ => "ℝ (Real Field, dim 1)",
-                            };
-
-                            ui.weak(format!("Resulting Algebra: {}", derived_algebra));
-                        });
-                    } else {
-                        ui.group(|ui| {
-                            ui.label(egui::RichText::new("Cayley-Dickson Algebra Family:").strong());
-                            ui.horizontal(|ui| {
-                                ui.label("Integer Depth:");
-                                ui.add(egui::Slider::new(&mut self.param_builder_cayley_depth, 0..=4).text("Depth"));
+                                let notes = match self.param_builder_standard_kind {
+                                    0 => "Real number line ℝ: Complete ordered Archimedean field",
+                                    1 => "Positive reals ℝ⁺: (0, ∞) strictly greater than zero",
+                                    2 => "Non-negative reals ℝ⁺₀: [0, ∞) including zero",
+                                    3 => "Integers ℤ: Integral domain with unit elements {-1, 1}",
+                                    4 => "Natural numbers ℕ: Non-negative counting numbers {0, 1, 2, ...}",
+                                    5 => "Rationals ℚ: Exact fraction quotient field p/q",
+                                    _ => "Complex field ℂ: Algebraically closed 2D plane with i² = -1",
+                                };
+                                ui.weak(notes);
                             });
+                        }
+                        1 => {
+                            // Cayley-Dickson Algebra Hierarchy
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Cayley-Dickson Algebra Family:").strong());
+                                ui.horizontal(|ui| {
+                                    ui.label("Integer Depth (0..5):");
+                                    ui.add(egui::Slider::new(&mut self.param_builder_cayley_depth, 0..=5).text("Depth"));
+                                });
 
-                            let (name, dim, notes) = match self.param_builder_cayley_depth {
-                                0 => ("ℝ (Reals)", 1, "Commutative, Associative, Ordered Field"),
-                                1 => ("ℂ (Complex)", 2, "Commutative, Associative, Algebraically Closed"),
-                                2 => ("ℍ (Quaternions)", 4, "Non-Commutative Division Ring (3D Rotations)"),
-                                3 => ("O (Octonions)", 8, "Non-Associative Alternative Division Algebra"),
-                                _ => ("S (Sedenions)", 16, "Non-Alternative, Contains Zero Divisors"),
-                            };
+                                let (name, dim, notes) = match self.param_builder_cayley_depth {
+                                    0 => ("ℝ (Reals)", 1, "Commutative, Associative, Ordered Field"),
+                                    1 => ("ℂ (Complex)", 2, "Commutative, Associative, Algebraically Closed"),
+                                    2 => ("ℍ (Quaternions)", 4, "Non-Commutative Division Ring (3D Spatial Rotations)"),
+                                    3 => ("𝕆 (Octonions)", 8, "Non-Associative Alternative Division Algebra"),
+                                    4 => ("𝕊 (Sedenions)", 16, "Non-Alternative, Non-Division, Contains Zero Divisors"),
+                                    _ => ("𝕋 (Trigintaduonions)", 32, "32-Dimensional Hypercomplex Algebra"),
+                                };
 
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("Class: {} (Dimension: {})", name, dim)).strong());
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(format!("Class: {} (Dimension: {})", name, dim)).strong());
+                                });
+                                ui.weak(format!("Properties: {}", notes));
                             });
-                            ui.weak(format!("Properties: {}", notes));
-                        });
+                        }
+                        2 => {
+                            // Adjoined Algebras & Generators
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Adjoin Algebraic Units to Base Field ℝ:").strong());
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.param_builder_adjoin_i, "i (Imaginary: i² = -1)");
+                                    ui.checkbox(&mut self.param_builder_adjoin_eps, "ε (Dual: ε² = 0, AutoDiff)");
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.checkbox(&mut self.param_builder_adjoin_j, "j (Split-Complex: j² = +1)");
+                                    ui.checkbox(&mut self.param_builder_adjoin_clifford, "e₁, e₂ (Grassmann/Clifford)");
+                                });
+
+                                let derived_algebra = match (
+                                    self.param_builder_adjoin_i,
+                                    self.param_builder_adjoin_eps,
+                                    self.param_builder_adjoin_j,
+                                    self.param_builder_adjoin_clifford,
+                                ) {
+                                    (true, false, false, false) => "ℂ (Complex Field, dim 2)",
+                                    (false, true, false, false) => "𝔻 (Dual Numbers for Forward AutoDiff, dim 2)",
+                                    (true, true, false, false) => "Dual-Complex (Kinematics & Screw Theory, dim 4)",
+                                    (false, false, true, false) => "ℝ[j] (Split-Complex / Hyperbolic Numbers, dim 2)",
+                                    (false, false, false, true) => "Clifford Cl(2, 0) Multivector Geometric Algebra",
+                                    (true, false, true, false) => "Bicomplex Commutative Quaternions",
+                                    _ => "ℝ (Real Base Field, dim 1)",
+                                };
+
+                                ui.weak(format!("Resulting Algebra: {}", derived_algebra));
+                            });
+                        }
+                        3 => {
+                            // Non-Archimedean & Infinitesimals
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Non-Archimedean & Infinitesimal Fields:").strong());
+                                ui.horizontal(|ui| {
+                                    if ui.selectable_label(self.param_builder_standard_kind == 0, "p-Adic ℚₚ").clicked() {
+                                        self.param_builder_standard_kind = 0;
+                                    }
+                                    if ui.selectable_label(self.param_builder_standard_kind == 1, "Surreal 𝐍𝐨").clicked() {
+                                        self.param_builder_standard_kind = 1;
+                                    }
+                                    if ui.selectable_label(self.param_builder_standard_kind == 2, "Adeles 𝔸").clicked() {
+                                        self.param_builder_standard_kind = 2;
+                                    }
+                                });
+
+                                match self.param_builder_standard_kind {
+                                    0 => {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Prime p:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_padic_prime).range(2..=997));
+                                            ui.separator();
+                                            ui.label("Valuation Bound vₚ(x) ≥:");
+                                            ui.add(egui::DragValue::new(&mut self.param_builder_padic_valuation).range(-10..=10));
+                                        });
+                                        ui.weak(format!("Ultrametric field ℚ_{} with non-Archimedean norm |x|_{} = {}^{{-v(x)}}", self.param_builder_padic_prime, self.param_builder_padic_prime, self.param_builder_padic_prime));
+                                    }
+                                    1 => {
+                                        ui.horizontal(|ui| {
+                                            ui.label("Generation / Birth Day Depth ≤:");
+                                            ui.add(egui::Slider::new(&mut self.param_builder_surreal_generation, 0..=10));
+                                        });
+                                        ui.weak("Conway Surreal numbers: contains infinitesimals ε and transfinite ordinals ω");
+                                    }
+                                    _ => {
+                                        ui.weak("Topological Adele Ring 𝔸: restricted product of ℝ and all p-adic completions ℚₚ");
+                                    }
+                                }
+                            });
+                        }
+                        4 => {
+                            // Modular & Finite Fields
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Modular Rings & Finite Galois Fields:").strong());
+                                ui.horizontal(|ui| {
+                                    if ui.selectable_label(self.param_builder_standard_kind == 0, "Modulo Ring (ℤ/nℤ)").clicked() {
+                                        self.param_builder_standard_kind = 0;
+                                    }
+                                    if ui.selectable_label(self.param_builder_standard_kind == 1, "Galois Field GF(pᵏ)").clicked() {
+                                        self.param_builder_standard_kind = 1;
+                                    }
+                                });
+
+                                if self.param_builder_standard_kind == 0 {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Modulus n:");
+                                        ui.add(egui::DragValue::new(&mut self.param_builder_modulo_n).range(2..=65536));
+                                    });
+                                    ui.weak(format!("Residue classes modulo {}: elements in {{0, ..., {}}}", self.param_builder_modulo_n, self.param_builder_modulo_n.saturating_sub(1)));
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Prime Characteristic p:");
+                                        ui.add(egui::DragValue::new(&mut self.param_builder_galois_prime).range(2..=257));
+                                        ui.label("Power k:");
+                                        ui.add(egui::DragValue::new(&mut self.param_builder_galois_power).range(1..=16));
+                                    });
+                                    let order = self.param_builder_galois_prime.saturating_pow(self.param_builder_galois_power);
+                                    ui.weak(format!("Galois field GF({}^{}) of order q = {}", self.param_builder_galois_prime, self.param_builder_galois_power, order));
+                                }
+                            });
+                        }
+                        _ => {
+                            // Matrix & Tensor Domains
+                            ui.group(|ui| {
+                                ui.label(egui::RichText::new("Matrix & Multilinear Tensor Domains:").strong());
+                                ui.horizontal(|ui| {
+                                    if ui.selectable_label(self.param_builder_standard_kind == 0, "Matrix Space Mₘₓₙ(D)").clicked() {
+                                        self.param_builder_standard_kind = 0;
+                                    }
+                                    if ui.selectable_label(self.param_builder_standard_kind == 1, "Tensor Algebra Tʳ(D)").clicked() {
+                                        self.param_builder_standard_kind = 1;
+                                    }
+                                });
+
+                                if self.param_builder_standard_kind == 0 {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Rows m:");
+                                        ui.add(egui::DragValue::new(&mut self.param_builder_matrix_rows).range(1..=16));
+                                        ui.label("Cols n:");
+                                        ui.add(egui::DragValue::new(&mut self.param_builder_matrix_cols).range(1..=16));
+                                        ui.label("Element Domain:");
+                                        ui.text_edit_singleline(&mut self.param_builder_matrix_domain);
+                                    });
+                                    ui.weak(format!("Matrix ring M_{{ {} x {} }}({})", self.param_builder_matrix_rows, self.param_builder_matrix_cols, self.param_builder_matrix_domain));
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Tensor Rank r:");
+                                        ui.add(egui::Slider::new(&mut self.param_builder_tensor_rank, 1..=8));
+                                        ui.label("Base Domain:");
+                                        ui.text_edit_singleline(&mut self.param_builder_matrix_domain);
+                                    });
+                                    ui.weak(format!("Tensor algebra of rank {} over {}", self.param_builder_tensor_rank, self.param_builder_matrix_domain));
+                                }
+                            });
+                        }
                     }
 
                     ui.add_space(4.0);
@@ -4007,44 +4188,69 @@ impl UraeNotebookApp {
                             self.param_builder_coords.push(("Coord".to_string(), -5.0, 5.0, false));
                         }
 
-                        // Update coordinate labels based on active class/mode
-                        if self.param_builder_mode == 0 {
-                            self.param_builder_coords[0].0 = "Re".to_string();
-                            self.param_builder_coords[1].0 = if self.param_builder_adjoin_eps { "Dual".to_string() } else { "Im".to_string() };
-                            self.param_builder_coords[2].0 = "Coord2".to_string();
-                            self.param_builder_coords[3].0 = "Coord3".to_string();
-                        } else {
-                            match self.param_builder_cayley_depth {
-                                0 => {
-                                    self.param_builder_coords[0].0 = "x0".to_string();
-                                }
-                                1 => {
+                        // Configure coordinate labels according to active category
+                        let active_count = match self.param_builder_category {
+                            0 => {
+                                if self.param_builder_standard_kind == 6 {
                                     self.param_builder_coords[0].0 = "Re".to_string();
                                     self.param_builder_coords[1].0 = "Im".to_string();
-                                }
-                                2 => {
-                                    self.param_builder_coords[0].0 = "Scalar".to_string();
-                                    self.param_builder_coords[1].0 = "Vector".to_string();
-                                    self.param_builder_coords[2].0 = "j_part".to_string();
-                                    self.param_builder_coords[3].0 = "k_part".to_string();
-                                }
-                                _ => {
-                                    self.param_builder_coords[0].0 = "Scalar".to_string();
-                                    self.param_builder_coords[1].0 = "NonScalar".to_string();
+                                    2
+                                } else {
+                                    self.param_builder_coords[0].0 = "Bound".to_string();
+                                    1
                                 }
                             }
-                        }
-
-                        let active_count = if self.param_builder_mode == 0 {
-                            if self.param_builder_adjoin_i && self.param_builder_adjoin_eps { 3 }
-                            else if self.param_builder_adjoin_i || self.param_builder_adjoin_eps || self.param_builder_adjoin_j { 2 }
-                            else { 1 }
-                        } else {
-                            match self.param_builder_cayley_depth {
-                                0 => 1,
-                                1 => 2,
-                                2 => 2,
-                                _ => 2,
+                            1 => {
+                                match self.param_builder_cayley_depth {
+                                    0 => {
+                                        self.param_builder_coords[0].0 = "x0".to_string();
+                                        1
+                                    }
+                                    1 => {
+                                        self.param_builder_coords[0].0 = "Re".to_string();
+                                        self.param_builder_coords[1].0 = "Im".to_string();
+                                        2
+                                    }
+                                    2 => {
+                                        self.param_builder_coords[0].0 = "Scalar".to_string();
+                                        self.param_builder_coords[1].0 = "Vector".to_string();
+                                        self.param_builder_coords[2].0 = "j_part".to_string();
+                                        self.param_builder_coords[3].0 = "k_part".to_string();
+                                        4
+                                    }
+                                    _ => {
+                                        self.param_builder_coords[0].0 = "Scalar".to_string();
+                                        self.param_builder_coords[1].0 = "NonScalar".to_string();
+                                        2
+                                    }
+                                }
+                            }
+                            2 => {
+                                self.param_builder_coords[0].0 = "Re".to_string();
+                                self.param_builder_coords[1].0 = if self.param_builder_adjoin_eps {
+                                    "Dual".to_string()
+                                } else if self.param_builder_adjoin_j {
+                                    "Split".to_string()
+                                } else {
+                                    "Im".to_string()
+                                };
+                                self.param_builder_coords[2].0 = "Part2".to_string();
+                                self.param_builder_coords[3].0 = "Part3".to_string();
+                                if self.param_builder_adjoin_i && self.param_builder_adjoin_eps { 3 }
+                                else if self.param_builder_adjoin_i || self.param_builder_adjoin_eps || self.param_builder_adjoin_j { 2 }
+                                else { 1 }
+                            }
+                            3 => {
+                                self.param_builder_coords[0].0 = "Interval".to_string();
+                                1
+                            }
+                            4 => {
+                                self.param_builder_coords[0].0 = "Residue".to_string();
+                                1
+                            }
+                            _ => {
+                                self.param_builder_coords[0].0 = "Elements".to_string();
+                                1
                             }
                         };
 
@@ -4065,18 +4271,30 @@ impl UraeNotebookApp {
 
                     ui.separator();
 
-                    // 5. Live Syntax Preview
-                    let syntax = generate_parameter_builder_syntax(
-                        &self.param_builder_var,
-                        self.param_builder_is_param,
-                        self.param_builder_mode,
-                        self.param_builder_adjoin_i,
-                        self.param_builder_adjoin_eps,
-                        self.param_builder_adjoin_j,
-                        self.param_builder_adjoin_clifford,
-                        self.param_builder_cayley_depth,
-                        &self.param_builder_coords,
-                    );
+                    // 5. Live Universal Syntax Preview
+                    let params = ParameterBuilderParams {
+                        var: &self.param_builder_var,
+                        is_param: self.param_builder_is_param,
+                        category: self.param_builder_category,
+                        standard_kind: self.param_builder_standard_kind,
+                        cayley_depth: self.param_builder_cayley_depth,
+                        adjoin_i: self.param_builder_adjoin_i,
+                        adjoin_eps: self.param_builder_adjoin_eps,
+                        adjoin_j: self.param_builder_adjoin_j,
+                        adjoin_clifford: self.param_builder_adjoin_clifford,
+                        padic_prime: self.param_builder_padic_prime,
+                        padic_valuation: self.param_builder_padic_valuation,
+                        surreal_generation: self.param_builder_surreal_generation,
+                        modulo_n: self.param_builder_modulo_n,
+                        galois_prime: self.param_builder_galois_prime,
+                        galois_power: self.param_builder_galois_power,
+                        matrix_rows: self.param_builder_matrix_rows,
+                        matrix_cols: self.param_builder_matrix_cols,
+                        matrix_domain: &self.param_builder_matrix_domain,
+                        tensor_rank: self.param_builder_tensor_rank,
+                        coords: &self.param_builder_coords,
+                    };
+                    let syntax = generate_universal_parameter_builder_syntax(&params);
 
                     ui.label("Live Syntax Preview:");
                     ui.monospace(

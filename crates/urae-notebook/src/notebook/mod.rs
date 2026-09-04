@@ -26,7 +26,8 @@ pub use session::{
     default_logging_level, export_session_to_compressed_bson, generate_branch_cut_syntax,
     generate_interval_syntax, generate_matrix_syntax, generate_ode_bc_syntax,
     generate_parameter_builder_syntax, generate_physical_unit_syntax,
-    import_session_from_compressed_bson, CardDisplayMode, MatrixPresetKind, NotebookSettings,
+    generate_universal_parameter_builder_syntax, import_session_from_compressed_bson,
+    CardDisplayMode, MatrixPresetKind, NotebookSettings, ParameterBuilderParams,
     ReactiveComputeMode, SessionData, SymbolMetadata, SymbolRole, SESSION_FILE_NAME,
 };
 pub use worker::{
@@ -1042,10 +1043,31 @@ impl NotebookState {
                     "Integers" if bound.min_val.is_some() && bound.max_val.is_some() => {
                         format!("∀ {} ∈ ℤ ∩ [{:.0}, {:.0}]", bound.name, min_s, max_s)
                     }
+                    "Naturals" if bound.min_val.is_some() && bound.max_val.is_some() => {
+                        format!("∀ {} ∈ ℕ ∩ [{:.0}, {:.0}]", bound.name, min_s, max_s)
+                    }
                     "Positive" => format!("∀ {} ∈ ℝ⁺", bound.name),
                     "NonNegative" => format!("∀ {} ∈ ℝ⁺₀", bound.name),
+                    "Naturals" => format!("∀ {} ∈ ℕ", bound.name),
                     "Integers" => format!("∀ {} ∈ ℤ", bound.name),
+                    "Rationals" => format!("∀ {} ∈ ℚ", bound.name),
                     "Complex" => format!("∀ {} ∈ ℂ", bound.name),
+                    "Quaternion" => format!("∀ {} ∈ ℍ", bound.name),
+                    "Octonion" => format!("∀ {} ∈ 𝕆", bound.name),
+                    "Sedenion" => format!("∀ {} ∈ 𝕊", bound.name),
+                    "Dual" => format!("∀ {} ∈ 𝔻 (Dual)", bound.name),
+                    "DualComplex" => format!("∀ {} ∈ 𝔻(ℂ) (Dual-Complex)", bound.name),
+                    "DualQuaternion" => format!("∀ {} ∈ 𝔻(ℍ) (Dual-Quaternion)", bound.name),
+                    "SplitComplex" => format!("∀ {} ∈ ℝ[j] (Split-Complex)", bound.name),
+                    "Bicomplex" => format!("∀ {} ∈ ℂ₂ (Bicomplex)", bound.name),
+                    "Clifford" => format!("∀ {} ∈ Cℓ (Clifford)", bound.name),
+                    "PAdics" => format!("∀ {} ∈ ℚₚ (p-adic)", bound.name),
+                    "Adeles" => format!("∀ {} ∈ 𝔸 (Adeles)", bound.name),
+                    "Surreals" => format!("∀ {} ∈ 𝐍𝐨 (Surreal)", bound.name),
+                    "Modulo" => format!("∀ {} ∈ ℤ/nℤ", bound.name),
+                    "GaloisField" => format!("∀ {} ∈ GF(pᵏ)", bound.name),
+                    "Matrix" => format!("∀ {} ∈ Mₘₓₙ", bound.name),
+                    "Tensor" => format!("∀ {} ∈ Tʳ", bound.name),
                     _ => format!("∀ {} ∈ {}", bound.name, bound.domain_type),
                 };
 
