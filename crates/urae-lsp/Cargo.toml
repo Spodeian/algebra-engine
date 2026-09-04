@@ -8,6 +8,10 @@ repository.workspace = true
 homepage.workspace = true
 description = "Language Server Protocol (LSP) Engine for URAE Mathematical Scripting in VS Code, Neovim & Zed"
 
+[lib]
+test = false
+doctest = false
+
 [lints]
 workspace = true
 

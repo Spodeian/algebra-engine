@@ -8,9 +8,14 @@ repository.workspace = true
 homepage.workspace = true
 description = "High-speed command-line REPL and JSON stream processing interface for URAE"
 
+[lib]
+test = false
+doctest = false
+
 [[bin]]
 name = "urae-cli"
 path = "src/main.rs"
+test = false
 
 [lints]
 workspace = true

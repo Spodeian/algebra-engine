@@ -100,3 +100,11 @@ codegen-units = 1
 panic = "abort"
 strip = true
 overflow-checks = false
+
+# Fast test execution: line-level debuginfo for quick linking, optimized dependencies for faster test runs
+[profile.test]
+debug = 1
+
+[profile.test.package."*"]
+opt-level = 2
+

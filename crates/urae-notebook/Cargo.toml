@@ -8,9 +8,13 @@ repository.workspace = true
 homepage.workspace = true
 description = "Cross-platform egui reactive mathematics notebook application for URAE"
 
+[lib]
+doctest = false
+
 [[bin]]
 name = "urae-notebook"
 path = "src/main.rs"
+test = false
 
 [lints]
 workspace = true

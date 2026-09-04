@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Native Zero-Latency Jupyter Kernel for the Universal Rust Algebra Engine (URAE)"
+ 
+[lib]
+test = false
+doctest = false
 
 [lints]
 workspace = true
