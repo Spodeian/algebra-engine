@@ -1952,6 +1952,87 @@ impl NotebookState {
                             continue;
                         }
                     }
+                    urae::parser::PermissiveIntent::PrimeDecomposition { expression, domain } => {
+                        let clean_expr = expression.trim();
+                        let mut effective_domain = domain.clone();
+
+                        // Infer domain from declared symbol metadata if not explicitly provided
+                        if effective_domain.is_none() {
+                            if let Some(meta) = self.session.symbol_metadata.get(clean_expr) {
+                                effective_domain = Some(meta.domain_type.clone());
+                            }
+                        }
+
+                        // Substitute known slider values if the expression is a single variable symbol
+                        let mut eval_expr = clean_expr.to_string();
+                        if let Some(&val) = self.session.slider_values.get(clean_expr) {
+                            if effective_domain.as_deref() == Some("GaussianIntegers") {
+                                let real_k = format!("{}_real", clean_expr);
+                                let imag_k = format!("{}_imag", clean_expr);
+                                let r = self.session.slider_values.get(&real_k).copied().unwrap_or(val);
+                                let i = self.session.slider_values.get(&imag_k).copied().unwrap_or(0.0);
+                                eval_expr = format!("{} + {}i", r as i64, i as i64);
+                            } else {
+                                eval_expr = format!("{}", val as i64);
+                            }
+                        }
+
+                        match urae::engine::numbertheory::decompose_universal(&eval_expr, effective_domain.as_deref()) {
+                            Ok(res) => {
+                                let summary_text = if res.classification_summary.is_empty() {
+                                    String::new()
+                                } else {
+                                    format!("\n  • {}", res.classification_summary.join("\n  • "))
+                                };
+                                let unicode_output = format!("{} [{}]{}", res.formatted_equation, res.number_system, summary_text);
+
+                                parsed_lines.push(ParsedLine {
+                                    line_idx: idx,
+                                    raw_text: line_str.to_string(),
+                                    kind: LineKind::Formula,
+                                    output_latex: res.latex_equation,
+                                    output_unicode: unicode_output,
+                                    simplified_unicode: Some(res.formatted_equation.clone()),
+                                    substituted_latex: None,
+                                    derivative_latex: None,
+                                    domain_info: Some(format!("Prime Decomposition in {}", res.number_system)),
+                                    error_msg: None,
+                                    suggested_symbols: Vec::new(),
+                                    is_function: false,
+                                    physical_unit: None,
+                                    numerical_roots: None,
+                                    linearized_estimate: None,
+                                    is_pending: false,
+                                    eval_time_ms: 0,
+                                    scoped_context: current_scoped_context.clone(),
+                                });
+                                continue;
+                            }
+                            Err(e) => {
+                                parsed_lines.push(ParsedLine {
+                                    line_idx: idx,
+                                    raw_text: line_str.to_string(),
+                                    kind: LineKind::Formula,
+                                    output_latex: format!("\\text{{Prime Decomposition Error: {}}}", e),
+                                    output_unicode: format!("Prime Decomposition Error: {}", e),
+                                    simplified_unicode: None,
+                                    substituted_latex: None,
+                                    derivative_latex: None,
+                                    domain_info: Some("Prime Decomposition Error".to_string()),
+                                    error_msg: Some(e),
+                                    suggested_symbols: Vec::new(),
+                                    is_function: false,
+                                    physical_unit: None,
+                                    numerical_roots: None,
+                                    linearized_estimate: None,
+                                    is_pending: false,
+                                    eval_time_ms: 0,
+                                    scoped_context: current_scoped_context.clone(),
+                                });
+                                continue;
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }

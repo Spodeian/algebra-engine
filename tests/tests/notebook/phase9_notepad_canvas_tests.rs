@@ -515,3 +515,43 @@ j in OddIntegers
     assert_eq!(state.parsed_lines[7].output_unicode, "∀ j ∈ 2ℤ+1");
 }
 
+#[test]
+fn test_universal_prime_decomposition_in_notebook() {
+    let mut state = NotebookState::default();
+    state.session.raw_document_text = r#"
+prime_factors 60
+prime_factors 3 + 4i
+prime_factors 7 in Eisenstein
+prime_factors 12 in Modulo(15)
+prime_factors 45 in PAdics(p=3)
+prime_factors 21/40
+"#.trim().to_string();
+
+    state.evaluate_all();
+    assert_eq!(state.parsed_lines.len(), 6);
+
+    // 1. Integers 60 = 2^2 * 3 * 5
+    assert!(state.parsed_lines[0].output_unicode.contains("Integers (ℤ)"));
+    assert!(state.parsed_lines[0].output_unicode.contains("60 = 2^2 * 3 * 5"));
+    assert!(state.parsed_lines[0].output_unicode.contains("Even prime"));
+
+    // 2. Gaussian Integers 3 + 4i
+    assert!(state.parsed_lines[1].output_unicode.contains("Gaussian Integers (ℤ[i])"));
+    assert!(state.parsed_lines[1].output_unicode.contains("3 + 4i ="));
+
+    // 3. Eisenstein Integers 7
+    assert!(state.parsed_lines[2].output_unicode.contains("Eisenstein Integers (ℤ[ω])"));
+    assert!(state.parsed_lines[2].output_unicode.contains("7 ="));
+
+    // 4. Modulo(15) 12
+    assert!(state.parsed_lines[3].output_unicode.contains("Modular Ring (ℤ/15ℤ)"));
+    assert!(state.parsed_lines[3].output_unicode.contains("Modular prime/maximal ideal"));
+
+    // 5. p-Adics 45 in Q_3
+    assert!(state.parsed_lines[4].output_unicode.contains("p-Adic Field (ℚ_3)"));
+    assert!(state.parsed_lines[4].output_unicode.contains("Valuation v_3(45) = 2"));
+
+    // 6. Rationals 21/40
+    assert!(state.parsed_lines[5].output_unicode.contains("Rationals (ℚ)"));
+    assert!(state.parsed_lines[5].output_unicode.contains("21/40 ="));
+}

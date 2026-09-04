@@ -23,7 +23,7 @@ use crate::combinatorics::{
 };
 use crate::control::StateSpaceSystem;
 use crate::hyperop::{ackermann, hyperoperation, knuth_up_arrow, pentation, super_log, tetration};
-use crate::numbertheory::{extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
+use crate::numbertheory::{decompose_universal, extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
 use crate::numeric::{EvalContext, NumericalEval};
 use crate::simplify::{AlgebraicTransformations, Simplifier, SymbolicSimplifier};
 use crate::solver::SymbolicSolver;
@@ -935,6 +935,15 @@ impl OperationExecutor {
                         format!("\\left(\\frac{{{}}}{{{}}}\\right) = {}", a, p, leg),
                         out,
                     )
+                }
+                NumberTheoryOpKind::PrimeDecomposition { expr_str, domain_hint } => {
+                    match decompose_universal(expr_str, domain_hint.as_deref()) {
+                        Ok(res) => {
+                            let out = format!("{} [{}]\n  {}", res.formatted_equation, res.number_system, res.classification_summary.join("\n  "));
+                            OperationResult::success(out, res.latex_equation, res.formatted_equation)
+                        }
+                        Err(err) => OperationResult::error(format!("Prime decomposition failed: {}", err)),
+                    }
                 }
             },
 

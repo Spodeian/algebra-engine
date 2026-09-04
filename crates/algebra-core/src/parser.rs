@@ -487,6 +487,11 @@ pub enum PermissiveIntent {
         lower: String,
         upper: String,
     },
+    /// Prime decomposition with prime classification across number systems: `prime_factors 60`, `prime_factors 3 + 4i in GaussianIntegers`
+    PrimeDecomposition {
+        expression: String,
+        domain: Option<String>,
+    },
 }
 
 fn split_expr_and_var(input: &str) -> (String, Option<String>) {
@@ -534,15 +539,33 @@ fn split_expr_and_var(input: &str) -> (String, Option<String>) {
 pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
     let trimmed = input.trim();
 
+    let is_command_prefix = trimmed.starts_with("solve")
+        || trimmed.starts_with("solveset")
+        || trimmed.starts_with("prime_factors")
+        || trimmed.starts_with("prime_decomposition")
+        || trimmed.starts_with("prime_decompose")
+        || trimmed.starts_with("prime_factorization")
+        || trimmed.starts_with("factor_primes")
+        || trimmed.starts_with("decompose_prime")
+        || trimmed.starts_with("factor ")
+        || trimmed.starts_with("substitute ")
+        || trimmed.starts_with("replace ")
+        || trimmed.starts_with("evaluate ")
+        || trimmed.starts_with("eval ")
+        || trimmed.starts_with("diff ")
+        || trimmed.starts_with("derivative")
+        || trimmed.starts_with("integrate ")
+        || trimmed.starts_with("int ");
+
     // 1. Domain & Variable Declarations e.g. `x is a real number`, `x is in Reals`, `x ∈ Reals`
-    if trimmed.contains(" is a ")
-        || trimmed.contains(" is in the set of ")
-        || trimmed.contains(" is in ")
-        || trimmed.contains(" ∈ ")
-        || (trimmed.contains(" in ")
-            && !trimmed.contains('{')
-            && !trimmed.contains('|')
-            && !trimmed.starts_with("solve"))
+    if !is_command_prefix
+        && (trimmed.contains(" is a ")
+            || trimmed.contains(" is in the set of ")
+            || trimmed.contains(" is in ")
+            || trimmed.contains(" ∈ ")
+            || (trimmed.contains(" in ")
+                && !trimmed.contains('{')
+                && !trimmed.contains('|')))
     {
         if let Some((var_part, dom_part)) = trimmed
             .split_once(" is in the set of ")
@@ -846,15 +869,65 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
         });
     }
 
+    // 4.5 Prime decomposition commands e.g. `prime_factors 60`, `prime_decomposition 3 + 4i in GaussianIntegers`
+    if let Some(rest) = trimmed
+        .strip_prefix("prime_factors ")
+        .or_else(|| trimmed.strip_prefix("prime_decomposition "))
+        .or_else(|| trimmed.strip_prefix("prime_decompose "))
+        .or_else(|| trimmed.strip_prefix("factor_primes "))
+        .or_else(|| trimmed.strip_prefix("decompose_prime "))
+        .or_else(|| trimmed.strip_prefix("prime_factorization "))
+    {
+        let (expr, dom) = if let Some((e, d)) = rest.split_once(" in ") {
+            (e.trim().to_string(), Some(d.trim().to_string()))
+        } else {
+            (rest.trim().to_string(), None)
+        };
+        return Some(PermissiveIntent::PrimeDecomposition {
+            expression: expr,
+            domain: dom,
+        });
+    }
+
     // 5. Simplification commands e.g. `simplify (x + 0) * 1`
     if let Some(rest) = trimmed
         .strip_prefix("simplify ")
         .or_else(|| trimmed.strip_prefix("reduce "))
         .or_else(|| trimmed.strip_prefix("expand "))
-        .or_else(|| trimmed.strip_prefix("factor "))
     {
         return Some(PermissiveIntent::Simplify {
             expression: rest.trim().to_string(),
+        });
+    }
+
+    if let Some(rest) = trimmed.strip_prefix("factor ") {
+        if let Some((e, d)) = rest.split_once(" in ") {
+            return Some(PermissiveIntent::PrimeDecomposition {
+                expression: e.trim().to_string(),
+                domain: Some(d.trim().to_string()),
+            });
+        }
+        let clean = rest.trim();
+        let is_pure_number = !clean.is_empty()
+            && clean.chars().all(|c| {
+                c.is_ascii_digit()
+                    || c == '/'
+                    || c == '+'
+                    || c == '-'
+                    || c == '*'
+                    || c == ' '
+                    || c == 'i'
+                    || c == 'w'
+                    || c == 'ω'
+            });
+        if is_pure_number && !clean.contains("x") && !clean.contains("y") {
+            return Some(PermissiveIntent::PrimeDecomposition {
+                expression: clean.to_string(),
+                domain: None,
+            });
+        }
+        return Some(PermissiveIntent::Simplify {
+            expression: clean.to_string(),
         });
     }
 
@@ -1347,6 +1420,23 @@ pub fn parse_operation(input: &str) -> MathOperation {
         return MathOperation::NumberTheory(NumberTheoryOpKind::ContinuedFraction {
             val_str,
             max_terms,
+        });
+    }
+    if let Some(body) = input
+        .strip_prefix("prime_factors ")
+        .or_else(|| input.strip_prefix("prime_decomposition "))
+        .or_else(|| input.strip_prefix("prime_decompose "))
+        .or_else(|| input.strip_prefix("factor_primes "))
+        .or_else(|| input.strip_prefix("prime_factorization "))
+    {
+        let (expr_str, domain_hint) = if let Some((e, d)) = body.split_once(" in ") {
+            (e.trim().to_string(), Some(d.trim().to_string()))
+        } else {
+            (body.trim().to_string(), None)
+        };
+        return MathOperation::NumberTheory(NumberTheoryOpKind::PrimeDecomposition {
+            expr_str,
+            domain_hint,
         });
     }
     if let Some(body) = input

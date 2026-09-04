@@ -214,6 +214,11 @@ pub enum NumberTheoryOpKind {
     ExtendedGcd { a: i64, b: i64 },
     /// Legendre symbol $(a/p)$
     Legendre { a: i64, p: u64 },
+    /// Prime decomposition with algebraic prime classification across number systems
+    PrimeDecomposition {
+        expr_str: String,
+        domain_hint: Option<String>,
+    },
 }
 
 /// Linear control systems operations.
