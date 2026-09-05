@@ -1,6 +1,6 @@
 # Universal Rust Algebra Engine (URAE)
 
-[![Rust Workspace](https://img.shields.io/badge/Rust-1.85%2B%20%7C%202021%20Edition-orange?logo=rust)](https://www.rust-lang.org/)
+[![Rust Workspace](https://img.shields.io/badge/Rust-1.85%2B%20%7C%202024%20Edition-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 [![Tests Passing](https://img.shields.io/badge/Tests-470%2B%20Passing%20%7C%200%20Failures-brightgreen.svg)](tests/)
 [![Clippy](https://img.shields.io/badge/Clippy-0%20Warnings-brightgreen.svg)](Cargo.toml)
