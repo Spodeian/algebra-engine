@@ -1,6 +1,7 @@
 //! # `urae-cli` (URAE Command Line Interface)
 //!
 //! Interactive REPL binary for Universal Rust Algebra Engine (URAE).
+#[cfg(not(target_arch = "wasm32"))]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
@@ -19,3 +20,4 @@ fn main() {
         urae_cli::run_repl();
     }
 }
+

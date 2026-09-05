@@ -249,19 +249,39 @@ cargo check --target wasm32-unknown-unknown -p urae-wasm
 
 ---
 
-## ⚙️ Compilation & Optimization Profiles
+## 🚀 Compilation & Optimization Profiles
 
-Optimized for maximum runtime efficiency and minimal binary footprint:
+The workspace defaults to `opt-level = 3` paired with `lto = "fat"`, `codegen-units = 1`, and `mimalloc` for uncompromising native calculation throughput, while delegating post-link `.wasm` compression to Binaryen `wasm-opt`:
 
 ```toml
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = true
 overflow-checks = false
 ```
+
+### Hardware-Targeted Release Builds
+
+- **Native Host Builds (`cargo build` / `cargo install`)**:
+  Build with host-tailored vectorization (AVX2, AVX-512) for maximum native execution speed:
+  ```bash
+  RUSTFLAGS="-C target-cpu=native" cargo build --release
+  ```
+
+- **Broad Cross-Platform Binary Distribution (Windows / Linux / macOS)**:
+  Target modern baseline instruction sets (SSE4.2, POPCNT) with complete backwards compatibility for modern x86_64 CPUs:
+  ```bash
+  RUSTFLAGS="-C target-cpu=x86-64-v2" cargo build --release
+  ```
+
+- **WebAssembly Deployment (Cloudflare Pages / GitHub Pages)**:
+  Utilize WebAssembly 128-bit SIMD for browser execution:
+  ```bash
+  RUSTFLAGS="-C target-feature=+simd128" trunk build --release
+  ```
 
 ---
 

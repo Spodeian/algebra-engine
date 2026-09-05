@@ -63,6 +63,8 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Web Application
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128"
         run: |
           cd crates/urae-wasm
           wasm-pack build --target web --out-dir public/pkg --release

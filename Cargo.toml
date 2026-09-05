@@ -93,7 +93,7 @@ web-time = "1.1"
 criterion = "0.5"
 
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = "fat"
 codegen-units = 1
 panic = "abort"

@@ -20,4 +20,6 @@ urae = { workspace = true, features = ["full", "cli"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 mimalloc.workspace = true
