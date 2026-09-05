@@ -20,3 +20,4 @@ urae = { workspace = true, features = ["full", "cli"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
+mimalloc.workspace = true

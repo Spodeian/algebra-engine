@@ -37,20 +37,18 @@ algebra-advanced = { path = "crates/algebra-advanced" }
 urae = { path = "crates/urae" }
 urae-notebook = { path = "crates/urae-notebook" }
 urae-cli = { path = "crates/urae-cli" }
-urae-wasm = { path = "crates/urae-wasm" }
 urae-lsp = { path = "crates/urae-lsp" }
 urae-kernel = { path = "crates/urae-kernel" }
 urae-py = { path = "crates/urae-py" }
 urae-ffi = { path = "crates/urae-ffi" }
 
 # GUI & Graphic dependencies
-egui = "0.31"
-eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "persistence"] }
-egui_plot = "0.31"
+egui = "0.36"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+egui_plot = "0.37"
 
 # Numerics & High-Precision CAS
 bnum = "0.13"
-malachite = "0.9"
 num = "0.4"
 num-rational = "0.4"
 num-traits = "0.2"
@@ -64,6 +62,7 @@ rayon = "1.10"
 parking_lot = "0.12"
 smallvec = { version = "1.13", features = ["serde"] }
 ahash = { version = "0.8", features = ["serde"] }
+mimalloc = "0.1"
 
 # Serialization & formatters
 serde = { version = "1.0", features = ["derive"] }
@@ -107,4 +106,5 @@ debug = 1
 
 [profile.test.package."*"]
 opt-level = 2
+
 

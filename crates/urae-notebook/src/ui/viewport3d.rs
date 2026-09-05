@@ -201,7 +201,7 @@ impl Viewport3D {
                             filename: format!("{}.stl", model_name),
                             data,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("STL (ASCII)").clicked() {
                         let data = export_stl_ascii(&verts, &tris, model_name).into_bytes();
@@ -210,7 +210,7 @@ impl Viewport3D {
                             filename: format!("{}.stl", model_name),
                             data,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("OBJ (Wavefront Mesh)").clicked() {
                         let data = export_obj(&verts, &tris, model_name).into_bytes();
@@ -219,7 +219,7 @@ impl Viewport3D {
                             filename: format!("{}.obj", model_name),
                             data,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("STEP (ISO 10303-21 CAD)").clicked() {
                         let data = export_step(&verts, &tris, model_name).into_bytes();
@@ -228,7 +228,7 @@ impl Viewport3D {
                             filename: format!("{}.step", model_name),
                             data,
                         });
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             });
@@ -258,7 +258,7 @@ impl Viewport3D {
 
             // Handle scroll zoom
             if response.hovered() {
-                let scroll = ui.input(|i| i.raw_scroll_delta.y);
+                let scroll = ui.input(|i| i.smooth_scroll_delta.y);
                 if scroll != 0.0 {
                     state.zoom = (state.zoom * (1.0 + scroll as f64 * 0.002)).clamp(1.0, 200.0);
                 }
@@ -571,3 +571,4 @@ pub fn export_step(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> Strin
 
     out
 }
+

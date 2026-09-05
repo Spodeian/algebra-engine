@@ -631,6 +631,7 @@ impl ThemePalette {
             }
         }
 
-        ui.fonts(|f| f.layout_job(job))
+        ui.fonts_mut(|f| f.layout_job(job))
     }
 }
+

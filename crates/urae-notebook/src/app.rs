@@ -800,7 +800,7 @@ impl UraeNotebookApp {
                 .default_size([580.0, 380.0])
                 .resizable(true)
                 .collapsible(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Storage Health & Durability");
                     ui.separator();
 
@@ -943,18 +943,19 @@ impl UraeNotebookApp {
 }
 
 impl eframe::App for UraeNotebookApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
         static FRAME_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let frame_num = FRAME_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         #[cfg(not(target_arch = "wasm32"))]
         {
             if frame_num < 5 || frame_num.is_multiple_of(120) {
-                let rect = ctx.screen_rect();
+                let rect = ctx.input(|i| i.raw.screen_rect);
                 crate::log_debug(&format!(
                     "[FRAME #{frame_num}] Screen Rect: {:.1}x{:.1}, Zoom: {:.2}, PixelsPerPoint: {:.2}",
-                    rect.width(),
-                    rect.height(),
+                    rect.unwrap_or(egui::Rect::EVERYTHING).width(),
+                    rect.unwrap_or(egui::Rect::EVERYTHING).height(),
                     ctx.zoom_factor(),
                     ctx.pixels_per_point()
                 ));
@@ -964,19 +965,19 @@ impl eframe::App for UraeNotebookApp {
         if frame_num == 0 {
             #[cfg(not(target_arch = "wasm32"))]
             crate::log_info("First frame rendering: displaying window and requesting UI paint...");
-            ctx.set_style(self.theme.to_style());
+            ctx.set_style_of(ctx.theme(), self.theme.to_style());
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             ctx.request_repaint();
         }
 
         if !self.fonts_initialized {
-            self.setup_fonts(ctx);
+            self.setup_fonts(&ctx);
             self.scan_available_notebooks();
             self.fonts_initialized = true;
         }
 
-        self.poll_storage_diagnostics(ctx);
+        self.poll_storage_diagnostics(&ctx);
 
         let mut state_changed = false;
 
@@ -1080,7 +1081,7 @@ impl eframe::App for UraeNotebookApp {
         }
 
         // Top Control Bar with Organized Dropdown Menus
-        egui::TopBottomPanel::top("top_header_panel").show(ctx, |ui| {
+        egui::Panel::top("top_header_panel").show(ui, |ui| {
             let palette = self.theme.palette();
 
             ui.horizontal_wrapped(|ui| {
@@ -1096,7 +1097,7 @@ impl eframe::App for UraeNotebookApp {
                             if ui.selectable_label(self.active_notebook == *nb, nb).clicked() {
                                 self.active_notebook = nb.clone();
                                 self.load_notebook(nb);
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                     });
@@ -1115,45 +1116,45 @@ impl eframe::App for UraeNotebookApp {
                             self.active_notebook = full_name;
                             self.scan_available_notebooks();
                             self.new_notebook_name.clear();
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.separator();
                     if ui.button("💾 Save (Ctrl+S)").clicked() {
                         let active_nb = self.active_notebook.clone();
                         self.save_notebook(&active_nb);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Save As...").clicked() {
                         self.show_save_modal = true;
                         if self.new_notebook_name.is_empty() {
                             self.new_notebook_name = self.active_notebook.clone();
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.menu_button("📤 Export", |ui| {
                         if ui.button("LaTeX (.tex)").clicked() {
                             let tex = format!("\\documentclass{{article}}\n\\begin{{document}}\n{}\n\\end{{document}}", self.state.session.raw_document_text);
                             self.trigger_file_download("notebook_export.tex", tex.as_bytes(), "text/x-tex");
                             self.export_notice = Some("Exported to 'notebook_export.tex'".to_string());
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Python SymPy (.py)").clicked() {
                             let py = format!("# URAE Exported Python Script\nimport sympy as sp\nx = sp.Symbol('x')\n# Document Text:\n\"\"\"{}\"\"\"", self.state.session.raw_document_text);
                             self.trigger_file_download("notebook_export.py", py.as_bytes(), "text/x-python");
                             self.export_notice = Some("Exported to 'notebook_export.py'".to_string());
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Lean 4 Proof (.lean)").clicked() {
                             let lean = "-- URAE Exported Lean 4 Formal Script\nimport Mathlib\n";
                             self.trigger_file_download("notebook_export.lean", lean.as_bytes(), "text/plain");
                             self.export_notice = Some("Exported to 'notebook_export.lean'".to_string());
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Compressed BSON (.bson)").clicked() {
                             self.download_bson_backup();
                             self.export_notice = Some("Exported compressed BSON backup".to_string());
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         if ui.button("🌐 WASM Embed IFrame Snippet").on_hover_text("Generate embeddable iframe tag for blogs, textbooks & documentation").clicked() {
@@ -1165,7 +1166,7 @@ impl eframe::App for UraeNotebookApp {
                             );
                             ctx.copy_text(iframe_html);
                             self.export_notice = Some("Copied WASM embed iframe snippet to clipboard!".to_string());
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.separator();
@@ -1176,7 +1177,7 @@ impl eframe::App for UraeNotebookApp {
                     };
                     if ui.button(storage_label).clicked() {
                         self.show_storage_modal = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -1190,7 +1191,7 @@ impl eframe::App for UraeNotebookApp {
                     if ui.add_enabled(can_undo, egui::Button::new(undo_lbl)).clicked() {
                         self.state.undo();
                         state_changed = true;
-                        ui.close_menu();
+                        ui.close();
                     }
 
                     let can_redo = self.state.can_redo();
@@ -1201,53 +1202,53 @@ impl eframe::App for UraeNotebookApp {
                     if ui.add_enabled(can_redo, egui::Button::new(redo_lbl)).clicked() {
                         self.state.redo();
                         state_changed = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("⚡ Re-evaluate Document").clicked() {
                         state_changed = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
                 // 3. View Menu Dropdown (Sidebars & Layout Presets)
                 ui.menu_button("👁 View", |ui| {
                     if ui.checkbox(&mut self.show_left_sidebar, "◀ Left Parameters Bar (Ctrl+B)").clicked() {
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.checkbox(&mut self.show_right_sidebar, "Right Results Stream ▶ (Ctrl+J)").clicked() {
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.checkbox(&mut self.state.session.settings.show_cell_line_numbers, "Show Line Numbers").clicked() {
                         self.state.save_session();
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
                 // 4. Windows & Tools Menu Dropdown (for opening sub-windows)
                 ui.menu_button("🪟 Windows", |ui| {
                     if ui.checkbox(&mut self.show_viewport_3d, "📐 3D Surface Viewport").clicked() {
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.checkbox(&mut self.show_cli_terminal, "💻 Interactive CLI Terminal").clicked() {
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📚 Example Notebook Gallery").clicked() {
                         self.show_example_gallery = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔍 Command Palette (Cmd+K)").clicked() {
                         self.command_palette_state.is_open = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui.button("⚙ Notebook Settings").clicked() {
                         self.state.show_settings_modal = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("❓ Help & Syntax Guide").clicked() {
                         self.show_help_modal = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -1255,27 +1256,27 @@ impl eframe::App for UraeNotebookApp {
                 ui.menu_button("🛠 Builders", |ui| {
                     if ui.button("📐 Parameter & Variable Builder").clicked() {
                         self.show_domain_picker = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚙ Parametric CAD Machinery").clicked() {
                         self.show_cad_machinery_palette = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🧮 Matrix & Tensor Builder").clicked() {
                         self.show_matrix_builder = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("✂ Riemann Branch Cut Configurator").clicked() {
                         self.show_branch_cut_config = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("📈 ODE/PDE Boundary Wizard").clicked() {
                         self.show_ode_wizard = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("⚖ Physical Units Palette").clicked() {
                         self.show_units_palette = true;
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -1284,9 +1285,9 @@ impl eframe::App for UraeNotebookApp {
                     for t in crate::ui::ThemeKind::all() {
                         if ui.selectable_value(&mut self.theme, *t, t.name()).clicked() {
                             self.state.session.settings.theme = self.theme;
-                            ctx.set_style(self.theme.to_style());
+                            ctx.set_style_of(ctx.theme(), self.theme.to_style());
                             self.state.save_session();
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                 });
@@ -1301,7 +1302,7 @@ impl eframe::App for UraeNotebookApp {
 
         // Bottom AI Copilot Bar (Only rendered when AI Copilot is enabled in settings)
         if self.state.session.settings.ai_config.enabled {
-            egui::TopBottomPanel::bottom("copilot_panel").show(ctx, |ui| {
+            egui::Panel::bottom("copilot_panel").show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("AI Copilot:").strong().color(egui::Color32::from_rgb(160, 120, 240)));
                     let res = ui.add(
@@ -1337,7 +1338,7 @@ impl eframe::App for UraeNotebookApp {
                 }
             });
         } else if self.export_notice.is_some() {
-            egui::TopBottomPanel::bottom("export_notice_panel").show(ctx, |ui| {
+            egui::Panel::bottom("export_notice_panel").show(ui, |ui| {
                 if let Some(notice) = &self.export_notice {
                     ui.colored_label(egui::Color32::GREEN, notice);
                 }
@@ -1345,8 +1346,8 @@ impl eframe::App for UraeNotebookApp {
         }
 
         // Render Help and Storage Modals
-        self.render_help_modal(ctx);
-        self.render_storage_modal(ctx);
+        self.render_help_modal(&ctx);
+        self.render_storage_modal(&ctx);
 
         // Settings Window (Floating or Docked)
         if self.state.show_settings_modal {
@@ -1358,7 +1359,7 @@ impl eframe::App for UraeNotebookApp {
                         .open(&mut settings_open)
                         .collapsible(true)
                         .resizable(true)
-                        .show(ctx, |ui| {
+                        .show(&ctx, |ui| {
                             close_requested = self.render_settings_contents(ui);
                         });
                     if !settings_open || close_requested {
@@ -1366,10 +1367,10 @@ impl eframe::App for UraeNotebookApp {
                     }
                 }
                 WindowDockPosition::DockLeft => {
-                    egui::SidePanel::left("settings_dock_left_panel")
+                    egui::Panel::left("settings_dock_left_panel")
                         .resizable(true)
-                        .default_width(300.0)
-                        .show(ctx, |ui| {
+                        .default_size(300.0)
+                        .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.heading("Settings");
                                 if ui.button("Float").clicked() {
@@ -1384,10 +1385,10 @@ impl eframe::App for UraeNotebookApp {
                         });
                 }
                 WindowDockPosition::DockRight => {
-                    egui::SidePanel::right("settings_dock_right_panel")
+                    egui::Panel::right("settings_dock_right_panel")
                         .resizable(true)
-                        .default_width(300.0)
-                        .show(ctx, |ui| {
+                        .default_size(300.0)
+                        .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.heading("Settings");
                                 if ui.small_button("Float").clicked() {
@@ -1415,18 +1416,18 @@ impl eframe::App for UraeNotebookApp {
                         .default_size([680.0, 360.0])
                         .resizable(true)
                         .collapsible(true)
-                        .show(ctx, |ui| {
-                            self.render_cli_terminal_contents(ctx, ui);
+                        .show(&ctx, |ui| {
+                            self.render_cli_terminal_contents(&ctx, ui);
                         });
                     if !terminal_open {
                         self.show_cli_terminal = false;
                     }
                 }
                 WindowDockPosition::DockBottom => {
-                    egui::TopBottomPanel::bottom("terminal_dock_bottom_panel")
+                    egui::Panel::bottom("terminal_dock_bottom_panel")
                         .resizable(true)
-                        .default_height(260.0)
-                        .show(ctx, |ui| {
+                        .default_size(260.0)
+                        .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.heading("Terminal CLI");
                                 if ui.button("Float").clicked() {
@@ -1440,14 +1441,14 @@ impl eframe::App for UraeNotebookApp {
                                 }
                             });
                             ui.separator();
-                            self.render_cli_terminal_contents(ctx, ui);
+                            self.render_cli_terminal_contents(&ctx, ui);
                         });
                 }
                 WindowDockPosition::DockRight => {
-                    egui::SidePanel::right("terminal_dock_right_panel")
+                    egui::Panel::right("terminal_dock_right_panel")
                         .resizable(true)
-                        .default_width(380.0)
-                        .show(ctx, |ui| {
+                        .default_size(380.0)
+                        .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.heading("Terminal CLI");
                                 if ui.small_button("Float").clicked() {
@@ -1461,7 +1462,7 @@ impl eframe::App for UraeNotebookApp {
                                 }
                             });
                             ui.separator();
-                            self.render_cli_terminal_contents(ctx, ui);
+                            self.render_cli_terminal_contents(&ctx, ui);
                         });
                 }
                 _ => {}
@@ -1471,10 +1472,10 @@ impl eframe::App for UraeNotebookApp {
         // Left Sidebar: Symbol Role Conversion & Multi-Component Parameter Controls
         if self.show_left_sidebar {
             let palette = self.theme.palette();
-            egui::SidePanel::left("sidebar_panel")
+            egui::Panel::left("sidebar_panel")
                 .resizable(true)
-                .default_width(260.0)
-                .show(ctx, |ui| {
+                .default_size(260.0)
+                .show(ui, |ui| {
                     ui.add_space(4.0);
                     ui.horizontal(|ui| {
                         ui.subheading("Parameters");
@@ -1781,26 +1782,26 @@ impl eframe::App for UraeNotebookApp {
         }
 
         // Main Central View (Unified Continuous Mathematical Notepad)
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             self.render_warning_banners(ui);
-            if self.render_smart_stream_view(ui, ctx) {
+            if self.render_smart_stream_view(ui, &ctx) {
                 state_changed = true;
             }
         });
 
         // Render floating popped-out windows and interactive builder modals
-        self.render_popped_out_windows(ctx);
-        self.render_save_modal(ctx);
-        self.render_matrix_builder_modal(ctx);
-        self.render_domain_picker_modal(ctx);
-        self.render_branch_cut_modal(ctx);
-        self.render_ode_wizard_modal(ctx);
-        self.render_units_palette_modal(ctx);
-        self.render_example_gallery_modal(ctx);
-        self.render_open_inspectors(ctx);
+        self.render_popped_out_windows(&ctx);
+        self.render_save_modal(&ctx);
+        self.render_matrix_builder_modal(&ctx);
+        self.render_domain_picker_modal(&ctx);
+        self.render_branch_cut_modal(&ctx);
+        self.render_ode_wizard_modal(&ctx);
+        self.render_units_palette_modal(&ctx);
+        self.render_example_gallery_modal(&ctx);
+        self.render_open_inspectors(&ctx);
 
         // Phase 17 UX: Render Command Palette (Cmd+K)
-        if let Some(syntax) = crate::ui::CommandPalette::show(ctx, &mut self.command_palette_state)
+        if let Some(syntax) = crate::ui::CommandPalette::show(&ctx, &mut self.command_palette_state)
         {
             match syntax.as_str() {
                 "__URAE_CMD_UNDO__" => {
@@ -1814,49 +1815,49 @@ impl eframe::App for UraeNotebookApp {
                 "__URAE_CMD_THEME_DARK__" => {
                     self.theme = crate::ui::ThemeKind::Dark;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_LIGHT__" => {
                     self.theme = crate::ui::ThemeKind::Light;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_CATPPUCCIN__" => {
                     self.theme = crate::ui::ThemeKind::CatppuccinMocha;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_NORD__" => {
                     self.theme = crate::ui::ThemeKind::Nord;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_DRACULA__" => {
                     self.theme = crate::ui::ThemeKind::Dracula;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_SOLARIZED_DARK__" => {
                     self.theme = crate::ui::ThemeKind::SolarizedDark;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_SOLARIZED_LIGHT__" => {
                     self.theme = crate::ui::ThemeKind::SolarizedLight;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_THEME_CYBERPUNK__" => {
                     self.theme = crate::ui::ThemeKind::Cyberpunk;
                     self.state.session.settings.theme = self.theme;
-                    ctx.set_style(self.theme.to_style());
+                    ctx.set_style_of(ctx.theme(), self.theme.to_style());
                     self.state.save_session();
                 }
                 "__URAE_CMD_LAYOUT_FLUID__" => {
@@ -1898,7 +1899,7 @@ impl eframe::App for UraeNotebookApp {
 
         // Phase 17 UX: Render CAD Machinery Builder Palette
         crate::ui::PalettesUi::render_cad_machinery_palette(
-            ctx,
+            &ctx,
             &mut self.show_cad_machinery_palette,
             &mut self.state,
         );
@@ -1910,7 +1911,7 @@ impl eframe::App for UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([540.0, 420.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     crate::ui::Viewport3D::show(ui, &mut self.viewport_3d_state, None);
                 });
             self.show_viewport_3d = is_open;
@@ -1937,7 +1938,7 @@ impl UraeNotebookApp {
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.label("Enter notebook name and select format:");
                     ui.add_space(8.0);
 
@@ -2027,7 +2028,7 @@ impl UraeNotebookApp {
                 .default_size([720.0, 560.0])
                 .resizable(true)
                 .collapsible(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.heading("URAE Interactive Mathematics Tutorial & Syntax Reference");
                         ui.weak("URAE is a multi-dimensional, context-aware symbolic Computer Algebra System.");
@@ -2134,7 +2135,7 @@ impl UraeNotebookApp {
                         });
                     if theme_changed {
                         self.state.session.settings.theme = self.theme;
-                        ui.ctx().set_style(self.theme.to_style());
+                        ui.ctx().set_style_of(ui.ctx().theme(), self.theme.to_style());
                         self.state.save_session();
                     }
                 });
@@ -2759,7 +2760,7 @@ impl UraeNotebookApp {
                                 .include_x(smart_max)
                                 .auto_bounds(egui::Vec2b::new(false, true))
                                 .show(ui, |plot_ui| {
-                                    let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                    let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                     let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                     let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
                                     if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
@@ -2813,7 +2814,7 @@ impl UraeNotebookApp {
                                             if !seg.is_empty() {
                                                 let plot_points: PlotPoints =
                                                     seg.into_iter().collect();
-                                                let line = Line::new(plot_points)
+                                                let line = Line::new("", plot_points)
                                                     .color(egui::Color32::from_rgb(100, 180, 240))
                                                     .width(2.0_f32);
                                                 plot_ui.line(line);
@@ -2992,8 +2993,8 @@ impl UraeNotebookApp {
                             egui::ViewportBuilder::default()
                                 .with_title(format!("URAE Standalone Graph: {}", expr_key))
                                 .with_inner_size([480.0, 320.0]),
-                            |ctx, _class| {
-                                egui::CentralPanel::default().show(ctx, |ui| {
+                            |ui, _class| {
+                                egui::CentralPanel::default().show(ui, |ui| {
                                     let mut local_min_r = min_r;
                                     let mut local_max_r = max_r;
                                     let plot_response =
@@ -3006,7 +3007,7 @@ impl UraeNotebookApp {
                                             .include_x(smart_max)
                                             .auto_bounds(egui::Vec2b::new(false, true))
                                             .show(ui, |plot_ui| {
-                                                let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                                let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                                 let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                                 let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
                                                 if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
@@ -3065,7 +3066,7 @@ impl UraeNotebookApp {
                                                         if !seg.is_empty() {
                                                             let plot_points: PlotPoints =
                                                                 seg.into_iter().collect();
-                                                            let line = Line::new(plot_points)
+                                                            let line = Line::new("", plot_points)
                                                                 .color(egui::Color32::from_rgb(
                                                                     240, 160, 50,
                                                                 ))
@@ -3101,7 +3102,7 @@ impl UraeNotebookApp {
                             .default_size([380.0, 260.0])
                             .resizable(true)
                             .collapsible(true)
-                            .show(ctx, |ui| {
+                            .show(&ctx, |ui| {
                                 let mut local_min_r = smart_min;
                                 let mut local_max_r = smart_max;
 
@@ -3115,7 +3116,7 @@ impl UraeNotebookApp {
                                         .include_x(smart_max)
                                         .auto_bounds(egui::Vec2b::new(false, true))
                                         .show(ui, |plot_ui| {
-                                            let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                            let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                             let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                             let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
                                             if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
@@ -3173,7 +3174,7 @@ impl UraeNotebookApp {
                                                     if !seg.is_empty() {
                                                         let plot_points: PlotPoints =
                                                             seg.into_iter().collect();
-                                                        let line = Line::new(plot_points)
+                                                        let line = Line::new("", plot_points)
                                                             .color(egui::Color32::from_rgb(
                                                                 120, 200, 255,
                                                             ))
@@ -3271,7 +3272,7 @@ impl UraeNotebookApp {
                     // 1. Line Numbers Column (Interactive Click & Drag explicitly aligned with editor rows, wrapped lines unnumbered)
                     if self.state.session.settings.show_cell_line_numbers {
                         let mono_font = egui::FontId::monospace(13.0);
-                        let default_row_height = ui.fonts(|f| f.row_height(&mono_font));
+                        let default_row_height = ui.fonts_mut(|f| f.row_height(&mono_font));
                         let frame_padding_y = 2.0;
 
                         let galley = palette.math_syntax_layouter(ui, &self.state.session.raw_document_text, editor_width);
@@ -3300,7 +3301,7 @@ impl UraeNotebookApp {
                                     let mut is_new_logical_line = true;
 
                                     for row in &galley.rows {
-                                        let row_height = row.rect.height();
+                                        let row_height = row.rect().height();
                                         let (rect, resp) = ui.allocate_exact_size(
                                             egui::vec2(line_num_width, row_height),
                                             egui::Sense::click_and_drag(),
@@ -3389,7 +3390,8 @@ impl UraeNotebookApp {
                     }
 
                     // 2. Main Continuous Text Editor
-                    let mut math_layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+                    let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
+                                let string = string.as_str();
                         palette.math_syntax_layouter(ui, string, wrap_width)
                     };
 
@@ -3404,7 +3406,7 @@ impl UraeNotebookApp {
                         if let Some(char_range) = text_state.cursor.char_range() {
                             let char_idx = char_range.primary.index;
                             let text = &self.state.session.raw_document_text;
-                            let clamped = char_idx.min(text.len());
+                            let clamped = usize::from(char_idx).min(text.len());
                             let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
                             self.state.focused_line = Some(current_line_idx);
                             self.state.cursor_char_idx = Some(clamped);
@@ -3429,7 +3431,7 @@ impl UraeNotebookApp {
                                 .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
                             if let Some(c_idx) = char_idx {
                                 if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
-                                    find_numeric_literal_at(&self.state.session.raw_document_text, c_idx)
+                                    find_numeric_literal_at(&self.state.session.raw_document_text, usize::from(c_idx))
                                 {
                                     let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
                                     self.active_scrubbing = Some(ActiveScrubbing {
@@ -3735,7 +3737,7 @@ impl UraeNotebookApp {
                                                                 .include_x(smart_max)
                                                                 .auto_bounds(egui::Vec2b::new(false, true))
                                                                 .show(ui, |plot_ui| {
-                                                                    let scroll_y = plot_ui.ctx().input(|i| i.raw_scroll_delta.y);
+                                                                    let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                                                     let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
                                                                     let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
                                                                     if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
@@ -3782,7 +3784,7 @@ impl UraeNotebookApp {
                                                                         for seg in segments {
                                                                             if !seg.is_empty() {
                                                                                 let plot_points: PlotPoints = seg.into_iter().collect();
-                                                                                let line = Line::new(plot_points)
+                                                                                let line = Line::new("", plot_points)
                                                                                     .color(palette.accent_primary)
                                                                                     .width(2.0_f32);
                                                                                 plot_ui.line(line);
@@ -3912,8 +3914,8 @@ impl UraeNotebookApp {
                     )
                     .collapsible(false)
                     .resizable(false)
-                    .default_width(320.0)
-                    .show(ctx, |ui| {
+                    .default_size([320.0, 320.0])
+                    .show(&ctx, |ui| {
                         ui.horizontal(|ui| {
                             ui.colored_label(palette.accent_primary, "Commands matching:");
                             ui.monospace(format!("/{}", query));
@@ -3968,7 +3970,7 @@ impl UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([440.0, 360.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Matrix Dimensions & Presets");
                     ui.horizontal(|ui| {
                         ui.label("Rows:");
@@ -4097,7 +4099,7 @@ impl UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([520.0, 560.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Symbol Declaration & Number System Specification");
 
                     // 1. Symbol Name and Role
@@ -4604,7 +4606,7 @@ impl UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([420.0, 260.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Multi-Valued Function & Cut Geometry");
                     ui.horizontal(|ui| {
                         ui.label("Function:");
@@ -4709,7 +4711,7 @@ impl UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([420.0, 260.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Initial & Boundary Conditions");
                     ui.horizontal(|ui| {
                         ui.label("Dependent Var:");
@@ -4778,7 +4780,7 @@ impl UraeNotebookApp {
                 .open(&mut is_open)
                 .default_size([440.0, 300.0])
                 .resizable(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Physical Variable & SI Dimensions");
                     ui.horizontal(|ui| {
                         ui.label("Variable Name:");
@@ -4856,7 +4858,7 @@ impl UraeNotebookApp {
                 .default_size([880.0, 560.0])
                 .resizable(true)
                 .collapsible(true)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     ui.subheading("Interactive Mathematical Notebook Examples");
                     ui.weak("Browse, search, and load pre-built production-ready notebooks covering all 31 phases of URAE.");
                     ui.separator();
@@ -5016,9 +5018,9 @@ impl UraeNotebookApp {
                 .id(window_id)
                 .title_bar(false) // NO HEADER
                 .resizable(true)
-                .default_width(280.0)
+                .default_size([280.0, 280.0])
                 .frame(
-                    egui::Frame::window(&ctx.style())
+                    egui::Frame::window(&ctx.style_of(ctx.theme()))
                         .fill(palette.bg_card)
                         .stroke(egui::Stroke::new(1.0_f32, palette.accent_primary))
                         .corner_radius(8)
@@ -5029,7 +5031,7 @@ impl UraeNotebookApp {
                 win = win.default_pos(egui::pos2(pos.x.max(40.0), pos.y + 4.0));
             }
 
-            win.show(ctx, |ui| {
+            win.show(&ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.colored_label(palette.accent_primary, format!("🔍 {}", sym_name));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -5423,3 +5425,6 @@ impl HeadingExt for egui::Ui {
         self.label(egui::RichText::new(text).heading().size(16.0));
     }
 }
+
+
+

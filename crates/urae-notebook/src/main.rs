@@ -1,6 +1,10 @@
 //! Main entry point for `urae-notebook` cross-platform GUI application.
 
 #[cfg(not(target_arch = "wasm32"))]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), eframe::Error> {
     urae_notebook::log_info(&format!(
         "Main binary started [Profile: {}, LogLevel: {}]. PID={}, OS={}, CWD={:?}",

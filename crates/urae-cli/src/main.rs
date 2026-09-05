@@ -1,6 +1,9 @@
 //! # `urae-cli` (URAE Command Line Interface)
 //!
 //! Interactive REPL binary for Universal Rust Algebra Engine (URAE).
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
