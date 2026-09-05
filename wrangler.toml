@@ -2,3 +2,7 @@ name = "algebra-engine"
 pages_build_output_dir = "crates/urae-wasm/public"
 compatibility_date = "2026-08-18"
 compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+NODE_VERSION = "24"

@@ -207,6 +207,21 @@ fn main() {
 
 ---
 
+## 🛠️ Build Requirements & Toolchains
+
+- **Rust Toolchain**: Managed via [`rust-toolchain.toml`](rust-toolchain.toml) (Rust 2024 Edition, 1.85+ with `wasm32-unknown-unknown` target).
+- **Node.js 24 LTS**: (Required for Cloudflare Pages edge builds, wasm-pack packaging, and asset minification pipelines; managed via [`.node-version`](.node-version) / [`.nvmrc`](.nvmrc)):
+  ```bash
+  nvm use # or fnm use
+  ```
+- *(Optional)* **WASM Tools & Bundlers**:
+  ```bash
+  cargo install wasm-pack
+  cargo install trunk
+  ```
+
+---
+
 ## 🧪 Testing & Verification
 
 All workspace integration and unit tests are centralized in the `tests/` directory:
