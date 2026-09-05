@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Liam <spodeian@proton.me>"]
 edition = "2024"
 license = "CC-BY-NC-SA-4.0"
