@@ -56,28 +56,46 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Atomic Cache-First Strategy:
+  // Atomic Cache-First with Background Network Revalidation Strategy:
   // Instantly serve from the active cache bucket so all assets in a session (JS, WASM, HTML)
-  // are guaranteed to share the exact same build version without ABI skew.
+  // load with zero latency, while double-checking network in background for updates.
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
+    caches.open(CACHE_NAME).then(async (cache) => {
+      // 1. Check cache first
+      const cachedResponse = await cache.match(event.request);
 
-        // Cache miss: fetch from network and populate active cache
-        return fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch((err) => {
-          if (event.request.mode === 'navigate') {
-            return cache.match('./index.html') || cache.match('./');
-          }
-          throw err;
-        });
+      // 2. Background network fetch & cache update (double-check network for updated files)
+      const networkFetch = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
+      }).catch(() => null);
+
+      if (cachedResponse) {
+        // Cache hit: serve cached response immediately, and revalidate in background
+        event.waitUntil(networkFetch);
+        return cachedResponse;
+      }
+
+      // Cache miss: wait for network response
+      const networkResponse = await networkFetch;
+      if (networkResponse) {
+        return networkResponse;
+      }
+
+      // Offline fallback on cache miss
+      if (event.request.mode === 'navigate') {
+        const fallback = await cache.match('./index.html') || await cache.match('./');
+        if (fallback) {
+          return fallback;
+        }
+      }
+
+      return new Response('Offline: Network unavailable', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: new Headers({ 'Content-Type': 'text/plain; charset=utf-8' })
       });
     })
   );

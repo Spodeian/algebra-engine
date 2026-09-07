@@ -137,7 +137,7 @@ fi
 echo "Purging previous build distribution caches..."
 rm -rf crates/urae-wasm/public/pkg crates/urae-wasm/pkg dist
 
-export RUSTFLAGS="-C target-feature=+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext ${RUSTFLAGS:-}"
+export RUSTFLAGS="-C target-feature=+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext -C link-arg=-zstack-size=2097152 ${RUSTFLAGS:-}"
 
 echo "Compiling WebAssembly release with Cargo (toolchain: $RUST_TOOLCHAIN, bulk-memory enabled)..."
 if command -v rustup &> /dev/null; then
