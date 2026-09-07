@@ -35,6 +35,7 @@ pub mod prelude;
 
 pub use algebra_core as core;
 pub use algebra_engine as engine;
+pub use auto_promoters;
 
 // Re-export all CAS DSL macros from algebra_engine
 pub use algebra_engine::{

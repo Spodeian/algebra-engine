@@ -71,6 +71,12 @@ pub enum ViewportColorMode {
 pub enum ViewportModelPreset {
     #[default]
     InvoluteGear,
+    SpurGear,
+    HelicalGear,
+    BevelGear,
+    WormGear,
+    RackPinion,
+    PlanetaryGear,
     ThreadedBolt,
     NacaWing,
     HelicalSpring,
@@ -99,11 +105,21 @@ pub type CustomMeshGeometry<'a> = (&'a [[f64; 3]], &'a [[usize; 3]], Option<&'a 
 pub struct Viewport3D;
 
 impl Viewport3D {
-    /// Render an interactive 3D viewport canvas inside `ui`.
+    /// Render an interactive 3D viewport canvas inside `ui` with standard 320px height.
     pub fn show(
         ui: &mut egui::Ui,
         state: &mut Viewport3DState,
         custom_mesh: Option<CustomMeshGeometry>,
+    ) {
+        Self::show_with_height(ui, state, custom_mesh, 320.0);
+    }
+
+    /// Render an interactive 3D viewport canvas inside `ui` with custom height (e.g. for inline results cards).
+    pub fn show_with_height(
+        ui: &mut egui::Ui,
+        state: &mut Viewport3DState,
+        custom_mesh: Option<CustomMeshGeometry>,
+        canvas_height: f32,
     ) {
         // Fetch or generate model geometry
         let (verts, tris, stresses): (Vec<[f64; 3]>, Vec<[usize; 3]>, Vec<f64>) =
@@ -129,6 +145,12 @@ impl Viewport3D {
                 egui::ComboBox::from_id_salt("3d_model_combo")
                     .selected_text(match state.active_model {
                         ViewportModelPreset::InvoluteGear => "Involute Gear",
+                        ViewportModelPreset::SpurGear => "Spur Gear (20°)",
+                        ViewportModelPreset::HelicalGear => "Helical Gear (15°)",
+                        ViewportModelPreset::BevelGear => "Bevel Gear (45°)",
+                        ViewportModelPreset::WormGear => "Worm Gear & Screw",
+                        ViewportModelPreset::RackPinion => "Rack and Pinion",
+                        ViewportModelPreset::PlanetaryGear => "Planetary Gear Set",
                         ViewportModelPreset::ThreadedBolt => "Threaded Bolt",
                         ViewportModelPreset::NacaWing => "NACA Wing",
                         ViewportModelPreset::HelicalSpring => "Helical Spring",
@@ -141,6 +163,36 @@ impl Viewport3D {
                             &mut state.active_model,
                             ViewportModelPreset::InvoluteGear,
                             "Involute Gear",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::SpurGear,
+                            "Spur Gear (20°)",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::HelicalGear,
+                            "Helical Gear (15°)",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::BevelGear,
+                            "Bevel Gear (45°)",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::WormGear,
+                            "Worm Gear & Screw",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::RackPinion,
+                            "Rack and Pinion",
+                        );
+                        let _ = ui.selectable_value(
+                            &mut state.active_model,
+                            ViewportModelPreset::PlanetaryGear,
+                            "Planetary Gear Set",
                         );
                         let _ = ui.selectable_value(
                             &mut state.active_model,
@@ -185,7 +237,12 @@ impl Viewport3D {
 
                 ui.menu_button("📥 Export 3D", |ui| {
                     let model_name = match state.active_model {
-                        ViewportModelPreset::InvoluteGear => "involute_gear",
+                        ViewportModelPreset::InvoluteGear | ViewportModelPreset::SpurGear => "spur_gear",
+                        ViewportModelPreset::HelicalGear => "helical_gear",
+                        ViewportModelPreset::BevelGear => "bevel_gear",
+                        ViewportModelPreset::WormGear => "worm_gear",
+                        ViewportModelPreset::RackPinion => "rack_and_pinion",
+                        ViewportModelPreset::PlanetaryGear => "planetary_gear_set",
                         ViewportModelPreset::ThreadedBolt => "threaded_bolt",
                         ViewportModelPreset::NacaWing => "naca_wing",
                         ViewportModelPreset::HelicalSpring => "helical_spring",
@@ -236,7 +293,7 @@ impl Viewport3D {
             ui.add_space(4.0);
 
             // Canvas drawing area
-            let canvas_size = egui::vec2(ui.available_width().max(300.0), 320.0);
+            let canvas_size = egui::vec2(ui.available_width().max(160.0), canvas_height);
             let (response, painter) = ui.allocate_painter(canvas_size, egui::Sense::drag());
 
             let rect = response.rect;
@@ -373,10 +430,88 @@ impl Viewport3D {
         preset: ViewportModelPreset,
     ) -> (Vec<[f64; 3]>, Vec<[usize; 3]>, Vec<f64>) {
         match preset {
-            ViewportModelPreset::InvoluteGear => {
-                let gear = urae::cad::InvoluteGear::spur(1.5, 12, 4.0);
+            ViewportModelPreset::InvoluteGear | ViewportModelPreset::SpurGear => {
+                let gear = urae::cad::InvoluteGear::spur(1.5, 16, 6.0);
                 let mesh = gear.generate_3d_mesh();
                 (mesh.vertices, mesh.triangles, Vec::new())
+            }
+            ViewportModelPreset::HelicalGear => {
+                let gear = urae::cad::InvoluteGear::helical(2.0, 18, 10.0, 20.0);
+                let mesh = gear.generate_3d_mesh();
+                (mesh.vertices, mesh.triangles, Vec::new())
+            }
+            ViewportModelPreset::BevelGear => {
+                let gear = urae::cad::InvoluteGear::spur(1.5, 16, 8.0);
+                let mut mesh = gear.generate_3d_mesh();
+                for v in &mut mesh.vertices {
+                    let factor = 1.0 - (v[2] / 12.0) * 0.45;
+                    v[0] *= factor;
+                    v[1] *= factor;
+                }
+                (mesh.vertices, mesh.triangles, Vec::new())
+            }
+            ViewportModelPreset::WormGear => {
+                let screw = urae::cad::ThreadedScrew::metric_bolt(10.0, 3.0, 20.0);
+                let mesh = screw.generate_3d_mesh();
+                (mesh.vertices, mesh.triangles, Vec::new())
+            }
+            ViewportModelPreset::RackPinion => {
+                let gear = urae::cad::InvoluteGear::spur(1.5, 14, 6.0);
+                let mut mesh = gear.generate_3d_mesh();
+                let base_y = -gear.tip_diameter() / 2.0 - 2.0;
+                let rack_len = 48.0;
+                let rack_teeth = 12;
+                let dt = rack_len / (rack_teeth as f64);
+                let v_start = mesh.vertices.len();
+                for i in 0..rack_teeth {
+                    let x0 = -rack_len / 2.0 + (i as f64) * dt;
+                    let x1 = x0 + dt * 0.35;
+                    let x2 = x0 + dt * 0.65;
+                    let x3 = x0 + dt;
+                    mesh.add_vertex([x0, base_y - 4.0, 0.0]);
+                    mesh.add_vertex([x0, base_y, 0.0]);
+                    mesh.add_vertex([x1, base_y + 2.5, 0.0]);
+                    mesh.add_vertex([x2, base_y + 2.5, 0.0]);
+                    mesh.add_vertex([x3, base_y, 0.0]);
+                    mesh.add_vertex([x3, base_y - 4.0, 0.0]);
+                }
+                let n_pts = mesh.vertices.len() - v_start;
+                for i in 0..n_pts {
+                    let p = mesh.vertices[v_start + i];
+                    mesh.add_vertex([p[0], p[1], 6.0]);
+                }
+                for i in 0..n_pts.saturating_sub(1) {
+                    let v0 = v_start + i;
+                    let v1 = v_start + i + 1;
+                    let v2 = v_start + n_pts + i + 1;
+                    let v3 = v_start + n_pts + i;
+                    mesh.add_triangle(v0, v1, v2);
+                    mesh.add_triangle(v0, v2, v3);
+                }
+                (mesh.vertices, mesh.triangles, Vec::new())
+            }
+            ViewportModelPreset::PlanetaryGear => {
+                let sun = urae::cad::InvoluteGear::spur(1.2, 12, 5.0);
+                let planet = urae::cad::InvoluteGear::spur(1.2, 8, 5.0);
+                let mut combined_mesh = sun.generate_3d_mesh();
+                let orbit_radius = (sun.pitch_diameter() + planet.pitch_diameter()) / 2.0;
+
+                for planet_idx in 0..3 {
+                    let theta = (planet_idx as f64) * (2.0 * PI / 3.0);
+                    let ox = orbit_radius * theta.cos();
+                    let oy = orbit_radius * theta.sin();
+                    let mut p_mesh = planet.generate_3d_mesh();
+                    let v_offset = combined_mesh.vertices.len();
+                    for v in &mut p_mesh.vertices {
+                        v[0] += ox;
+                        v[1] += oy;
+                        combined_mesh.add_vertex(*v);
+                    }
+                    for t in &p_mesh.triangles {
+                        combined_mesh.add_triangle(t[0] + v_offset, t[1] + v_offset, t[2] + v_offset);
+                    }
+                }
+                (combined_mesh.vertices, combined_mesh.triangles, Vec::new())
             }
             ViewportModelPreset::ThreadedBolt => {
                 let screw = urae::cad::ThreadedScrew::metric_bolt(6.0, 1.0, 12.0);

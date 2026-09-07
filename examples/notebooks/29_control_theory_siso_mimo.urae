@@ -1,0 +1,46 @@
+# URAE Mathematics Notepad: Modern & Classical Control Systems (SISO, MIMO & Pole Placement)
+# Demonstrates assembling state-space models, computing characteristic polynomials, solving for open-loop poles, and verifying controllability.
+
+# 1. Continuous SISO System Parameters
+wn: Parameter = 3.00 [rad/s]
+zeta: Parameter = 0.35
+
+s: Variable
+
+# 2. Assembling the State-Space Matrices
+# x_dot = A * x + B * u, y = C * x + D * u
+# A = [[0, 1], [-wn^2, -2*zeta*wn]], B = [[0], [wn^2]], C = [[1, 0]], D = [[0]]
+A = [[0.0, 1.0], [-9.0, -2.1]]
+B = [[0.0], [9.0]]
+C = [[1.0, 0.0]]
+
+# 3. Assembling the Characteristic Polynomial & Solving for Poles
+# det(s*I - A) = det([[s, -1], [wn^2, s + 2*zeta*wn]]) = s^2 + 2*zeta*wn*s + wn^2
+char_poly = s^2 + 2.0 * zeta * wn * s + wn^2
+
+# Solving for open-loop poles:
+solve s^2 + 2.0 * zeta * wn * s + wn^2 = 0, s
+
+# 4. Assembled Closed-Form Transfer Function H(s)
+# H(s) = C * inv(s*I - A) * B = wn^2 / (s^2 + 2*zeta*wn*s + wn^2)
+H_siso(s) = wn^2 / (s^2 + 2.0 * zeta * wn * s + wn^2)
+
+# Frequency response: substitute s = j * omega
+# Natural frequency and damping metrics:
+omega_peak = wn * sqrt(1.0 - 2.0 * zeta^2)
+peak_overshoot = exp(-3.14159265 * zeta / sqrt(1.0 - zeta^2))
+
+# 5. Assembling Controllability Matrix C = [B, A*B]
+# A * B = [[0, 1], [-9, -2.1]] * [[0], [9]] = [[9], [-18.9]]
+# Controllability matrix: C_mat = [[0, 9], [9, -18.9]]
+det_controllability = 0.0 * (-18.9) - 9.0 * 9.0 # = -81.0 != 0 => Completely Controllable!
+
+# 6. State-Feedback Pole Placement Design (Ackermann Assembly)
+# Desired closed-loop poles at p1 = -4.0, p2 = -5.0
+# Desired polynomial: (s + 4)*(s + 5) = s^2 + 9*s + 20
+# Equating with det(s*I - (A - B*K)) = s^2 + (2*zeta*wn + 9*k2)*s + (wn^2 + 9*k1)
+# Solving for feedback gains k1, k2:
+solve 9.0 + 9.0 * k1 = 20.0, k1
+solve 2.1 + 9.0 * k2 = 9.0, k2
+k1_gain = 11.0 / 9.0
+k2_gain = 6.9 / 9.0

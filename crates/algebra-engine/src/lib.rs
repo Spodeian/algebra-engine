@@ -20,6 +20,7 @@ pub mod combinatorics;
 pub mod control;
 pub mod curvature;
 pub mod diffalg;
+pub mod diffeq;
 pub mod distributions;
 pub mod exceptional_lie;
 pub mod executor;
@@ -90,9 +91,10 @@ pub use combinatorics::{
     bell_number, catalan_number, combinations, derangements, factorial, integer_partitions,
     permutations, stirling_second_kind,
 };
-pub use control::StateSpaceSystem;
+pub use control::{StateSpaceSystem, TimeDomain};
 pub use curvature::{CurvatureAnalysis, MetricTensor};
 pub use diffalg::{DiffIndeterminate, DiffPolynomial, DiffTerm, RittWuReducer, WeylOperator};
+pub use diffeq::{DiffEqClassifier, DiffEqDescriptor, DiffEqKind, DiffEqLinearity};
 pub use distributions::EmpiricalDistributionMut;
 pub use exceptional_lie::{AlbertAlgebra, E8Lattice, Octonion};
 pub use executor::{ExecutionContext, OperationExecutor, OperationResult};
@@ -126,7 +128,8 @@ pub use ode::{
 pub use padic_hodge::{FontaineModule, PadicGaloisRepresentation, TateTwist};
 pub use pde::{
     BoundaryCondition, ElementType, FeaBoundaryCondition, FeaEngine, FeaMesh, FeaSolution,
-    NumericalPdeSolver, PdeClassification, PdeGridSolution, PhysicsDiscipline, SymbolicPdeSolver,
+    NumericalPdeSolver, PdeClassification, PdeGridSolution, PdeTravelingWaveReduction,
+    PhysicsDiscipline, SymbolicPdeSolver,
 };
 pub use physics::{
     Constants, Dimensions, FourVector, HamiltonianSystem, LagrangianSystem, Quantity,

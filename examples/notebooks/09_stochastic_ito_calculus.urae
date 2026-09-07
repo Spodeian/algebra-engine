@@ -1,0 +1,37 @@
+# URAE Mathematics Notepad: Stochastic Itô Calculus & SDEs
+# Interactive continuous document for Itô's Lemma, quadratic variation, geometric Brownian motion, and Black-Scholes PDE derivation.
+
+# Parameters for Geometric Brownian Motion
+mu: Parameter = 0.05 [s^-1]
+sigma: Parameter = 0.20 [s^-0.5]
+S0: Parameter = 100.0 [USD]
+
+# Time and process variables
+t: Variable
+S: Variable
+W_t: Variable
+
+# Domain constraints
+{ S in Reals | S > 0.0 }
+{ t in Reals | t >= 0.0 }
+
+# 1. Quadratic Variation & Itô Differential Multiplication Rules
+# (dt)^2 = 0, dt * dW_t = 0, (dW_t)^2 = dt
+ito_rule_dt_dt = ito_mult(dt, dt)
+ito_rule_dt_dw = ito_mult(dt, dW_t)
+ito_rule_dw_dw = ito_mult(dW_t, dW_t)
+
+# 2. Geometric Brownian Motion (GBM) SDE
+# dS_t = mu * S_t * dt + sigma * S_t * dW_t
+dS_t = mu * S * dt + sigma * S * dW_t
+
+# 3. Application of Itô's Lemma to f(S) = ln(S)
+# df = (f'(S) * mu * S + 1/2 * f''(S) * sigma^2 * S^2) * dt + f'(S) * sigma * S * dW_t
+# Since d(ln S)/dS = 1/S and d^2(ln S)/dS^2 = -1/S^2:
+# d(ln S) = (mu - 1/2 * sigma^2) * dt + sigma * dW_t
+d_ln_S = ito_lemma(ln(S), S, mu * S, sigma * S)
+
+# 4. Black-Scholes Differential Operator & Option Pricing PDE
+r: Parameter = 0.03 [s^-1]
+V: Function(S, t)
+bs_pde = diff(V(S, t), t) + r * S * diff(V(S, t), S) + 0.5 * sigma^2 * S^2 * diff(diff(V(S, t), S), S) - r * V(S, t)

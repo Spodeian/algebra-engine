@@ -1,6 +1,6 @@
 use super::Uint;
 
-use std::ops::{BitAnd, BitOr, BitXor, Not, BitAndAssign, BitOrAssign, BitXorAssign, ShlAssign, ShrAssign};
+use std::ops::{BitAnd, BitOr, BitXor, BitAndAssign, BitOrAssign, BitXorAssign, ShlAssign, ShrAssign};
 
 use num::{BigUint, ToPrimitive, traits::ConstZero};
 

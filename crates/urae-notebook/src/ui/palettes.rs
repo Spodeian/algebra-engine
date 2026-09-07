@@ -143,16 +143,32 @@ impl PalettesUi {
                 ui.label(egui::RichText::new("Parametric 3D Engineering Shapes:").strong().color(egui::Color32::from_rgb(56, 189, 248)));
                 ui.separator();
 
-                // 1. Involute Gear
+                // 1. Gears Suite
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("⚙ Involute Spur / Helical Gear").strong());
+                    ui.label(egui::RichText::new("⚙ Precision Gears Library (Spur, Helical, Bevel, Worm, Rack, Planetary)").strong());
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("Insert 16-Tooth Spur Gear").clicked() {
-                            state.insert_text_at_active_line("gear!(teeth = 16, module = 2.0, pressure_angle = 20.0, face_width = 8.0)");
+                        if ui.button("16T Spur Gear").on_hover_text("External involute spur gear, module 2.0, 20° pressure angle").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"spur\", teeth = 16, module = 2.0, pressure_angle = 20.0, face_width = 8.0)");
                             close_requested = true;
                         }
-                        if ui.button("Insert 24-Tooth Helical Gear (15°)").clicked() {
-                            state.insert_text_at_active_line("gear!(teeth = 24, module = 2.5, pressure_angle = 20.0, face_width = 12.0, helix_angle = 15.0)");
+                        if ui.button("24T Helical Gear (15°)").on_hover_text("High-speed quiet helical gear with 15° helix angle").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"helical\", teeth = 24, module = 2.5, pressure_angle = 20.0, face_width = 12.0, helix_angle = 15.0)");
+                            close_requested = true;
+                        }
+                        if ui.button("20T Bevel Gear (90°)").on_hover_text("Straight conical bevel gear for perpendicular shaft power transmission").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"bevel\", teeth = 20, module = 2.0, pressure_angle = 20.0, face_width = 10.0, shaft_angle = 90.0)");
+                            close_requested = true;
+                        }
+                        if ui.button("Worm & Wheel (30:1)").on_hover_text("Self-locking high ratio worm drive with lead angle 6°").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"worm\", teeth = 30, module = 1.5, pressure_angle = 20.0, starts = 1, lead_angle = 6.0)");
+                            close_requested = true;
+                        }
+                        if ui.button("Rack & Pinion (14T)").on_hover_text("Rotary to linear motion mechanism").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"rack_pinion\", teeth = 14, module = 2.0, rack_length = 60.0, face_width = 8.0)");
+                            close_requested = true;
+                        }
+                        if ui.button("Planetary Gearset (3 Planets)").on_hover_text("Epicyclic planetary gear train (Sun: 12T, Planets: 8T, Ring: 28T)").clicked() {
+                            state.insert_text_at_active_line("gear!(type = \"planetary\", sun_teeth = 12, planet_teeth = 8, ring_teeth = 28, module = 1.5)");
                             close_requested = true;
                         }
                     });
@@ -162,14 +178,18 @@ impl PalettesUi {
 
                 // 2. Threaded Bolt / Screw
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("🔩 Threaded Metric Fastener / Screw").strong());
+                    ui.label(egui::RichText::new("🔩 Threaded Metric Fasteners & Screws").strong());
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("Insert M8 Hex Bolt").clicked() {
+                        if ui.button("M8 Hex Bolt (25mm)").clicked() {
                             state.insert_text_at_active_line("screw!(dia = 8.0, pitch = 1.25, len = 25.0, head = Hex)");
                             close_requested = true;
                         }
-                        if ui.button("Insert M6 Socket Cap Screw").clicked() {
+                        if ui.button("M6 Socket Cap Screw (16mm)").clicked() {
                             state.insert_text_at_active_line("screw!(dia = 6.0, pitch = 1.0, len = 16.0, head = SocketCap)");
+                            close_requested = true;
+                        }
+                        if ui.button("M10 Acme Lead Screw (50mm)").clicked() {
+                            state.insert_text_at_active_line("screw!(dia = 10.0, pitch = 2.0, len = 50.0, standard = Acme29)");
                             close_requested = true;
                         }
                     });
@@ -179,14 +199,18 @@ impl PalettesUi {
 
                 // 3. NACA Wing Airfoil
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("✈ NACA 4-Digit Airfoil & 3D Wing").strong());
+                    ui.label(egui::RichText::new("✈ NACA 4-Digit Aerodynamic Airfoils & 3D Wings").strong());
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("Insert NACA 2412 Wing").clicked() {
+                        if ui.button("NACA 2412 Wing").clicked() {
                             state.insert_text_at_active_line("airfoil!(code = \"2412\", chord = 10.0, span = 30.0)");
                             close_requested = true;
                         }
-                        if ui.button("Insert Symmetrical NACA 0012 Wing").clicked() {
+                        if ui.button("NACA 0012 Symmetrical Wing").clicked() {
                             state.insert_text_at_active_line("airfoil!(code = \"0012\", chord = 12.0, span = 40.0)");
+                            close_requested = true;
+                        }
+                        if ui.button("NACA 4415 High-Lift Wing").clicked() {
+                            state.insert_text_at_active_line("airfoil!(code = \"4415\", chord = 15.0, span = 35.0)");
                             close_requested = true;
                         }
                     });
@@ -196,10 +220,14 @@ impl PalettesUi {
 
                 // 4. Helical Spring
                 ui.group(|ui| {
-                    ui.label(egui::RichText::new("🌀 Helical Coil Spring").strong());
+                    ui.label(egui::RichText::new("🌀 Helical Coil Springs").strong());
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("Insert Compression Spring").clicked() {
+                        if ui.button("Compression Spring (D=10mm)").clicked() {
                             state.insert_text_at_active_line("spring!(mean_dia = 10.0, wire_dia = 1.5, pitch = 4.0, coils = 8)");
+                            close_requested = true;
+                        }
+                        if ui.button("Heavy Tension Spring (D=16mm)").clicked() {
+                            state.insert_text_at_active_line("spring!(mean_dia = 16.0, wire_dia = 2.5, pitch = 5.0, coils = 12)");
                             close_requested = true;
                         }
                     });

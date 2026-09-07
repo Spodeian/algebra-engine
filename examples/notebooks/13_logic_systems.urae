@@ -1,0 +1,65 @@
+# URAE Mathematics Notepad: Formal, Multi-Valued & Modal Logic Systems
+# Interactive continuous document exploring Classical Boolean Logic, Kleene K3,
+# Łukasiewicz Ł3, Bochvar Nonsense Propagation, Gödel Intuitionistic G3, and Modal S5.
+
+# Boolean proposition variables
+p: Variable
+q: Variable
+r: Variable
+
+# =========================================================================
+# 1. CLASSICAL BOOLEAN PROPOSITIONAL LOGIC & DPLL SAT SOLVING
+# Identities: A -> B = ~A \/ B, ~(A /\ B) = ~A \/ ~B
+# =========================================================================
+phi_tautology = bool_implies(p, bool_or([p, q]))
+phi_contradiction = bool_and([p, bool_not(p)])
+
+# DPLL SAT Solver evaluation:
+sat_check_tautology = bool_sat_solve(phi_tautology)
+sat_check_contradiction = bool_sat_solve(phi_contradiction)
+
+# =========================================================================
+# 2. THREE-VALUED LOGIC COMPARISON (Kleene K3 vs Łukasiewicz Ł3 vs Bochvar vs Gödel G3)
+# Truth values: True (1), False (0), Unknown / Indeterminate (u)
+# =========================================================================
+# (A) Kleene's Strong 3-Valued Logic K3 (Incomplete Information):
+# In K3, u -> u = u (Law of Identity fails for indeterminate propositions)
+k3_unknown_implies_unknown = logic_k3_implies(Unknown, Unknown)
+k3_or_true_unknown = logic_k3_or(True, Unknown) # True
+
+# (B) Łukasiewicz 3-Valued Logic Ł3 (Preserves Law of Identity):
+# In Ł3, v(A -> B) = min(1, 1 - v(A) + v(B)), so u -> u = True
+l3_unknown_implies_unknown = logic_l3_implies(Unknown, Unknown) # True
+
+# (C) Bochvar 3-Valued Logic (Meaningless / Error Propagation):
+# Any expression containing Unknown results in Unknown
+bochvar_or_true_unknown = logic_bochvar_or(True, Unknown) # Unknown (error propagates)
+
+# (D) Gödel-Dummett 3-Valued Intuitionistic Logic G3:
+# Intuitionistic negation: ~u = 0 (False), so ~~u != u (Double negation fails)
+godel_not_unknown = logic_godel_not(Unknown) # False
+
+# =========================================================================
+# 3. MODAL LOGIC S5: NECESSITY (□) AND POSSIBILITY (◇)
+# Duality theorem: Box A <===> ~Dia (~A)
+# Dia A <===> ~Box (~A)
+# =========================================================================
+box_true = modal_necessity(True)       # True
+box_unknown = modal_necessity(Unknown) # False (not necessarily true)
+
+dia_true = modal_possibility(True)       # True
+dia_unknown = modal_possibility(Unknown) # True (it is possible)
+dia_false = modal_possibility(False)     # False
+
+modal_duality_identity = modal_duality_check("Box A <=> ~Dia ~A")
+
+# =========================================================================
+# 4. PREDICATE ASSUMPTIONS & CONTRADICTION ENGINE
+# Automatic assumption propagation: Positive ==> Real /\ NonNegative /\ NonZero
+# =========================================================================
+assume(x, Predicate::Positive)
+query_x_is_real = is(x, Predicate::Real)
+query_x_is_nonzero = is(x, Predicate::NonZero)
+
+# Consistency check (returns true if assumptions have no logical contradiction)
+assumptions_consistent = is_consistent()

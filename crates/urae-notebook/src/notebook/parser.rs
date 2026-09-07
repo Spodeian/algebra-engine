@@ -85,6 +85,15 @@ pub enum LineKind {
         domain_type: String,
         condition: String,
     },
+    CadMesh {
+        model_kind: String,
+        summary: String,
+    },
+    Plot3D {
+        expr_str: String,
+        x_var: String,
+        y_var: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -102,12 +111,41 @@ pub struct ParsedLine {
     pub error_msg: Option<String>,
     pub suggested_symbols: Vec<String>,
     pub is_function: bool,
+    pub is_surface_3d: bool,
+    pub custom_mesh_preset: Option<String>,
     pub physical_unit: Option<String>,
     pub numerical_roots: Option<Vec<f64>>,
     pub linearized_estimate: Option<f64>,
     pub is_pending: bool,
     pub eval_time_ms: u128,
     pub scoped_context: urae::MathContext,
+}
+
+impl Default for ParsedLine {
+    fn default() -> Self {
+        Self {
+            line_idx: 0,
+            raw_text: String::new(),
+            kind: LineKind::Formula,
+            output_latex: String::new(),
+            output_unicode: String::new(),
+            simplified_unicode: None,
+            substituted_latex: None,
+            derivative_latex: None,
+            domain_info: None,
+            error_msg: None,
+            suggested_symbols: Vec::new(),
+            is_function: false,
+            is_surface_3d: false,
+            custom_mesh_preset: None,
+            physical_unit: None,
+            numerical_roots: None,
+            linearized_estimate: None,
+            is_pending: false,
+            eval_time_ms: 0,
+            scoped_context: urae::MathContext::default(),
+        }
+    }
 }
 
 /// Structural representation of an individual notebook cell block kind.
@@ -181,12 +219,79 @@ pub enum ObjectKind {
         exact_desc: String,
         approx_val: f64,
     },
-    /// Line evaluation result ($1, $2, ans)
-    LineResult { line_idx: usize, summary: String },
     /// Generic Symbolic Expression
     Expression {
         free_variables: Vec<String>,
         structure: String,
+    },
+    /// Line evaluation result ($1, $2, ans)
+    LineResult { line_idx: usize, summary: String },
+    /// Linear Time-Invariant Transfer Function H(s) / G(s)
+    TransferFunction {
+        numerator_degree: usize,
+        denominator_degree: usize,
+        poles: Vec<String>,
+        zeros: Vec<String>,
+        is_stable: bool,
+    },
+    /// Stochastic Process (Itô SDE, Wiener Process, Diffusion)
+    StochasticProcess {
+        drift_term: String,
+        diffusion_term: String,
+        is_martingale: bool,
+    },
+    /// Finite Element Analysis / Isogeometric Analysis (CAD Patch, Mesh)
+    FEAResult {
+        nodes: usize,
+        elements: usize,
+        max_stress: f64,
+        deformation_scale: f64,
+        solution_type: String,
+    },
+    /// Thermodynamic System State & Thermal Cycles (EoS, Carnot, Van der Waals)
+    ThermodynamicState {
+        system_type: String,
+        equation_of_state: String,
+        properties: Vec<(String, f64)>,
+    },
+    /// Canonical Algebraic Form (Horner polynomial, Factored, Expanded, Tropical)
+    AlgebraicForm {
+        form_type: String,
+        complexity_score: usize,
+    },
+    /// Formal Logic System (Classical Propositional, Kleene K3, Łukasiewicz Ł3, Gödel G3, Modal S5)
+    LogicSystem {
+        system_name: String,
+        truth_values_count: usize,
+        is_paraconsistent: bool,
+        is_intuitionistic: bool,
+        tautologies_summary: String,
+    },
+    /// Elliptic Curve or Cryptographic Structure over Finite Field
+    CryptographicCurve {
+        curve_name: String,
+        field_order: String,
+        equation: String,
+    },
+    /// Discrete Graph, Network & Spectral Laplacian Structure
+    GraphStructure {
+        vertices: usize,
+        edges: usize,
+        is_directed: bool,
+        spectral_gap: Option<f64>,
+    },
+    /// Differential Manifold & Riemannian Metric Tensor (General Relativity Spacetime)
+    DifferentialManifold {
+        dimension: usize,
+        metric_name: String,
+        curvature_scalar: Option<f64>,
+    },
+    /// Probability Distribution & Statistical Random Variable
+    ProbabilityDistribution {
+        dist_type: String,
+        mean: f64,
+        variance: f64,
+        is_discrete: bool,
     },
 }
 
@@ -201,6 +306,27 @@ pub struct SymbolInfoCard {
     pub dependent_lines: Vec<usize>,
     pub formula_references: Vec<String>,
     pub object_kind: Option<ObjectKind>,
+    #[serde(default)]
+    pub computation_time_ms: Option<f64>,
+    #[serde(default)]
+    pub compound_tags: Vec<String>,
+}
+
+impl Default for SymbolInfoCard {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            role: SymbolRole::Variable,
+            cur_val: 0.0,
+            domain_type: "Real".to_string(),
+            unit_str: None,
+            dependent_lines: Vec::new(),
+            formula_references: Vec::new(),
+            object_kind: None,
+            computation_time_ms: None,
+            compound_tags: Vec::new(),
+        }
+    }
 }
 
 /// Resolve `ans`, `$N`, and range `$M..$N` or `sum($M..$N)` references within a line before parsing.

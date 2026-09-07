@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/auto-promoters",
     "crates/algebra-core",
     "crates/algebra-engine",
     "crates/algebra-advanced",
@@ -16,7 +17,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Liam <spodeian@proton.me>"]
 edition = "2024"
 license = "CC-BY-NC-SA-4.0"
@@ -31,6 +32,7 @@ all = "warn"
 
 [workspace.dependencies]
 # Internal workspace crates
+auto-promoters = { path = "crates/auto-promoters" }
 algebra-core = { path = "crates/algebra-core" }
 algebra-engine = { path = "crates/algebra-engine" }
 algebra-advanced = { path = "crates/algebra-advanced" }

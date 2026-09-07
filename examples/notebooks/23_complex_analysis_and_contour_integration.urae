@@ -1,0 +1,18 @@
+# URAE Mathematics Notepad: Complex Analysis & Contour Integration
+# Calculus in the complex plane: Laurent series, residue calculus, and evaluation of real improper integrals.
+
+z: Variable
+x: Variable
+a: Parameter = 2.0
+
+# 1. Complex Laurent Series & Pole Classification
+f(z) = exp(z) / (z^2 * (z - 1))
+laurent_series(f(z), z, center = 0, order_min = -2, order_max = 3)
+complex_singularities(f(z), z)
+residue(f(z), z, point = 0)
+residue(f(z), z, point = 1)
+
+# 2. Real Improper Integration via Semicircular Contour
+# Evaluate ∫_{-∞}^{∞} 1 / (x⁴ + 1) dx = π / √2
+contour_integrate(1 / (z^4 + 1), z, contour = "upper_half_circle")
+integrate(1 / (x^4 + 1), x, -Infinity, Infinity)

@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 algebra-core.workspace = true
 algebra-engine.workspace = true
+auto-promoters.workspace = true
 algebra-advanced = { workspace = true, optional = true }
 urae-cli = { workspace = true, optional = true }
 

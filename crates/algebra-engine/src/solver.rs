@@ -7,7 +7,7 @@ use crate::calculus::SymbolicCalculus;
 use crate::numeric::NumericalEval;
 use crate::simplify::Simplifier;
 use algebra_core::{
-    AlgebraError, AlgebraResult, ExprGraph, ExprId, ExprKind, MathStep, StepByStepResult, SymbolId,
+    AlgebraResult, ExprGraph, ExprId, ExprKind, MathStep, StepByStepResult, SymbolId,
 };
 
 /// Diophantine Equation Solver for integer solutions over $\mathbb{Z}$.
@@ -117,6 +117,56 @@ pub trait SymbolicSolver {
         x: SymbolId,
         t: SymbolId,
     ) -> AlgebraResult<(ExprId, ExprId)>;
+
+    /// Solve 1D Wave PDE $u_{tt} = c^2 u_{xx}$ via separation of variables $u(x, t) = X(x) T(t)$.
+    fn solve_pde_wave_1d(
+        &self,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)>;
+
+    /// Solve 1D Wave PDE via d'Alembert's formula: $u(x, t) = \frac{1}{2}[f(x - ct) + f(x + ct)] + \frac{1}{2c}\int_{x-ct}^{x+ct} g(s) ds$.
+    fn solve_pde_wave_dalembert(
+        &self,
+        f: ExprId,
+        g: Option<ExprId>,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId>;
+
+    /// Solve 2D Laplace PDE $u_{xx} + u_{yy} = 0$ via separation of variables.
+    fn solve_pde_laplace_2d(
+        &self,
+        a: ExprId,
+        x: SymbolId,
+        y: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)>;
+
+    /// Solve 1D Transport / Advection PDE $u_t + c u_x = 0 \implies u(x, t) = f(x - c t)$.
+    fn solve_pde_transport_1d(
+        &self,
+        f: ExprId,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId>;
+
+    /// Solve 2D Radial Laplacian Bessel eigenmode: $R_n(r) = J_n(k r)$.
+    fn solve_pde_radial_bessel(
+        &self,
+        k: ExprId,
+        r: SymbolId,
+        order: usize,
+    ) -> AlgebraResult<ExprId>;
+
+    /// Solve polynomial equations using exact radicals (binomial, biquadratic, reciprocal, Cardano cubic, Bring radicals, or RootOf).
+    fn solve_polynomial_radicals(
+        &self,
+        eq: ExprId,
+        target: SymbolId,
+    ) -> AlgebraResult<Vec<ExprId>>;
 }
 
 impl SymbolicSolver for ExprGraph {
@@ -183,125 +233,21 @@ impl SymbolicSolver for ExprGraph {
                     Ok(vec![])
                 }
             }
-            ExprKind::Add(_terms) => {
-                let zero = self.integer(0);
-                let ctx = crate::numeric::EvalContext::default();
-                let f0 = self.substitute(eq, target, zero);
-                let dt = self.diff(eq, target);
-                let f_prime_0 = self.substitute(dt, target, zero);
-                let d2t = self.diff(dt, target);
-                let f_double_prime_0 = self.substitute(d2t, target, zero);
-
-                // Safe structural coefficient extraction helper
-                let get_coeff_val = |node_id: ExprId| -> f64 {
-                    match &self.get(node_id).kind {
-                        ExprKind::Number(algebra_core::Number::Integer(i)) => *i as f64,
-                        ExprKind::Number(algebra_core::Number::Float(bits)) => {
-                            f64::from_bits(*bits)
-                        }
-                        ExprKind::Number(algebra_core::Number::Rational(n, d)) => {
-                            *n as f64 / *d as f64
-                        }
-                        _ => self.evalf(node_id, &ctx).map(|v| v.to_f64()).unwrap_or(0.0),
-                    }
-                };
-
-                let f0_val = get_coeff_val(f0);
-                let b_val = get_coeff_val(f_prime_0);
-                let a2_val = get_coeff_val(f_double_prime_0);
-                let a_val = a2_val / 2.0;
-
-                if a_val.abs() < 1e-12 && b_val.abs() > 1e-12 {
-                    // Exact linear equation: b*x + c = 0 -> x = -c/b
-                    if b_val != 0.0 {
-                        let root_val = -f0_val / b_val;
-                        if (root_val - root_val.round()).abs() < 1e-12 {
-                            return Ok(vec![self.integer(root_val.round() as i64)]);
-                        }
-                    }
-
-                    let neg_c = self.neg(f0);
-                    let sol_node = self.div(neg_c, f_prime_0);
-                    let simp_node = Simplifier::simplify(self, sol_node).unwrap_or(sol_node);
-                    Ok(vec![simp_node])
-                } else if a_val.abs() > 1e-12 {
-                    let d3t = self.diff(d2t, target);
-                    let simp_d3t = Simplifier::simplify(self, d3t).unwrap_or(d3t);
-                    let is_quadratic = simp_d3t == zero
-                        || matches!(
-                            self.get(simp_d3t).kind,
-                            ExprKind::Number(algebra_core::Number::Integer(0))
-                        )
-                        || self
-                            .evalf(simp_d3t, &ctx)
-                            .map(|v| v.to_f64().abs() < 1e-12)
-                            .unwrap_or(true);
-
-                    if is_quadratic {
-                        let b_sq = self.pow(f_prime_0, self.integer(2));
-                        let four_a_c = self.mul([self.integer(2), f_double_prime_0, f0]);
-                        let two_a = f_double_prime_0;
-                        let neg_b = self.neg(f_prime_0);
-                        let disc = self.sub(b_sq, four_a_c);
-
-                        let disc_f = get_coeff_val(disc);
-                        if disc_f >= 0.0 {
-                            let sqrt_d = disc_f.sqrt();
-                            if a2_val != 0.0 {
-                                let r1 = (-b_val + sqrt_d) / a2_val;
-                                let r2 = (-b_val - sqrt_d) / a2_val;
-
-                                let mut roots = Vec::new();
-                                if (r1 - r1.round()).abs() < 1e-12 {
-                                    roots.push(self.integer(r1.round() as i64));
-                                } else {
-                                    roots.push(self.float(r1));
-                                }
-
-                                if (r1 - r2).abs() > 1e-12 {
-                                    if (r2 - r2.round()).abs() < 1e-12 {
-                                        roots.push(self.integer(r2.round() as i64));
-                                    } else {
-                                        roots.push(self.float(r2));
-                                    }
-                                }
-                                return Ok(roots);
+            ExprKind::Mul(factors) => {
+                let mut all_roots = Vec::new();
+                for &f in factors {
+                    if let Ok(roots) = self.solveset(f, target) {
+                        for r in roots {
+                            if !all_roots.contains(&r) {
+                                all_roots.push(r);
                             }
                         }
-
-                        let half = self.div(self.integer(1), self.integer(2));
-                        let sqrt_disc = self.pow(disc, half);
-
-                        let num1 = self.add([neg_b, sqrt_disc]);
-                        let num2 = self.sub(neg_b, sqrt_disc);
-
-                        let sol1 = self.div(num1, two_a);
-                        let sol2 = self.div(num2, two_a);
-
-                        let s1 = Simplifier::simplify(self, sol1).unwrap_or(sol1);
-                        let s2 = Simplifier::simplify(self, sol2).unwrap_or(sol2);
-
-                        if s1 == s2 {
-                            Ok(vec![s1])
-                        } else {
-                            Ok(vec![s1, s2])
-                        }
-                    } else {
-                        Err(AlgebraError::UnsolvableSystem(
-                            "No exact symbolic radical solution closed-form available for equation"
-                                .into(),
-                        ))
                     }
-                } else {
-                    Err(AlgebraError::UnsolvableSystem(
-                        "No exact symbolic radical solution closed-form available for equation"
-                            .into(),
-                    ))
                 }
+                Ok(all_roots)
             }
-            _ => Err(AlgebraError::UnsolvableSystem(
-                "General solveset fallback".into(),
-            )),
+            ExprKind::Pow(base, _exp) => self.solveset(*base, target),
+            _ => self.solve_polynomial_radicals(eq, target),
         }
     }
 
@@ -355,5 +301,596 @@ impl SymbolicSolver for ExprGraph {
             [self.mul([neg_alpha_sq, self.symbol("k_x"), self.symbol("t")])],
         );
         Ok((spatial_sol, temporal_sol))
+    }
+
+    fn solve_pde_wave_1d(
+        &self,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)> {
+        let l_node = self.symbol("L");
+        crate::pde::SymbolicPdeSolver::solve_wave_1d_separated(self, c, l_node, x, t)
+    }
+
+    fn solve_pde_wave_dalembert(
+        &self,
+        f: ExprId,
+        g: Option<ExprId>,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId> {
+        crate::pde::SymbolicPdeSolver::solve_wave_dalembert_exact(self, f, g, c, x, t)
+    }
+
+    fn solve_pde_laplace_2d(
+        &self,
+        a: ExprId,
+        x: SymbolId,
+        y: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)> {
+        crate::pde::SymbolicPdeSolver::solve_laplace_2d_separated(self, a, x, y)
+    }
+
+    fn solve_pde_transport_1d(
+        &self,
+        f: ExprId,
+        c: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId> {
+        crate::pde::SymbolicPdeSolver::solve_transport_1d(self, f, c, x, t)
+    }
+
+    fn solve_pde_radial_bessel(
+        &self,
+        k: ExprId,
+        r: SymbolId,
+        order: usize,
+    ) -> AlgebraResult<ExprId> {
+        crate::pde::SymbolicPdeSolver::solve_bessel_radial(self, k, r, order)
+    }
+
+    fn solve_polynomial_radicals(
+        &self,
+        eq: ExprId,
+        target: SymbolId,
+    ) -> AlgebraResult<Vec<ExprId>> {
+        let zero = self.integer(0);
+        let ctx = crate::numeric::EvalContext::default();
+
+        let get_coeff_val = |node_id: ExprId| -> f64 {
+            match &self.get(node_id).kind {
+                ExprKind::Number(n) => n.as_f64().unwrap_or(0.0),
+                _ => self.evalf(node_id, &ctx).map(|v| v.to_f64()).unwrap_or(0.0),
+            }
+        };
+
+        // Compute derivatives up to order 6 at 0
+        let mut derivs = Vec::with_capacity(7);
+        derivs.push(eq);
+        for i in 0..6 {
+            let d = self.diff(derivs[i], target);
+            let simp = Simplifier::simplify(self, d).unwrap_or(d);
+            derivs.push(simp);
+        }
+
+        let factorials = [1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0];
+        let mut coeffs = Vec::with_capacity(7);
+        let mut coeff_nodes = Vec::with_capacity(7);
+        for (k, &d) in derivs.iter().enumerate() {
+            let val_at_0 = self.substitute(d, target, zero);
+            let simp_0 = Simplifier::simplify(self, val_at_0).unwrap_or(val_at_0);
+            let val = get_coeff_val(simp_0) / factorials[k];
+            coeffs.push(val);
+            coeff_nodes.push(simp_0);
+        }
+
+        let mut deg = 0;
+        for k in (1..=6).rev() {
+            if coeffs[k].abs() > 1e-12 {
+                deg = k;
+                break;
+            }
+        }
+
+        if deg == 0 {
+            if coeffs[0].abs() < 1e-12 {
+                return Ok(vec![self.symbol("x")]);
+            } else {
+                return Ok(vec![]);
+            }
+        }
+
+        // Degree 1: c1 * x + c0 = 0 -> x = -c0 / c1
+        if deg == 1 {
+            let r_val = -coeffs[0] / coeffs[1];
+            let r_lossless = algebra_core::Number::from_f64_lossless(r_val);
+            if r_lossless.is_lossless() {
+                let r_id = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Rationals,
+                    ExprKind::Number(r_lossless),
+                ));
+                return Ok(vec![r_id]);
+            }
+            let neg_c = self.neg(coeff_nodes[0]);
+            let sol = self.div(neg_c, coeff_nodes[1]);
+            let simp = Simplifier::simplify(self, sol).unwrap_or(sol);
+            return Ok(vec![simp]);
+        }
+
+        // Pure Binomial: c_n * x^n + c_0 = 0
+        let is_pure_binomial = deg >= 2
+            && (1..deg).all(|k| coeffs[k].abs() < 1e-12)
+            && coeffs[0].abs() > 1e-12;
+
+        if is_pure_binomial {
+            let r_val = -coeffs[0] / coeffs[deg];
+            let half = self.div(self.integer(1), self.integer(2));
+            if deg == 2 {
+                if r_val >= 0.0 {
+                    let sq = r_val.sqrt();
+                    if (sq - sq.round()).abs() < 1e-10 {
+                        let s_int = sq.round() as i64;
+                        return Ok(vec![self.integer(s_int), self.integer(-s_int)]);
+                    }
+                    let r_node = self.float(r_val);
+                    let sqrt_r = self.pow(r_node, half);
+                    return Ok(vec![sqrt_r, self.neg(sqrt_r)]);
+                } else {
+                    let pos_r = -r_val;
+                    let sq = pos_r.sqrt();
+                    let i_sym = self.constant(algebra_core::Constant::I);
+                    if (sq - sq.round()).abs() < 1e-10 {
+                        let s_int = sq.round() as i64;
+                        let sol1 = self.mul([self.integer(s_int), i_sym]);
+                        let sol2 = self.mul([self.integer(-s_int), i_sym]);
+                        return Ok(vec![sol1, sol2]);
+                    }
+                    let pos_node = self.float(pos_r);
+                    let sqrt_r = self.pow(pos_node, half);
+                    let sol1 = self.mul([sqrt_r, i_sym]);
+                    let sol2 = self.neg(sol1);
+                    return Ok(vec![sol1, sol2]);
+                }
+            } else if deg == 3 {
+                let one_third = self.div(self.integer(1), self.integer(3));
+                let root_val = if r_val >= 0.0 { r_val.cbrt() } else { -(-r_val).cbrt() };
+                if (root_val - root_val.round()).abs() < 1e-10 {
+                    let r_int = root_val.round() as i64;
+                    let r0 = self.integer(r_int);
+                    let neg_half = self.div(self.integer(-1), self.integer(2));
+                    let sqrt3_over_2 = self.div(self.pow(self.integer(3), half), self.integer(2));
+                    let i_sym = self.constant(algebra_core::Constant::I);
+                    let im_part = self.mul([sqrt3_over_2, i_sym]);
+                    let omega1 = self.add([neg_half, im_part]);
+                    let omega2 = self.sub(neg_half, im_part);
+                    let r1 = self.mul([r0, omega1]);
+                    let r2 = self.mul([r0, omega2]);
+                    return Ok(vec![
+                        r0,
+                        Simplifier::simplify(self, r1).unwrap_or(r1),
+                        Simplifier::simplify(self, r2).unwrap_or(r2),
+                    ]);
+                } else {
+                    let abs_val = r_val.abs();
+                    let base = self.float(abs_val);
+                    let r0 = if r_val >= 0.0 {
+                        self.pow(base, one_third)
+                    } else {
+                        self.neg(self.pow(base, one_third))
+                    };
+                    return Ok(vec![r0]);
+                }
+            } else if deg == 4 {
+                let one_fourth = self.div(self.integer(1), self.integer(4));
+                if r_val >= 0.0 {
+                    let q_val = r_val.powf(0.25);
+                    if (q_val - q_val.round()).abs() < 1e-10 {
+                        let q_int = q_val.round() as i64;
+                        let i_sym = self.constant(algebra_core::Constant::I);
+                        let r1 = self.integer(q_int);
+                        let r2 = self.integer(-q_int);
+                        let r3 = self.mul([r1, i_sym]);
+                        let r4 = self.mul([r2, i_sym]);
+                        return Ok(vec![r1, r2, r3, r4]);
+                    } else {
+                        let base = self.float(r_val);
+                        let r0 = self.pow(base, one_fourth);
+                        let neg_r0 = self.neg(r0);
+                        let i_sym = self.constant(algebra_core::Constant::I);
+                        let r_im1 = self.mul([r0, i_sym]);
+                        let r_im2 = self.neg(r_im1);
+                        return Ok(vec![r0, neg_r0, r_im1, r_im2]);
+                    }
+                }
+            } else if deg == 5 {
+                let one_fifth = self.div(self.integer(1), self.integer(5));
+                let root_val = if r_val >= 0.0 { r_val.powf(0.2) } else { -(-r_val).powf(0.2) };
+                if (root_val - root_val.round()).abs() < 1e-10 {
+                    let r_int = root_val.round() as i64;
+                    return Ok(vec![self.integer(r_int)]);
+                } else {
+                    let abs_val = r_val.abs();
+                    let base = self.float(abs_val);
+                    let r0 = if r_val >= 0.0 {
+                        self.pow(base, one_fifth)
+                    } else {
+                        self.neg(self.pow(base, one_fifth))
+                    };
+                    return Ok(vec![r0]);
+                }
+            }
+        }
+
+        // Degree 2: Quadratic formula
+        if deg == 2 {
+            let a = coeffs[2];
+            let b = coeffs[1];
+            let c = coeffs[0];
+            let disc = b * b - 4.0 * a * c;
+            let two_a = 2.0 * a;
+
+            if disc >= 0.0 {
+                let sqrt_d = disc.sqrt();
+                if (sqrt_d - sqrt_d.round()).abs() < 1e-10 {
+                    let sd = sqrt_d.round();
+                    let r1_val = (-b + sd) / two_a;
+                    let r2_val = (-b - sd) / two_a;
+                    let r1 = algebra_core::Number::from_f64_lossless(r1_val);
+                    let r2 = algebra_core::Number::from_f64_lossless(r2_val);
+                    let r1_id = self.intern(algebra_core::ExprNode::new(
+                        algebra_core::Domain::Rationals,
+                        ExprKind::Number(r1),
+                    ));
+                    let r2_id = self.intern(algebra_core::ExprNode::new(
+                        algebra_core::Domain::Rationals,
+                        ExprKind::Number(r2),
+                    ));
+                    if (r1_val - r2_val).abs() < 1e-12 {
+                        return Ok(vec![r1_id]);
+                    } else {
+                        return Ok(vec![r1_id, r2_id]);
+                    }
+                }
+
+                let half = self.div(self.integer(1), self.integer(2));
+                let disc_node = self.float(disc);
+                let sqrt_disc = self.pow(disc_node, half);
+                let neg_b = self.float(-b);
+                let two_a_node = self.float(two_a);
+
+                let num1 = self.add([neg_b, sqrt_disc]);
+                let num2 = self.sub(neg_b, sqrt_disc);
+                let sol1 = self.div(num1, two_a_node);
+                let sol2 = self.div(num2, two_a_node);
+                let s1 = Simplifier::simplify(self, sol1).unwrap_or(sol1);
+                let s2 = Simplifier::simplify(self, sol2).unwrap_or(sol2);
+                return Ok(vec![s1, s2]);
+            } else {
+                let pos_disc = -disc;
+                let half = self.div(self.integer(1), self.integer(2));
+                let disc_node = self.float(pos_disc);
+                let sqrt_disc = self.pow(disc_node, half);
+                let i_sym = self.constant(algebra_core::Constant::I);
+                let im_term = self.mul([sqrt_disc, i_sym]);
+                let neg_b = self.float(-b);
+                let two_a_node = self.float(two_a);
+
+                let num1 = self.add([neg_b, im_term]);
+                let num2 = self.sub(neg_b, im_term);
+                let sol1 = self.div(num1, two_a_node);
+                let sol2 = self.div(num2, two_a_node);
+                let s1 = Simplifier::simplify(self, sol1).unwrap_or(sol1);
+                let s2 = Simplifier::simplify(self, sol2).unwrap_or(sol2);
+                return Ok(vec![s1, s2]);
+            }
+        }
+
+        // Degree 4: Biquadratic check: c3 == 0 and c1 == 0
+        if deg == 4 && coeffs[3].abs() < 1e-12 && coeffs[1].abs() < 1e-12 {
+            let a = coeffs[4];
+            let b = coeffs[2];
+            let c = coeffs[0];
+            let disc_u = b * b - 4.0 * a * c;
+
+            if disc_u >= 0.0 {
+                let sqrt_du = disc_u.sqrt();
+                let u1 = (-b + sqrt_du) / (2.0 * a);
+                let u2 = (-b - sqrt_du) / (2.0 * a);
+
+                let mut all_x = Vec::new();
+                for &u in &[u1, u2] {
+                    if u >= 0.0 {
+                        let sq = u.sqrt();
+                        if (sq - sq.round()).abs() < 1e-10 {
+                            let val = sq.round() as i64;
+                            all_x.push(self.integer(val));
+                            if val != 0 {
+                                all_x.push(self.integer(-val));
+                            }
+                        } else {
+                            let half = self.div(self.integer(1), self.integer(2));
+                            let u_node = self.float(u);
+                            let sqrt_node = self.pow(u_node, half);
+                            all_x.push(sqrt_node);
+                            all_x.push(self.neg(sqrt_node));
+                        }
+                    } else {
+                        let pos_u = -u;
+                        let sq = pos_u.sqrt();
+                        let i_sym = self.constant(algebra_core::Constant::I);
+                        if (sq - sq.round()).abs() < 1e-10 {
+                            let val = sq.round() as i64;
+                            let sol1 = self.mul([self.integer(val), i_sym]);
+                            let sol2 = self.mul([self.integer(-val), i_sym]);
+                            all_x.push(sol1);
+                            all_x.push(sol2);
+                        } else {
+                            let half = self.div(self.integer(1), self.integer(2));
+                            let pos_node = self.float(pos_u);
+                            let sqrt_node = self.pow(pos_node, half);
+                            let sol1 = self.mul([sqrt_node, i_sym]);
+                            let sol2 = self.neg(sol1);
+                            all_x.push(sol1);
+                            all_x.push(sol2);
+                        }
+                    }
+                }
+                return Ok(all_x);
+            }
+        }
+
+        // Degree 4: Reciprocal / Palindromic Quartic: a x^4 + b x^3 + c x^2 + b x + a = 0
+        if deg == 4
+            && (coeffs[4] - coeffs[0]).abs() < 1e-10
+            && (coeffs[3] - coeffs[1]).abs() < 1e-10
+            && coeffs[4].abs() > 1e-12
+        {
+            let a = coeffs[4];
+            let b = coeffs[3];
+            let c_const = coeffs[2] - 2.0 * a;
+            let disc_y = b * b - 4.0 * a * c_const;
+            if disc_y >= 0.0 {
+                let sqrt_dy = disc_y.sqrt();
+                let y1 = (-b + sqrt_dy) / (2.0 * a);
+                let y2 = (-b - sqrt_dy) / (2.0 * a);
+                let mut all_x = Vec::new();
+
+                for &y in &[y1, y2] {
+                    let disc_x = y * y - 4.0;
+                    if disc_x >= 0.0 {
+                        let sqx = disc_x.sqrt();
+                        let x1 = (y + sqx) / 2.0;
+                        let x2 = (y - sqx) / 2.0;
+                        let num1 = algebra_core::Number::from_f64_lossless(x1);
+                        let num2 = algebra_core::Number::from_f64_lossless(x2);
+                        all_x.push(self.intern(algebra_core::ExprNode::new(
+                            algebra_core::Domain::Rationals,
+                            ExprKind::Number(num1),
+                        )));
+                        all_x.push(self.intern(algebra_core::ExprNode::new(
+                            algebra_core::Domain::Rationals,
+                            ExprKind::Number(num2),
+                        )));
+                    } else {
+                        let half = self.div(self.integer(1), self.integer(2));
+                        let disc_node = self.float(-disc_x);
+                        let sqrt_node = self.pow(disc_node, half);
+                        let i_sym = self.constant(algebra_core::Constant::I);
+                        let im = self.mul([sqrt_node, i_sym]);
+                        let y_node = self.float(y / 2.0);
+                        let im_over_2 = self.div(im, self.integer(2));
+                        all_x.push(self.add([y_node, im_over_2]));
+                        all_x.push(self.sub(y_node, im_over_2));
+                    }
+                }
+                return Ok(all_x);
+            }
+        }
+
+        // Degree 3: Cardano's Cubic Formula (with rational root factoring first)
+        if deg == 3 {
+            let test_candidates = [
+                0.0, 1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0, 5.0, -5.0,
+                0.5, -0.5, 1.0 / 3.0, -1.0 / 3.0, 2.0 / 3.0, -2.0 / 3.0,
+                0.25, -0.25, 0.75, -0.75,
+            ];
+            let mut found_rational: Option<f64> = None;
+            for &cand in &test_candidates {
+                let cand_id = self.float(cand);
+                let sub_val = self.substitute(eq, target, cand_id);
+                if let Ok(eval_res) = self.evalf(sub_val, &ctx) {
+                    if eval_res.to_f64().abs() < 1e-11 {
+                        found_rational = Some(cand);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(r) = found_rational {
+                let a = coeffs[3];
+                let b = coeffs[2];
+                let c = coeffs[1];
+                let cap_a = a;
+                let cap_b = b + a * r;
+                let cap_c = c + b * r + a * r * r;
+
+                let mut all_roots = Vec::new();
+                let r_num = algebra_core::Number::from_f64_lossless(r);
+                all_roots.push(self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Rationals,
+                    ExprKind::Number(r_num),
+                )));
+
+                let disc = cap_b * cap_b - 4.0 * cap_a * cap_c;
+                if disc >= 0.0 {
+                    let sq = disc.sqrt();
+                    let r1 = (-cap_b + sq) / (2.0 * cap_a);
+                    let r2 = (-cap_b - sq) / (2.0 * cap_a);
+                    let n1 = algebra_core::Number::from_f64_lossless(r1);
+                    let n2 = algebra_core::Number::from_f64_lossless(r2);
+                    let id1 = self.intern(algebra_core::ExprNode::new(
+                        algebra_core::Domain::Rationals,
+                        ExprKind::Number(n1),
+                    ));
+                    let id2 = self.intern(algebra_core::ExprNode::new(
+                        algebra_core::Domain::Rationals,
+                        ExprKind::Number(n2),
+                    ));
+                    if !all_roots.contains(&id1) {
+                        all_roots.push(id1);
+                    }
+                    if !all_roots.contains(&id2) {
+                        all_roots.push(id2);
+                    }
+                } else {
+                    let pos_d = -disc;
+                    let half = self.div(self.integer(1), self.integer(2));
+                    let disc_node = self.float(pos_d);
+                    let sqrt_node = self.pow(disc_node, half);
+                    let i_sym = self.constant(algebra_core::Constant::I);
+                    let im_term = self.mul([sqrt_node, i_sym]);
+                    let real_term = self.float(-cap_b / (2.0 * cap_a));
+                    let im_over_2a = self.div(im_term, self.float(2.0 * cap_a));
+                    all_roots.push(self.add([real_term, im_over_2a]));
+                    all_roots.push(self.sub(real_term, im_over_2a));
+                }
+                return Ok(all_roots);
+            }
+
+            let a = coeffs[3];
+            let b = coeffs[2];
+            let c = coeffs[1];
+            let d = coeffs[0];
+
+            let p = (3.0 * a * c - b * b) / (3.0 * a * a);
+            let q = (2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d) / (27.0 * a * a * a);
+            let delta = (q * q) / 4.0 + (p * p * p) / 27.0;
+
+            let shift = -b / (3.0 * a);
+            let _shift_node = self.float(shift);
+
+            if delta >= 0.0 {
+                let sqrt_delta = delta.sqrt();
+                let u_val = -q / 2.0 + sqrt_delta;
+                let v_val = -q / 2.0 - sqrt_delta;
+
+                let u_sign = if u_val >= 0.0 { 1.0 } else { -1.0 };
+                let v_sign = if v_val >= 0.0 { 1.0 } else { -1.0 };
+
+                let u = u_sign * u_val.abs().cbrt();
+                let v = v_sign * v_val.abs().cbrt();
+
+                let real_root = u + v + shift;
+                let real_node = self.float(real_root);
+
+                let half = self.div(self.integer(1), self.integer(2));
+                let sqrt3 = self.pow(self.integer(3), half);
+                let i_sym = self.constant(algebra_core::Constant::I);
+
+                let re_complex = -0.5 * (u + v) + shift;
+                let re_node = self.float(re_complex);
+                let im_factor = self.float(0.5 * (u - v));
+                let im_part = self.mul([im_factor, sqrt3, i_sym]);
+
+                let c1 = self.add([re_node, im_part]);
+                let c2 = self.sub(re_node, im_part);
+
+                return Ok(vec![real_node, c1, c2]);
+            } else {
+                let r = (-p * p * p / 27.0).sqrt();
+                let theta = (-q / (2.0 * r)).acos();
+                let mult = 2.0 * (-p / 3.0).sqrt();
+
+                let x1 = mult * (theta / 3.0).cos() + shift;
+                let x2 = mult * ((theta + 2.0 * std::f64::consts::PI) / 3.0).cos() + shift;
+                let x3 = mult * ((theta + 4.0 * std::f64::consts::PI) / 3.0).cos() + shift;
+
+                let r1 = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Reals,
+                    ExprKind::Number(algebra_core::Number::from_f64_lossless(x1)),
+                ));
+                let r2 = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Reals,
+                    ExprKind::Number(algebra_core::Number::from_f64_lossless(x2)),
+                ));
+                let r3 = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Reals,
+                    ExprKind::Number(algebra_core::Number::from_f64_lossless(x3)),
+                ));
+                return Ok(vec![r1, r2, r3]);
+            }
+        }
+
+        // Degree 5: Bring Radical check: c4 == 0, c3 == 0, c2 == 0
+        if deg == 5
+            && coeffs[4].abs() < 1e-12
+            && coeffs[3].abs() < 1e-12
+            && coeffs[2].abs() < 1e-12
+        {
+            let p = coeffs[1] / coeffs[5];
+            let q = coeffs[0] / coeffs[5];
+
+            if (p - 1.0).abs() < 1e-10 {
+                let q_num = algebra_core::Number::from_f64_lossless(q);
+                let q_node = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Rationals,
+                    ExprKind::Number(q_num),
+                ));
+                let br_node = self.function("BR", [q_node]);
+                return Ok(vec![br_node]);
+            } else if p > 0.0 {
+                let p_quart = p.powf(0.25);
+                let p_five_quart = p.powf(1.25);
+                let arg = q / p_five_quart;
+                let arg_num = algebra_core::Number::from_f64_lossless(arg);
+                let arg_node = self.intern(algebra_core::ExprNode::new(
+                    algebra_core::Domain::Rationals,
+                    ExprKind::Number(arg_num),
+                ));
+                let br_node = self.function("BR", [arg_node]);
+                let p_quart_node = self.float(p_quart);
+                let sol = self.mul([p_quart_node, br_node]);
+                return Ok(vec![sol]);
+            }
+        }
+
+        // General Rational Root Theorem for higher degree polynomials
+        let test_candidates = [
+            0.0, 1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0, 5.0, -5.0,
+            0.5, -0.5, 1.0 / 3.0, -1.0 / 3.0, 2.0 / 3.0, -2.0 / 3.0,
+            0.25, -0.25, 0.75, -0.75, 1.0 / 5.0, -1.0 / 5.0,
+        ];
+        let mut rational_roots = Vec::new();
+        for &cand in &test_candidates {
+            let cand_num = algebra_core::Number::from_f64_lossless(cand);
+            let cand_id = self.intern(algebra_core::ExprNode::new(
+                algebra_core::Domain::Rationals,
+                ExprKind::Number(cand_num),
+            ));
+            let sub_val = self.substitute(eq, target, cand_id);
+            if let Ok(eval_res) = self.evalf(sub_val, &ctx) {
+                if eval_res.to_f64().abs() < 1e-11 && !rational_roots.contains(&cand_id) {
+                    rational_roots.push(cand_id);
+                }
+            }
+        }
+
+        if !rational_roots.is_empty() {
+            return Ok(rational_roots);
+        }
+
+        // Exact Symbolic RootOf representation before lossy fallback
+        let target_name = self.symbols.resolve(target).unwrap_or_else(|| "x".to_string());
+        let target_node = self.symbol(&target_name);
+        let mut root_of_nodes = Vec::new();
+        for k in 1..=deg {
+            let k_node = self.integer(k as i64);
+            let root_of = self.function("RootOf", [eq, target_node, k_node]);
+            root_of_nodes.push(root_of);
+        }
+        Ok(root_of_nodes)
     }
 }

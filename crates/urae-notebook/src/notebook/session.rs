@@ -33,6 +33,18 @@ pub struct SymbolMetadata {
     pub unit_str: Option<String>,
     #[serde(default)]
     pub parsed_text_val: Option<f64>,
+    #[serde(default)]
+    pub is_function: bool,
+    #[serde(default)]
+    pub function_args: Vec<String>,
+    #[serde(default)]
+    pub is_distribution: bool,
+    #[serde(default)]
+    pub tensor_rank: Option<usize>,
+    #[serde(default)]
+    pub tensor_shape: Vec<usize>,
+    #[serde(default)]
+    pub is_constant_locked: bool,
 }
 
 impl SymbolMetadata {
@@ -46,7 +58,81 @@ impl SymbolMetadata {
             domain_type: "Real".to_string(),
             unit_str: None,
             parsed_text_val: Some(val),
+            is_function: false,
+            function_args: Vec::new(),
+            is_distribution: false,
+            tensor_rank: None,
+            tensor_shape: Vec::new(),
+            is_constant_locked: role == SymbolRole::Constant,
         }
+    }
+
+    /// Retrieve all concurrent compound mathematical classification tags for this symbol.
+    pub fn compound_tags(&self) -> Vec<String> {
+        let mut tags = Vec::new();
+        match self.role {
+            SymbolRole::Constant => tags.push("Constant".to_string()),
+            SymbolRole::Parameter => tags.push("Parameter".to_string()),
+            SymbolRole::Variable => tags.push("Variable".to_string()),
+        }
+        if self.is_function {
+            if self.function_args.is_empty() {
+                tags.push("Function".to_string());
+            } else {
+                tags.push(format!("Function of ({})", self.function_args.join(", ")));
+            }
+        }
+        if self.is_distribution {
+            tags.push("Distribution".to_string());
+        }
+        match self.tensor_rank {
+            Some(0) | None => tags.push("Scalar".to_string()),
+            Some(1) => {
+                if let Some(dim) = self.tensor_shape.first() {
+                    tags.push(format!("Vector ({}D)", dim));
+                } else {
+                    tags.push("Vector".to_string());
+                }
+            }
+            Some(2) => {
+                if self.tensor_shape.len() >= 2 {
+                    tags.push(format!("Matrix ({}×{})", self.tensor_shape[0], self.tensor_shape[1]));
+                } else {
+                    tags.push("Matrix".to_string());
+                }
+            }
+            Some(r) => {
+                let dims = self.tensor_shape.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("×");
+                if dims.is_empty() {
+                    tags.push(format!("Rank-{} Tensor", r));
+                } else {
+                    tags.push(format!("Rank-{} Tensor ({})", r, dims));
+                }
+            }
+        }
+        tags.push(self.domain_type.clone());
+        if let Some(u) = &self.unit_str {
+            tags.push(format!("[{}]", u));
+        }
+        tags
+    }
+
+    /// Retrieve distinct, non-redundant mathematical classification badges for sidebar display.
+    /// Excludes the base role (shown on the conversion button), base domain (shown as subtitle),
+    /// the default "Scalar" tag (which applies to almost every mathematical variable and clutters cards),
+    /// and raw unit strings (shown alongside the value or slider).
+    pub fn distinct_badges(&self) -> Vec<String> {
+        self.compound_tags()
+            .into_iter()
+            .filter(|tag| {
+                tag != "Parameter"
+                    && tag != "Variable"
+                    && tag != "Constant"
+                    && tag != "Scalar"
+                    && tag != &self.domain_type
+                    && !self.unit_str.as_ref().is_some_and(|u| tag == &format!("[{}]", u))
+            })
+            .collect()
     }
 
     /// Clamp current value within min_val..max_val and domain restrictions.
@@ -561,6 +647,203 @@ pub fn generate_physical_unit_syntax(var: &str, val: f64, unit: &str) -> String 
     format!("{} = {:.2} [{}]", var.trim(), val, unit.trim())
 }
 
+/// Palette code generator for general n-rank tensors (scalars, vectors, matrices, rank-3+ tensors).
+pub fn generate_tensor_syntax(
+    var: &str,
+    rank: usize,
+    shape: &[usize],
+    preset: &str,
+    elements: Option<&[String]>,
+) -> String {
+    let clean_var = var.trim();
+    let name_prefix = if clean_var.is_empty() { "T" } else { clean_var };
+
+    match rank {
+        0 => {
+            let val = elements.and_then(|e| e.first()).map(|s| s.as_str()).unwrap_or("0");
+            format!("{}: Scalar = {}", name_prefix, val)
+        }
+        1 => {
+            let dim = shape.first().copied().unwrap_or(3);
+            let elems = if let Some(e) = elements {
+                e.iter().take(dim).cloned().collect::<Vec<_>>().join(", ")
+            } else {
+                vec!["0".to_string(); dim].join(", ")
+            };
+            format!("{}: Vector = [{}]", name_prefix, elems)
+        }
+        2 => {
+            let rows = shape.first().copied().unwrap_or(2);
+            let cols = shape.get(1).copied().unwrap_or(2);
+            if preset == "Identity" {
+                format!("{}: Matrix = eye({}, {})", name_prefix, rows, cols)
+            } else if preset == "Zero" {
+                format!("{}: Matrix = zeros({}, {})", name_prefix, rows, cols)
+            } else if preset == "PauliX" {
+                format!("{}: Matrix = [[0, 1], [1, 0]]", name_prefix)
+            } else if preset == "PauliY" {
+                format!("{}: Matrix = [[0, -i], [i, 0]]", name_prefix)
+            } else if preset == "PauliZ" {
+                format!("{}: Matrix = [[1, 0], [0, -1]]", name_prefix)
+            } else if let Some(e) = elements {
+                let mut row_strs = Vec::new();
+                for r in 0..rows {
+                    let mut row_items = Vec::new();
+                    for c in 0..cols {
+                        let idx = r * cols + c;
+                        let item = e.get(idx).map(|s| s.as_str()).unwrap_or("0");
+                        row_items.push(item);
+                    }
+                    row_strs.push(format!("[{}]", row_items.join(", ")));
+                }
+                format!("{}: Matrix = [{}]", name_prefix, row_strs.join(", "))
+            } else {
+                format!("{}: Matrix = zeros({}, {})", name_prefix, rows, cols)
+            }
+        }
+        _ => {
+            let shape_str = shape.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(", ");
+            format!(
+                "{}: Tensor = tensor(shape = [{}], preset = \"{}\")",
+                name_prefix, shape_str, preset
+            )
+        }
+    }
+}
+
+/// Palette code generator for complex PDE Initial and Boundary Value Problems (IBVP).
+pub fn generate_pde_bc_syntax(
+    pde_kind: &str,
+    var_dep: &str,
+    spatial_vars: &[String],
+    time_var: Option<&str>,
+    bc_kind: &str,
+    bcs: &[String],
+    ics: &[String],
+) -> String {
+    let u = var_dep.trim();
+    let spat = if spatial_vars.is_empty() {
+        "x".to_string()
+    } else {
+        spatial_vars.join(", ")
+    };
+    let t_part = time_var.map(|t| format!(", {}", t)).unwrap_or_default();
+
+    let mut parts = Vec::new();
+    // 1. PDE Classification Header
+    parts.push(format!("// PDE Model: {} for {}({}{})", pde_kind, u, spat, t_part));
+
+    // 2. Boundary Conditions
+    if !bcs.is_empty() {
+        for bc in bcs {
+            parts.push(format!("bc: {} | {}", bc_kind, bc));
+        }
+    } else {
+        parts.push(format!("bc: {} | {}(0{}) = 0, {}(L{}) = 0", bc_kind, u, t_part, u, t_part));
+    }
+
+    // 3. Initial Conditions (if time-dependent)
+    if time_var.is_some() {
+        if !ics.is_empty() {
+            for ic in ics {
+                parts.push(format!("ic: {}", ic));
+            }
+        } else {
+            parts.push(format!("ic: {}({}, 0) = f({})", u, spat, spat));
+            if pde_kind.to_lowercase().contains("wave") {
+                parts.push(format!("ic: {}_t({}, 0) = 0", u, spat));
+            }
+        }
+    }
+
+    parts.join("\n")
+}
+
+/// Palette code generator for Parametric CAD & Gear Machinery.
+pub fn generate_gear_cad_syntax(
+    gear_kind: &str,
+    teeth: usize,
+    module_val: f64,
+    pressure_angle: f64,
+    face_width: f64,
+    extra_params: &[(&str, f64)],
+) -> String {
+    let mut args = vec![
+        format!("type = \"{}\"", gear_kind),
+        format!("teeth = {}", teeth),
+        format!("module = {:.2}", module_val),
+        format!("pressure_angle = {:.1}", pressure_angle),
+        format!("face_width = {:.1}", face_width),
+    ];
+    for (k, v) in extra_params {
+        args.push(format!("{} = {:.2}", k, v));
+    }
+    format!("gear!({})", args.join(", "))
+}
+
+/// Palette code generator for Dimensional Analysis across unit systems.
+pub fn generate_dimensional_unit_syntax(
+    var: &str,
+    val: f64,
+    unit_system: &str,
+    l: i32,
+    m: i32,
+    t: i32,
+    i_curr: i32,
+    th: i32,
+    n: i32,
+    j_lum: i32,
+) -> (String, String) {
+    let (u_l, u_m, u_t, u_i, u_th, u_n, u_j) = match unit_system {
+        "Imperial" => ("ft", "lb", "s", "A", "degF", "mol", "cd"),
+        "CGS" => ("cm", "g", "s", "A", "K", "mol", "cd"),
+        "Natural" => ("l_p", "m_p", "t_p", "q_p", "T_p", "mol", "cd"),
+        _ => ("m", "kg", "s", "A", "K", "mol", "cd"),
+    };
+
+    let mut numerators = Vec::new();
+    let mut denominators = Vec::new();
+
+    let push_dim = |arr_num: &mut Vec<String>, arr_den: &mut Vec<String>, name: &str, exp: i32| {
+        if exp > 0 {
+            if exp == 1 {
+                arr_num.push(name.to_string());
+            } else {
+                arr_num.push(format!("{}^{}", name, exp));
+            }
+        } else if exp < 0 {
+            let pos = exp.abs();
+            if pos == 1 {
+                arr_den.push(name.to_string());
+            } else {
+                arr_den.push(format!("{}^{}", name, pos));
+            }
+        }
+    };
+
+    push_dim(&mut numerators, &mut denominators, u_m, m);
+    push_dim(&mut numerators, &mut denominators, u_l, l);
+    push_dim(&mut numerators, &mut denominators, u_t, t);
+    push_dim(&mut numerators, &mut denominators, u_i, i_curr);
+    push_dim(&mut numerators, &mut denominators, u_th, th);
+    push_dim(&mut numerators, &mut denominators, u_n, n);
+    push_dim(&mut numerators, &mut denominators, u_j, j_lum);
+
+    let unit_str = if numerators.is_empty() && denominators.is_empty() {
+        "1".to_string()
+    } else if denominators.is_empty() {
+        numerators.join("·")
+    } else if numerators.is_empty() {
+        format!("1/({})", denominators.join("·"))
+    } else {
+        format!("{}/({})", numerators.join("·"), denominators.join("·"))
+    };
+
+    let clean_unit = unit_str.replace("/(1)", "");
+    let syntax = format!("{} = {:.4} [{}]", var.trim(), val, clean_unit);
+    (clean_unit, syntax)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NotebookSettings {
@@ -579,6 +862,29 @@ pub struct NotebookSettings {
     pub theme: crate::ui::ThemeKind,
     pub workspace_preset: crate::ui::WorkspaceLayoutPreset,
     pub show_cell_line_numbers: bool,
+
+    // Left Panel Features
+    pub left_panel_show_sliders: bool,
+    pub left_panel_show_domains: bool,
+    pub left_panel_show_values: bool,
+    pub left_panel_show_badges: bool,
+
+    // Text Editor Features
+    pub show_editor: bool,
+    pub editor_syntax_highlighting: bool,
+    pub editor_word_wrap: bool,
+    pub editor_alt_scrubbing: bool,
+
+    // Right Panel Features
+    pub right_panel_show_plots: bool,
+    pub right_panel_show_3d: bool,
+    pub right_panel_show_cad: bool,
+    pub right_panel_show_solutions: bool,
+    pub right_panel_compact_mode: bool,
+    pub right_panel_show_inbound_refs: bool,
+
+    // Terminal Features
+    pub terminal_show_timing: bool,
 }
 
 pub fn default_logging_level() -> String {
@@ -609,6 +915,22 @@ impl Default for NotebookSettings {
             theme: crate::ui::ThemeKind::default(),
             workspace_preset: crate::ui::WorkspaceLayoutPreset::default(),
             show_cell_line_numbers: true,
+
+            left_panel_show_sliders: true,
+            left_panel_show_domains: true,
+            left_panel_show_values: true,
+            left_panel_show_badges: true,
+            show_editor: true,
+            editor_syntax_highlighting: true,
+            editor_word_wrap: true,
+            editor_alt_scrubbing: true,
+            right_panel_show_plots: true,
+            right_panel_show_3d: true,
+            right_panel_show_cad: true,
+            right_panel_show_solutions: true,
+            right_panel_compact_mode: false,
+            right_panel_show_inbound_refs: true,
+            terminal_show_timing: true,
         }
     }
 }

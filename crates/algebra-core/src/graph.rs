@@ -131,6 +131,19 @@ impl ExprGraph {
         self.intern(ExprNode::new(domain, ExprKind::Symbol(sym_id)))
     }
 
+    /// Intern a scalar Number directly, inferring the appropriate mathematical domain.
+    pub fn number(&self, n: Number) -> ExprId {
+        let domain = match &n {
+            Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+            Number::Rational(_, _) | Number::BigRational(_) | Number::Scientific { .. } => {
+                Domain::Rationals
+            }
+            Number::Constant(Constant::I) => Domain::Complex,
+            _ => Domain::Reals,
+        };
+        self.intern(ExprNode::new(domain, ExprKind::Number(n)))
+    }
+
     /// Intern an integer scalar.
     pub fn integer(&self, val: i64) -> ExprId {
         self.intern(ExprNode::new(
@@ -139,16 +152,41 @@ impl ExprGraph {
         ))
     }
 
-    /// Intern a rational fraction scalar.
+    /// Intern a rational fraction scalar in reduced form.
     pub fn rational(&self, num: i64, den: i64) -> ExprId {
-        self.intern(ExprNode::new(
-            Domain::Rationals,
-            ExprKind::Number(Number::Rational(num, den)),
-        ))
+        let n = Number::rational(num, den);
+        let domain = match &n {
+            Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+            _ => Domain::Rationals,
+        };
+        self.intern(ExprNode::new(domain, ExprKind::Number(n)))
     }
 
-    /// Intern a float scalar.
+    /// Intern an exact scientific notation scalar: mantissa * 10^exponent.
+    pub fn scientific(&self, mantissa: i64, exponent: i32) -> ExprId {
+        let n = Number::scientific(mantissa, exponent);
+        let domain = match &n {
+            Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+            _ => Domain::Rationals,
+        };
+        self.intern(ExprNode::new(domain, ExprKind::Number(n)))
+    }
+
+    /// Intern a float scalar, decomposing into a lossless exact representation by default.
     pub fn float(&self, val: f64) -> ExprId {
+        let n = Number::from_f64_lossless(val);
+        let domain = match &n {
+            Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+            Number::Rational(_, _) | Number::BigRational(_) | Number::Scientific { .. } => {
+                Domain::Rationals
+            }
+            _ => Domain::Reals,
+        };
+        self.intern(ExprNode::new(domain, ExprKind::Number(n)))
+    }
+
+    /// Intern an explicit lossy float scalar preserving raw IEEE-754 bits.
+    pub fn float_lossy(&self, val: f64) -> ExprId {
         self.intern(ExprNode::new(
             Domain::Reals,
             ExprKind::Number(Number::float(val)),
@@ -164,19 +202,44 @@ impl ExprGraph {
         self.intern(ExprNode::new(domain, ExprKind::Number(Number::Constant(c))))
     }
 
-    /// Add multiple term expressions together with basic zero-term folding.
+    /// Add multiple term expressions together with zero-term folding and lossless constant folding.
     pub fn add<I: IntoIterator<Item = ExprId>>(&self, terms: I) -> ExprId {
         let vec: SmallVec<[ExprId; 4]> = terms.into_iter().collect();
         let mut non_zero: SmallVec<[ExprId; 4]> = SmallVec::new();
+        let mut const_acc: Option<Number> = None;
+
         for &t in &vec {
             let node = self.get(t);
             if let ExprKind::Number(n) = &node.kind {
                 if n.is_zero() {
                     continue;
                 }
+                if n.is_lossless() {
+                    if let Some(acc) = &const_acc {
+                        if let Some(sum) = acc.add_lossless(n) {
+                            const_acc = Some(sum);
+                            continue;
+                        }
+                    } else {
+                        const_acc = Some(n.clone());
+                        continue;
+                    }
+                }
             }
             non_zero.push(t);
         }
+
+        if let Some(acc) = const_acc {
+            if !acc.is_zero() {
+                let domain = match &acc {
+                    Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+                    _ => Domain::Rationals,
+                };
+                let acc_id = self.intern(ExprNode::new(domain, ExprKind::Number(acc)));
+                non_zero.push(acc_id);
+            }
+        }
+
         if non_zero.is_empty() {
             return self.integer(0);
         }
@@ -187,10 +250,12 @@ impl ExprGraph {
         self.intern(ExprNode::new(domain, ExprKind::Add(non_zero)))
     }
 
-    /// Multiply multiple factor expressions together with zero/unity folding.
+    /// Multiply multiple factor expressions together with zero/unity folding and lossless constant folding.
     pub fn mul<I: IntoIterator<Item = ExprId>>(&self, factors: I) -> ExprId {
         let vec: SmallVec<[ExprId; 4]> = factors.into_iter().collect();
         let mut non_one: SmallVec<[ExprId; 4]> = SmallVec::new();
+        let mut const_acc: Option<Number> = None;
+
         for &f in &vec {
             let node = self.get(f);
             if let ExprKind::Number(n) = &node.kind {
@@ -200,9 +265,35 @@ impl ExprGraph {
                 if n.is_one() {
                     continue;
                 }
+                if n.is_lossless() {
+                    if let Some(acc) = &const_acc {
+                        if let Some(prod) = acc.mul_lossless(n) {
+                            const_acc = Some(prod);
+                            continue;
+                        }
+                    } else {
+                        const_acc = Some(n.clone());
+                        continue;
+                    }
+                }
             }
             non_one.push(f);
         }
+
+        if let Some(acc) = const_acc {
+            if acc.is_zero() {
+                return self.integer(0);
+            }
+            if !acc.is_one() {
+                let domain = match &acc {
+                    Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+                    _ => Domain::Rationals,
+                };
+                let acc_id = self.intern(ExprNode::new(domain, ExprKind::Number(acc)));
+                non_one.insert(0, acc_id);
+            }
+        }
+
         if non_one.is_empty() {
             return self.integer(1);
         }
@@ -223,23 +314,46 @@ impl ExprGraph {
     pub fn div(&self, num: ExprId, den: ExprId) -> ExprId {
         let n_node = self.get(num);
         let den_node = self.get(den);
-        if let ExprKind::Number(crate::number::Number::Integer(1)) = &den_node.kind {
-            return num;
+        if let ExprKind::Number(n) = &den_node.kind {
+            if n.is_one() {
+                return num;
+            }
+        }
+        if let (
+            ExprKind::Number(Number::Integer(n)),
+            ExprKind::Number(Number::Integer(d)),
+        ) = (&n_node.kind, &den_node.kind)
+        {
+            if *d != 0 {
+                return self.rational(*n, *d);
+            }
         }
         self.intern(ExprNode::new(n_node.domain, ExprKind::Div(num, den)))
     }
 
     /// Subtract rhs from lhs.
     pub fn sub(&self, lhs: ExprId, rhs: ExprId) -> ExprId {
-        let l_node = self.get(lhs);
-        self.intern(ExprNode::new(l_node.domain, ExprKind::Sub(lhs, rhs)))
+        let neg_rhs = self.neg(rhs);
+        self.add([lhs, neg_rhs])
     }
 
     /// Unary negation of expression.
     pub fn neg(&self, inner: ExprId) -> ExprId {
         let i_node = self.get(inner);
-        if let ExprKind::Number(crate::number::Number::Integer(i)) = &i_node.kind {
-            return self.integer(-i);
+        if let ExprKind::Number(n) = &i_node.kind {
+            match n {
+                Number::Integer(i) => {
+                    if let Some(neg_i) = i.checked_neg() {
+                        return self.integer(neg_i);
+                    }
+                }
+                Number::Rational(num, den) => {
+                    if let Some(neg_num) = num.checked_neg() {
+                        return self.rational(neg_num, *den);
+                    }
+                }
+                _ => {}
+            }
         }
         self.intern(ExprNode::new(i_node.domain, ExprKind::Neg(inner)))
     }

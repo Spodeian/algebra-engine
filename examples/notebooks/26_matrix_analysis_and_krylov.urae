@@ -1,0 +1,15 @@
+# URAE Mathematics Notepad: Matrix Analysis, SVD & Krylov Subspaces
+# Numerical linear algebra: Singular Value Decomposition (SVD), Schur factorization, Arnoldi iterations, and GMRES.
+
+# 1. Matrix Decompositions & Condition Number
+A = [[4.0, 1.0, 2.0], [1.0, 5.0, 3.0], [2.0, 3.0, 6.0]]
+svd_decomp = matrix_svd(A)
+schur_decomp = matrix_schur(A)
+cond_num = matrix_condition_number(A)
+matrix_exponential(A)
+
+# 2. Large Sparse Systems & Krylov Iterations
+# Arnoldi Iteration for Krylov Subspace K_m(A, b)
+b = [1.0, 0.0, 1.0]
+krylov_basis = arnoldi_iteration(A, b, subspace_dim = 3)
+sol_gmres = gmres_solve(A, b, restart = 10, max_iter = 50, tol = 1e-6)

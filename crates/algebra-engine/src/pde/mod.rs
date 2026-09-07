@@ -8,10 +8,12 @@
 
 pub mod fea;
 pub mod numerical;
+pub mod reduction;
 pub mod symbolic;
 
 pub use fea::{
     ElementType, FeaBoundaryCondition, FeaEngine, FeaMesh, FeaSolution, PhysicsDiscipline,
 };
 pub use numerical::{BoundaryCondition, NumericalPdeSolver, PdeGridSolution};
+pub use reduction::PdeTravelingWaveReduction;
 pub use symbolic::{PdeClassification, SymbolicPdeSolver};

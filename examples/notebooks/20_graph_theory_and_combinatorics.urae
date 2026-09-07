@@ -1,0 +1,19 @@
+# URAE Mathematics Notepad: Spectral Graph Theory & Combinatorics
+# Interactive exploration of graph Laplacians, algebraic connectivity, network flow, and chromatic polynomials.
+
+# 1. Graph Construction & Adjacency
+G = graph_from_edges([(1, 2), (2, 3), (3, 4), (4, 1), (1, 3)])
+A = graph_adjacency_matrix(G)
+D = graph_degree_matrix(G)
+
+# 2. Graph Laplacian & Spectral Gap
+# L = D - A, λ₂ > 0 indicates connected graph
+L = graph_laplacian(G)
+spectral_gap = graph_algebraic_connectivity(G)
+graph_cheeger_constant(G)
+
+# 3. Network Flow & Path Optimization
+shortest_path_dijkstra(G, start = 1, end = 4)
+max_flow_edmonds_karp(G, source = 1, sink = 4)
+lambda: Variable
+chromatic_polynomial(G, lambda)

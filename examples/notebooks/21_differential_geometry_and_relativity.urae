@@ -1,0 +1,22 @@
+# URAE Mathematics Notepad: Differential Geometry & General Relativity
+# Exploration of Riemannian metric tensors, Christoffel symbols, Riemann/Ricci tensors, and Schwarzschild geodesics.
+
+r: Variable
+theta: Variable
+phi: Variable
+t: Variable
+M: Parameter = 1.0
+
+# 1. Schwarzschild Spacetime Metric Tensor g_μν
+# ds² = -(1 - 2M/r) dt² + (1 - 2M/r)⁻¹ dr² + r² (dθ² + sin²θ dφ²)
+g = metric_tensor("schwarzschild", coords = [t, r, theta, phi], mass = M)
+
+# 2. Christoffel Symbols of the 2nd Kind
+# Γ^λ_{μν} = (1/2) g^{λσ} (∂_μ g_{νσ} + ∂_ν g_{σμ} - ∂_σ g_{μν})
+Gamma = christoffel_symbols(g)
+
+# 3. Curvature & Geodesic Equations
+Riemann = riemann_tensor(g)
+Ricci = ricci_tensor(g)
+Ricci_scalar = ricci_scalar(g)
+geodesic_orbit(g, initial_r = 10.0, angular_momentum = 3.75)

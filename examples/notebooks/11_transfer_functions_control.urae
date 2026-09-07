@@ -1,0 +1,46 @@
+# URAE Mathematics Notepad: Transfer Functions & Control Engineering
+# Electrical Engineering: Passive RLC filters and Active Sallen-Key Op-Amps
+# Mechanical Engineering: Damped Mass-Spring-Damper system
+# Tooltips provide poles, zeros, natural frequency omega_0, damping ratio zeta, and stability status.
+
+# Component Parameters
+R: Parameter = 1000.0 [ohm]
+L: Parameter = 0.05 [H]
+C: Parameter = 1e-6 [F]
+m: Parameter = 2.5 [kg]
+k_spring: Parameter = 250.0 [N/m]
+c_damper: Parameter = 5.0 [N*s/m]
+
+s: Variable
+t: Variable
+
+# =========================================================================
+# 1. ELECTRICAL ENGINEERING (PASSIVE): Second-Order RLC Low-Pass Filter
+# H_rlc(s) = V_out(s) / V_in(s) = 1 / (L*C*s^2 + R*C*s + 1)
+# =========================================================================
+omega_0_rlc = 1 / sqrt(L * C)
+zeta_rlc = (R / 2) * sqrt(C / L)
+H_rlc(s) = 1.0 / (L * C * s^2 + R * C * s + 1.0)
+
+# Tooltips render poles, zeros and stability automatically
+tf_rlc = transfer_function(H_rlc(s), s)
+bode_plot(tf_rlc, omega_min = 10.0, omega_max = 100000.0)
+pole_zero_map(tf_rlc)
+
+# =========================================================================
+# 2. ELECTRICAL ENGINEERING (ACTIVE): Sallen-Key Active Op-Amp Low-Pass Filter
+# H_opamp(s) = K / (s^2 + (3 - K) * s + 1) where K = 1 + R4/R3
+# =========================================================================
+gain_K: Parameter = 1.586
+H_opamp(s) = gain_K / (s^2 + (3.0 - gain_K) * s + 1.0)
+tf_opamp = transfer_function(H_opamp(s), s)
+step_response(tf_opamp, t_span = [0.0, 10.0])
+
+# =========================================================================
+# 3. MECHANICAL ENGINEERING: Damped Mass-Spring-Damper System
+# m*x''(t) + c*x'(t) + k*x(t) = F(t)
+# G_mech(s) = X(s) / F(s) = 1 / (m*s^2 + c*s + k)
+# =========================================================================
+G_mech(s) = 1.0 / (m * s^2 + c_damper * s + k_spring)
+tf_mech = transfer_function(G_mech(s), s)
+frequency_response(tf_mech)

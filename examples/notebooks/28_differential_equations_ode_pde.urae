@@ -1,0 +1,54 @@
+# URAE Mathematics Notepad: Differential Equations (ODEs, PDEs & Nonlinear Reductions)
+# Demonstrates assembling differential equations, solving characteristic polynomials for roots, deriving analytical solutions, and reducing nonlinear PDEs.
+
+# =========================================================================
+# 1. LINEAR 2ND-ORDER DAMPED HARMONIC OSCILLATOR ODE
+# Governing equation: y''(t) + 2*zeta*omega*y'(t) + omega^2*y(t) = 0
+# =========================================================================
+zeta: Parameter = 0.20
+omega: Parameter = 3.00 [rad/s]
+t: Variable
+{ t in Reals | 0.0 <= t <= 10.0 }
+
+# Assembling the ODE differential expression:
+ode_osc = diff(y, t, 2) + 2 * zeta * omega * diff(y, t, 1) + omega^2 * y
+
+# Setting up the algebraic characteristic equation: r^2 + 2*zeta*omega*r + omega^2 = 0
+# Solving for roots:
+solve r^2 + 2 * zeta * omega * r + omega^2 = 0, r
+
+# Damped natural frequency: omega_d = omega * sqrt(1 - zeta^2)
+omega_d = omega * sqrt(1.0 - zeta^2)
+
+# Assembling the exact analytical response for initial state y(0) = 1.0, y'(0) = 0:
+y_resp(t) = exp(-zeta * omega * t) * (cos(omega_d * t) + (zeta * omega / omega_d) * sin(omega_d * t))
+
+# =========================================================================
+# 2. LINEAR 2ND-ORDER PDE: 1D WAVE EQUATION
+# Governing equation: u_tt - c^2 * u_xx = 0
+# Separation of variables: u(x, t) = X(x) * T(t) => X'' + k^2*X = 0, T'' + (c*k)^2*T = 0
+# =========================================================================
+c_wave: Parameter = 2.0 [m/s]
+L_string: Parameter = 1.0 [m]
+x: Variable
+{ x in Reals | 0.0 <= x <= L_string }
+
+# Mode wavenumber and angular frequency for fundamental harmonic:
+k_mode = 3.14159265 / L_string
+omega_wave = c_wave * k_mode
+
+# Assembled standing wave solution: u(x, t) = sin(k*x) * cos(omega*t)
+u_standing(x) = sin(k_mode * x) * cos(omega_wave * 0.25)
+
+# =========================================================================
+# 3. NONLINEAR PDE: KORTEWEG-DE VRIES (KdV) SOLITON REDUCTION
+# Governing equation: u_t + 6*u*u_x + u_xxx = 0
+# Traveling wave reduction: xi = x - c*t, u(x, t) = phi(xi)
+# Yields: -c*phi' + 6*phi*phi' + phi''' = 0
+# Integrating once: -c*phi + 3*phi^2 + phi'' = 0
+# Multiplying by phi' and integrating: (phi')^2 = c*phi^2 - 2*phi^3
+# =========================================================================
+c_soliton: Parameter = 4.0 [m/s]
+
+# Exact analytical solitary wave solution phi(xi) = (c/2) * sech^2(sqrt(c)/2 * xi):
+soliton(x) = (c_soliton / 2.0) / (cosh(sqrt(c_soliton) / 2.0 * x))^2

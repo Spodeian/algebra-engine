@@ -1,0 +1,18 @@
+# URAE Mathematics Notepad: Statistics, Probability & Bayesian Inference
+# Probabilistic modeling: continuous/discrete distributions, conjugate priors, and Metropolis-Hastings MCMC.
+
+# 1. Continuous & Discrete Distributions
+dist_norm = distribution_normal(mean = 0.0, std = 1.0)
+dist_beta = distribution_beta(alpha = 2.0, beta = 5.0)
+pdf(dist_norm, x = 1.96)
+cdf(dist_norm, x = 1.96)
+
+# 2. Conjugate Beta-Binomial Bayesian Updating
+# Prior Beta(2, 2) + Data (7 heads, 3 tails) -> Posterior Beta(9, 5)
+prior_beta = distribution_beta(alpha = 2.0, beta = 2.0)
+posterior_beta = bayesian_conjugate_update(prior_beta, successes = 7, trials = 10)
+credible_interval(posterior_beta, level = 0.95)
+
+# 3. Markov Chain Monte Carlo (Metropolis-Hastings)
+mcmc_samples = metropolis_hastings(target_log_prob = "-0.5 * theta^2", iterations = 5000, step_size = 0.2)
+mcmc_summary(mcmc_samples)

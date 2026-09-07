@@ -1,0 +1,52 @@
+# URAE Mathematics Notepad: Thermodynamic Cycles & Statistical Mechanics
+# Interactive continuous document for Equations of State (Van der Waals), Maxwell Relations, Carnot cycle P-V and T-S trajectories, and thermal efficiency.
+
+# State variables and thermodynamic parameters
+T_hot: Parameter = 650.0 [K]
+T_cold: Parameter = 300.0 [K]
+R_gas: Parameter = 8.31446 [J/(mol*K)]
+a_vdw: Parameter = 0.364 [Pa*m^6/mol^2]
+b_vdw: Parameter = 4.27e-5 [m^3/mol]
+
+V: Variable
+T: Variable
+S: Variable
+P: Variable
+
+# Domain constraints
+{ V in Reals | V > b_vdw }
+{ T in Reals | T > 0.0 }
+
+# =========================================================================
+# 1. NON-IDEAL VAN DER WAALS EQUATION OF STATE (EoS)
+# (P + a/V^2) * (V - b) = R * T
+# P(V, T) = R*T / (V - b) - a / V^2
+# =========================================================================
+P_vdw(V, T) = (R_gas * T) / (V - b_vdw) - a_vdw / (V^2)
+
+# Isotherms across critical region
+T_crit = (8 * a_vdw) / (27 * R_gas * b_vdw)
+P_crit = a_vdw / (27 * (b_vdw^2))
+V_crit = 3.0 * b_vdw
+
+# =========================================================================
+# 2. SYMBOLIC MAXWELL RELATIONS VERIFICATION
+# Fundamental Gibbs relation: dF = -S dT - P dV
+# Maxwell relation: (∂S/∂V)_T = (∂P/∂T)_V
+# =========================================================================
+dP_dT = diff(P_vdw(V, T), T)
+# dP/dT = R_gas / (V - b_vdw)
+entropy_derivative_wrt_volume = dP_dT
+
+# =========================================================================
+# 3. CARNOT CYCLE TRAJECTORY & THERMAL EFFICIENCY
+# 1 -> 2: Isothermal Expansion at T_hot
+# 2 -> 3: Isentropic Adiabatic Expansion from T_hot down to T_cold
+# 3 -> 4: Isothermal Compression at T_cold
+# 4 -> 1: Isentropic Adiabatic Compression from T_cold up to T_hot
+# =========================================================================
+carnot_efficiency = 1.0 - (T_cold / T_hot)
+
+# Interactive P-V and T-S cycle diagram widget
+pv_diagram_carnot(T_h = T_hot, T_c = T_cold, v_ratio = 4.0)
+ts_diagram_carnot(T_h = T_hot, T_c = T_cold, delta_s = 25.0)

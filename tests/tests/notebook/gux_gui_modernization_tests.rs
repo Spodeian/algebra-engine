@@ -89,13 +89,21 @@ fn test_theme_kind_equality_and_copy() {
 #[test]
 fn test_workspace_state_default() {
     let ws = WorkspaceState::default();
-    assert_eq!(ws.layout_preset, WorkspaceLayoutPreset::FluidNotepad);
+    assert_eq!(ws.layout_preset, WorkspaceLayoutPreset::DualHalves);
     assert_eq!(ws.active_tab, WorkspaceTab::MathDocument);
     assert!(
         !ws.pinned_tabs.is_empty(),
         "Default workspace should have pinned tabs"
     );
     assert!(ws.pinned_tabs.contains(&WorkspaceTab::MathDocument));
+}
+
+#[test]
+fn test_workspace_set_layout_dual_halves() {
+    let mut ws = WorkspaceState::default();
+    ws.set_layout(WorkspaceLayoutPreset::DualHalves);
+    assert_eq!(ws.layout_preset, WorkspaceLayoutPreset::DualHalves);
+    assert_eq!(ws.split_ratio, 0.50);
 }
 
 #[test]
@@ -292,6 +300,7 @@ fn test_symbol_info_card_structure() {
     let card = SymbolInfoCard {
         name: "x".to_string(),
         role: urae_notebook::notebook::SymbolRole::Variable,
+        compound_tags: vec!["Variable".to_string(), "Scalar".to_string()],
         cur_val: std::f64::consts::PI,
         domain_type: "Real".to_string(),
         unit_str: Some("m/s".to_string()),
@@ -302,8 +311,10 @@ fn test_symbol_info_card_structure() {
             unit: "m/s".to_string(),
             magnitude: std::f64::consts::PI,
         }),
+        computation_time_ms: Some(1.23),
     };
     assert_eq!(card.name, "x");
+    assert_eq!(card.compound_tags.len(), 2);
     assert_eq!(card.dependent_lines.len(), 3);
     assert_eq!(card.formula_references.len(), 1);
     assert!(card.unit_str.is_some());

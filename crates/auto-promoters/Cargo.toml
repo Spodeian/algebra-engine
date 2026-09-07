@@ -1,0 +1,17 @@
+[package]
+name = "auto-promoters"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Auto-promoting machine-to-arbitrary-precision integer arithmetic for high-performance CAS."
+
+[dependencies]
+num = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+bnum = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = "0.5"

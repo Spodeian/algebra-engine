@@ -119,17 +119,17 @@ fn test_lagrange_burmann_inversion_and_lambert_w() {
     // c_1 = 1/1
     assert_eq!(
         graph.get(w_res.coefficients[0]).kind,
-        algebra_core::ExprKind::Number(algebra_core::Number::Rational(1, 1))
+        algebra_core::ExprKind::Number(algebra_core::Number::rational(1, 1))
     );
     // c_2 = -1/1
     assert_eq!(
         graph.get(w_res.coefficients[1]).kind,
-        algebra_core::ExprKind::Number(algebra_core::Number::Rational(-1, 1))
+        algebra_core::ExprKind::Number(algebra_core::Number::rational(-1, 1))
     );
     // c_3 = 3/2 (represented as 3/2)
     assert_eq!(
         graph.get(w_res.coefficients[2]).kind,
-        algebra_core::ExprKind::Number(algebra_core::Number::Rational(3, 2))
+        algebra_core::ExprKind::Number(algebra_core::Number::rational(3, 2))
     );
 
     // Kepler series: E(M, e) = M + e sin(M) + e^2/2 sin(2M) + ...

@@ -1,15 +1,36 @@
-# URAE Mathematics Notepad: Multiphysics Finite Elements & Neural ODEs
-# Interactive notebook for 2D thermal/structural FEM, Symplectic Yoshida integration, and Continuous Neural ODEs.
+# URAE Mathematics Notepad: Multiphysics Poisson Heat Equation & Conduction
+# Demonstrates assembling the heat conduction PDE, integrating twice, solving boundary value systems, and finding peak temperatures.
 
-# 2D Finite Element Mesh generation on unit square [0, 1] x [0, 1]
-mesh_2d(grid_x = 10, grid_y = 10, element_type = Tri3)
+# 1. Thermal & Geometric Parameters
+k_thermal: Parameter = 45.0 [W/(m*K)]
+Q_source: Parameter = 50000.0 [W/m^3]
+L_rod: Parameter = 0.20 [m]
+T_left: Parameter = 293.15 [K]
+T_right: Parameter = 350.0 [K]
 
-# Multiphysics Poisson Heat Equation: -k Laplacian(T) = Q
-poisson_solver(mesh = "grid_10x10", conductivity = 45.0, heat_source = 1000.0)
+x: Variable
+{ x in Reals | 0.0 <= x <= L_rod }
 
-# Symplectic 4th-Order Yoshida Integrator for Hamiltonian Systems
-# H(q, p) = 1/2 p^2 + 1/2 q^2
-symplectic_yoshida(q0 = 1.0, p0 = 0.0, dt = 0.01, steps = 1000)
+# 2. Assembling the Poisson Heat Conduction Equation
+# Governing PDE: -k * d^2 T / dx^2 = Q
+# Integrating twice: T(x) = -(Q / (2*k)) * x^2 + C1 * x + C2
+# Boundary condition 1: T(0) = T_left => C2 = T_left
+# Boundary condition 2: T(L) = T_right => C1 * L - (Q / (2*k)) * L^2 + T_left = T_right
 
-# Continuous Neural ODE with Adjoint Sensitivity
-neural_ode_forward(t_span = [0.0, 1.0], state0 = [1.0, 0.5])
+# Solving for integration constant C1:
+solve C1 * L_rod - (Q_source / (2.0 * k_thermal)) * L_rod^2 + T_left = T_right, C1
+
+# Exact analytical value for C1:
+C1_val = (T_right - T_left) / L_rod + (Q_source * L_rod) / (2.0 * k_thermal)
+
+# 3. Assembled Exact Temperature Profile T(x)
+T_profile(x) = T_left + C1_val * x - (Q_source / (2.0 * k_thermal)) * x^2
+
+# 4. Finding Peak Temperature Location dT/dx = 0
+solve C1_val - (Q_source / k_thermal) * x = 0, x
+x_peak = (C1_val * k_thermal) / Q_source
+T_max = T_profile(x_peak)
+
+# 5. Heat Flux at Boundaries: q = -k * dT/dx
+q_left = -k_thermal * C1_val
+q_right = -k_thermal * (C1_val - (Q_source * L_rod) / k_thermal)

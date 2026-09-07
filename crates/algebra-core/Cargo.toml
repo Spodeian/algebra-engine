@@ -12,9 +12,11 @@ description = "Core expression graph DAG, symbols, intervals, numbers, parser, a
 workspace = true
 
 [dependencies]
+auto-promoters.workspace = true
 bnum.workspace = true
-num.workspace = true
-num-rational.workspace = true
+num = { workspace = true, features = ["serde"] }
+num-bigint = { workspace = true, features = ["serde"] }
+num-rational = { workspace = true, features = ["serde"] }
 num-traits.workspace = true
 dashmap.workspace = true
 rayon.workspace = true

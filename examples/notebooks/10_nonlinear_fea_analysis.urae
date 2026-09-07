@@ -1,0 +1,49 @@
+# URAE Mathematics Notepad: Non-Linear Finite Element Analysis & Large Deformations
+# Part 1: Symbolic Hyperelasticity closed-form solutions
+# Part 2: Numerical Newton-Raphson tangent stiffness solver and 3D stress field visualization
+
+# Material and geometric parameters
+E: Parameter = 210000.0 [MPa]
+nu: Parameter = 0.30
+A: Parameter = 100.0 [mm^2]
+L: Parameter = 1000.0 [mm]
+F_load: Parameter = 15000.0 [N]
+alpha_nl: Parameter = 0.002 [mm^-1]
+
+x: Variable
+{ x in Reals | 0.0 <= x <= L }
+
+# =========================================================================
+# PART 1: EXACT CLOSED-FORM SYMBOLIC SOLUTION (Non-Linear 1D Hyperelastic Bar)
+# Strain energy density with quadratic non-linear hardening:
+# W(epsilon) = 1/2 * E * epsilon^2 + 1/3 * E * alpha * epsilon^3
+# =========================================================================
+u_sym(x) = (F_load / (A * E)) * x * (1.0 - 0.5 * alpha_nl * (F_load / (A * E)) * x)
+eps_sym(x) = diff(u_sym(x), x)
+sigma_sym(x) = E * (eps_sym(x) + alpha_nl * (eps_sym(x))^2)
+
+# Symbolic tip deflection at x = L:
+u_tip = u_sym(L)
+sigma_max_symbolic = sigma_sym(0.0)
+
+# =========================================================================
+# PART 2: NUMERICAL FINITE ELEMENT NEWTON-RAPHSON ASSEMBLY
+# Residual: R(u) = F_ext - F_int(u) = 0
+# Tangent update: K_tan(u) * delta_u = R(u)
+# =========================================================================
+mesh_beam = mesh_3d_beam(length = 200.0, height = 25.0, depth = 15.0, elements = 216)
+bc_fixed = boundary_condition_dirichlet(face = "x_min", dof = [1, 1, 1], value = [0.0, 0.0, 0.0])
+bc_traction = boundary_condition_neumann(face = "x_max", dof = [0, 1, 0], force_total = F_load)
+
+# Solve with non-linear Newton-Raphson iterations
+fea_solution = solve_nonlinear_fea(
+    mesh = mesh_beam,
+    youngs_modulus = E,
+    poisson_ratio = nu,
+    yield_stress = 355.0,
+    iterations = 8,
+    tolerance = 1e-6
+)
+
+# Render 3D stress viewport widget
+viewport_3d_stress(fea_solution, colormap = "Viridis", scale_factor = 2.5)

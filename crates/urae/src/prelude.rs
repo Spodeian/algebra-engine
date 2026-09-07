@@ -30,6 +30,8 @@ pub use algebra_core::{
     vm::{BytecodeProgram, BytecodeVM, Instruction, VmCompiler, VmError},
 };
 
+pub use auto_promoters::uint::Uint;
+
 pub use algebra_engine::{
     analysis::{
         ClassifiedZero, CriticalPoint1D, CriticalPointKind, CriticalPointND, FunctionAnalyzer,

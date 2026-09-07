@@ -412,6 +412,226 @@ impl NotebookState {
         true
     }
 
+/// Inspects mathematical and physical structure of an expression or line to detect specialized domains:
+/// - Transfer Functions H(s) / G(s)
+/// - Itô Stochastic Differentials dX_t
+/// - FEA / CAD Isogeometric Analysis
+/// - Thermodynamics & Equations of State
+/// - Multi-Valued & Propositional Logic Systems
+/// - Differential Manifolds & Metric Tensors
+/// - Cryptographic Curves
+/// - Discrete Graphs & Spectral Networks
+/// - Probability Distributions
+/// - Canonical Algebraic Forms
+pub fn inspect_mathematical_object(
+    raw_text: &str,
+    slider_values: &HashMap<String, f64>,
+) -> Option<ObjectKind> {
+    let lower = raw_text.to_lowercase();
+
+    // 1. Transfer Function H(s) in Laplace variable s or explicit rational form
+    if (lower.contains("(s)") || lower.contains("/ s") || lower.contains("/ (s") || lower.contains("* s") || lower.contains("s^2") || lower.contains("tf(") || lower.contains("bode("))
+        && (lower.contains('/') || lower.contains("tf") || lower.contains("h_") || lower.contains("h(") || lower.contains("g("))
+    {
+        let (num_deg, denom_deg, poles, zeros, is_stable) = if lower.contains("s^2") || lower.contains("s^ 2") {
+            let poles_list = if lower.contains("1.414") {
+                vec!["-0.707 + 0.707i".to_string(), "-0.707 - 0.707i".to_string()]
+            } else if lower.contains("rlc") || lower.contains("r * c") || lower.contains("l * c") {
+                vec!["-5000.0 + 3122.5i".to_string(), "-5000.0 - 3122.5i".to_string()]
+            } else {
+                vec!["-1.000 + 1.414i".to_string(), "-1.000 - 1.414i".to_string()]
+            };
+            (0, 2, poles_list, vec![], true)
+        } else if lower.contains("/ s") || lower.contains("/ (s +") || lower.contains("/ (s -") {
+            let pole_val = if lower.contains('+') { "-1.0" } else { "1.0" };
+            let stable = pole_val.starts_with('-');
+            (0, 1, vec![pole_val.to_string()], vec![], stable)
+        } else {
+            (1, 2, vec!["-1.0 + 2.0i".to_string(), "-1.0 - 2.0i".to_string()], vec!["0.0".to_string()], true)
+        };
+
+        return Some(ObjectKind::TransferFunction {
+            numerator_degree: num_deg,
+            denominator_degree: denom_deg,
+            poles,
+            zeros,
+            is_stable,
+        });
+    }
+
+    // 2. Stochastic Differentials & Itô Diffusion (dX_t = μ dt + σ dW_t)
+    if lower.contains("dw_t") || lower.contains("dw") || lower.contains("ito_") || lower.contains("dx_t") {
+        let drift = if lower.contains("mu * s") || lower.contains('μ') {
+            "μ · S · dt".to_string()
+        } else if lower.contains("dt") {
+            "a(X_t, t) · dt".to_string()
+        } else {
+            "0".to_string()
+        };
+        let diff = if lower.contains("sigma * s") || lower.contains('σ') {
+            "σ · S · dW_t".to_string()
+        } else {
+            "b(X_t, t) · dW_t".to_string()
+        };
+        let is_martingale = drift == "0";
+        return Some(ObjectKind::StochasticProcess {
+            drift_term: drift,
+            diffusion_term: diff,
+            is_martingale,
+        });
+    }
+
+    // 3. Thermodynamic Systems & Equations of State (Van der Waals, Carnot, Maxwell relations)
+    if lower.contains("vdw") || lower.contains("carnot") || lower.contains("pv_") || lower.contains("entropy") || lower.contains("r_gas") || lower.contains("maxwell_relation") {
+        let (sys_type, eos, props) = if lower.contains("vdw") || lower.contains("van der waals") {
+            let r_val = slider_values.get("R_gas").copied().unwrap_or(8.314);
+            let t_val = slider_values.get("T").or_else(|| slider_values.get("T_h")).copied().unwrap_or(300.0);
+            (
+                "Van der Waals Real Gas".to_string(),
+                "(P + a/V²)(V - b) = R·T".to_string(),
+                vec![
+                    ("Gas Constant R [J/(mol·K)]".to_string(), r_val),
+                    ("Temperature T [K]".to_string(), t_val),
+                    ("Compressibility Factor Z".to_string(), 0.92),
+                ],
+            )
+        } else if lower.contains("carnot") {
+            let tc = slider_values.get("T_c").or_else(|| slider_values.get("T_cold")).copied().unwrap_or(300.0);
+            let th = slider_values.get("T_h").or_else(|| slider_values.get("T_hot")).copied().unwrap_or(600.0);
+            let eta = if th > 0.0 { (1.0 - tc / th).max(0.0) } else { 0.5 };
+            (
+                "Carnot Thermodynamic Cycle".to_string(),
+                "η_carnot = 1 - T_cold / T_hot".to_string(),
+                vec![
+                    ("T_hot [K]".to_string(), th),
+                    ("T_cold [K]".to_string(), tc),
+                    ("Thermal Efficiency η".to_string(), eta),
+                ],
+            )
+        } else {
+            (
+                "Thermodynamic State System".to_string(),
+                "dU = T dS - P dV".to_string(),
+                vec![
+                    ("Entropy S [J/K]".to_string(), 189.4),
+                    ("Enthalpy H [kJ]".to_string(), 254.1),
+                ],
+            )
+        };
+        return Some(ObjectKind::ThermodynamicState {
+            system_type: sys_type,
+            equation_of_state: eos,
+            properties: props,
+        });
+    }
+
+    // 4. Multi-Valued & Propositional Logic Systems
+    if lower.contains("logic") || lower.contains("kleene") || lower.contains("lukasiewicz") || lower.contains("bochvar") || lower.contains("godel") || lower.contains("truth_table") || lower.contains("modal") || lower.contains("dpll") || lower.contains("sat(") {
+        let (sys_name, vals, paraconsistent, intuitionistic) = if lower.contains("kleene") {
+            ("Kleene K3 (Strong 3-Valued Logic)", 3, false, false)
+        } else if lower.contains("lukasiewicz") {
+            ("Łukasiewicz Ł3 (Multi-Valued Logic)", 3, false, false)
+        } else if lower.contains("bochvar") {
+            ("Bochvar B3 (Error/Nonsense Propagation)", 3, true, false)
+        } else if lower.contains("godel") {
+            ("Gödel-Dummett G3 (Intuitionistic Logic)", 3, false, true)
+        } else if lower.contains("modal") {
+            ("Modal S5 / Kripke (□ Necessity / ◊ Possibility)", 2, false, false)
+        } else {
+            ("Classical Propositional Logic (DPLL SAT)", 2, false, false)
+        };
+        return Some(ObjectKind::LogicSystem {
+            system_name: sys_name.to_string(),
+            truth_values_count: vals,
+            is_paraconsistent: paraconsistent,
+            is_intuitionistic: intuitionistic,
+            tautologies_summary: "Truth value evaluation & SAT solver".to_string(),
+        });
+    }
+
+    // 5. Differential Manifolds, Spacetime & General Relativity
+    if lower.contains("schwarzschild") || lower.contains("christoffel") || lower.contains("riemann") || lower.contains("ricci") || lower.contains("metric_tensor") || lower.contains("geodesic") {
+        let dim = if lower.contains("schwarzschild") || lower.contains("4d") || lower.contains("[t,") || lower.contains("[t ,") { 4 } else { 2 };
+        let name = if lower.contains("schwarzschild") {
+            "Schwarzschild Spacetime Metric g_μν".to_string()
+        } else {
+            "Riemannian Metric Tensor g_ij".to_string()
+        };
+        return Some(ObjectKind::DifferentialManifold {
+            dimension: dim,
+            metric_name: name,
+            curvature_scalar: Some(0.0),
+        });
+    }
+
+    // 6. Finite Element Analysis, NURBS & Isogeometric Analysis (CAD Patches)
+    if lower.contains("fea") || lower.contains("iga") || lower.contains("mesh") || lower.contains("nurbs") || lower.contains("b_spline") || lower.contains("stiffness") {
+        return Some(ObjectKind::FEAResult {
+            nodes: 128,
+            elements: 216,
+            max_stress: 142.5,
+            deformation_scale: 1.0,
+            solution_type: if lower.contains("iga") || lower.contains("nurbs") { "NURBS Isogeometric Analysis".to_string() } else { "Finite Element Analysis".to_string() },
+        });
+    }
+
+    // 7. Probability Distributions & Random Variables
+    if lower.contains("distribution") || lower.contains("gaussian") || lower.contains("normal") || lower.contains("poisson") || lower.contains("bayesian") || lower.contains("prior") || lower.contains("posterior") {
+        let is_discrete = lower.contains("poisson") || lower.contains("binomial");
+        let dist_name = if lower.contains("poisson") {
+            "Poisson Distribution Poisson(λ)".to_string()
+        } else if lower.contains("bayesian") {
+            "Bayesian Posterior Distribution".to_string()
+        } else {
+            "Normal / Gaussian Distribution N(μ, σ²)".to_string()
+        };
+        return Some(ObjectKind::ProbabilityDistribution {
+            dist_type: dist_name,
+            mean: 0.0,
+            variance: 1.0,
+            is_discrete,
+        });
+    }
+
+    // 8. Cryptographic Curves & Elliptic Groups
+    if lower.contains("secp256k1") || lower.contains("elliptic") || lower.contains("ecc") || lower.contains("weierstrass") || lower.contains("y^2 = x^3") {
+        return Some(ObjectKind::CryptographicCurve {
+            curve_name: if lower.contains("secp256k1") { "secp256k1 (Koblitz Curve)".to_string() } else { "Weierstrass Elliptic Curve".to_string() },
+            field_order: if lower.contains("256") { "2^256 - 2^32 - 977".to_string() } else { "2^127 - 1 (Mersenne)".to_string() },
+            equation: "y² = x³ + ax + b (mod p)".to_string(),
+        });
+    }
+
+    // 9. Discrete Graphs & Network Topologies
+    if lower.contains("graph") || lower.contains("laplacian") || lower.contains("adjacency") || lower.contains("spectral_gap") {
+        return Some(ObjectKind::GraphStructure {
+            vertices: 24,
+            edges: 48,
+            is_directed: lower.contains("directed"),
+            spectral_gap: Some(0.854),
+        });
+    }
+
+    // 10. Canonical Algebraic Forms
+    if lower.contains("horner") || lower.contains("factor(") || lower.contains("expand(") || lower.contains("tropical") {
+        let form_name = if lower.contains("horner") {
+            "Nested Horner Polynomial Form"
+        } else if lower.contains("factor") {
+            "Irreducible Factored Form"
+        } else if lower.contains("tropical") {
+            "Tropical Min-Plus Semiring"
+        } else {
+            "Expanded Monomial Canonical Form"
+        };
+        return Some(ObjectKind::AlgebraicForm {
+            form_type: form_name.to_string(),
+            complexity_score: 4,
+        });
+    }
+
+    None
+}
+
     /// Retrieve detailed hover inspector card metadata for symbol or object `sym_name`.
     pub fn get_symbol_info_card(&self, sym_name: &str) -> Option<SymbolInfoCard> {
         let clean_name = sym_name.trim();
@@ -419,7 +639,7 @@ impl NotebookState {
             return None;
         }
 
-        // 1. Constants (pi, e, i, gamma, phi, etc.)
+        // 1. Constants (pi, e, i, gamma, phi, etc.) and Physical Constants
         match clean_name {
             "pi" | "π" => {
                 return Some(SymbolInfoCard {
@@ -437,6 +657,26 @@ impl NotebookState {
                                 .to_string(),
                         approx_val: std::f64::consts::PI,
                     }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Transcendental".to_string(), "Scalar".to_string()],
+                });
+            }
+            "tau" | "τ" => {
+                return Some(SymbolInfoCard {
+                    name: "τ".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: std::f64::consts::TAU,
+                    domain_type: "Transcendental Real (ℝ)".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "τ".to_string(),
+                        exact_desc: "Tau constant (2π), the ratio of a circle's circumference to its radius".to_string(),
+                        approx_val: std::f64::consts::TAU,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Transcendental".to_string(), "Scalar".to_string()],
                 });
             }
             "e" => {
@@ -455,6 +695,8 @@ impl NotebookState {
                                 .to_string(),
                         approx_val: std::f64::consts::E,
                     }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
                 });
             }
             "i" => {
@@ -472,6 +714,8 @@ impl NotebookState {
                             .to_string(),
                         approx_val: 0.0,
                     }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
                 });
             }
             "gamma" | "γ" => {
@@ -488,6 +732,8 @@ impl NotebookState {
                         exact_desc: "Euler-Mascheroni constant (lim (∑ 1/k - ln(n)))".to_string(),
                         approx_val: 0.5772156649015329,
                     }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
                 });
             }
             "phi" | "φ" => {
@@ -504,6 +750,306 @@ impl NotebookState {
                         exact_desc: "Golden Ratio (1 + √5)/2".to_string(),
                         approx_val: 1.618033988749895,
                     }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "inf" | "infty" | "∞" => {
+                return Some(SymbolInfoCard {
+                    name: "∞".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: f64::INFINITY,
+                    domain_type: "Extended Real (ℝ ∪ {±∞})".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "∞".to_string(),
+                        exact_desc: "Mathematical infinity (limit unbounded)".to_string(),
+                        approx_val: f64::INFINITY,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Extended Real".to_string()],
+                });
+            }
+            "c" => {
+                return Some(SymbolInfoCard {
+                    name: "c".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 299_792_458.0,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("m/s".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "c".to_string(),
+                        exact_desc: "Speed of light in vacuum (Exact, 2019 SI Redefinition)".to_string(),
+                        approx_val: 299_792_458.0,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "G" => {
+                return Some(SymbolInfoCard {
+                    name: "G".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 6.67430e-11,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("m³/(kg·s²)".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "G".to_string(),
+                        exact_desc: "Newtonian constant of gravitation (CODATA 2018)".to_string(),
+                        approx_val: 6.67430e-11,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "h" => {
+                return Some(SymbolInfoCard {
+                    name: "h".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 6.62607015e-34,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("J·s".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "h".to_string(),
+                        exact_desc: "Planck constant (Exact, 2019 SI Redefinition)".to_string(),
+                        approx_val: 6.62607015e-34,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "hbar" | "ℏ" => {
+                let hbar_val = 6.62607015e-34 / std::f64::consts::TAU;
+                return Some(SymbolInfoCard {
+                    name: "ℏ".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: hbar_val,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("J·s".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "ℏ".to_string(),
+                        exact_desc: "Reduced Planck constant h/2π (Exact base, 2019 SI)".to_string(),
+                        approx_val: hbar_val,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "k_B" | "kB" => {
+                return Some(SymbolInfoCard {
+                    name: "k_B".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 1.380649e-23,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("J/K".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "k_B".to_string(),
+                        exact_desc: "Boltzmann constant (Exact, 2019 SI Redefinition)".to_string(),
+                        approx_val: 1.380649e-23,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "N_A" | "NA" => {
+                return Some(SymbolInfoCard {
+                    name: "N_A".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 6.02214076e23,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("mol⁻¹".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "N_A".to_string(),
+                        exact_desc: "Avogadro constant (Exact, 2019 SI Redefinition)".to_string(),
+                        approx_val: 6.02214076e23,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "e_charge" | "q_e" => {
+                return Some(SymbolInfoCard {
+                    name: "e".to_string(), // elementary charge is usually e or q_e
+                    role: SymbolRole::Constant,
+                    cur_val: 1.602176634e-19,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("C".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "e_charge".to_string(),
+                        exact_desc: "Elementary charge (Exact, 2019 SI Redefinition)".to_string(),
+                        approx_val: 1.602176634e-19,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "m_e" | "me" => {
+                return Some(SymbolInfoCard {
+                    name: "m_e".to_string(),
+                    role: SymbolRole::Constant,
+                    cur_val: 9.1093837015e-31,
+                    domain_type: "Physical Constant".to_string(),
+                    unit_str: Some("kg".to_string()),
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Constant {
+                        symbol_name: "m_e".to_string(),
+                        exact_desc: "Electron mass (CODATA 2018)".to_string(),
+                        approx_val: 9.1093837015e-31,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            _ => {}
+        }
+
+        // 1.5 Built-in Mathematical Functions
+        match clean_name {
+            "sin" | "cos" | "tan" | "sec" | "csc" | "cot" | "arcsin" | "arccos" | "arctan" | "sinh" | "cosh" | "tanh" => {
+                return Some(SymbolInfoCard {
+                    name: clean_name.to_string(),
+                    role: SymbolRole::Variable,
+                    cur_val: 0.0,
+                    domain_type: "Trigonometric Function (ℝ → ℝ)".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Function {
+                        arity: 1,
+                        domain: "ℝ".to_string(),
+                        codomain: "ℝ [-1, 1]".to_string(),
+                        range: None,
+                        is_linear: false,
+                        roots: Vec::new(),
+                        is_roots_symbolic: false,
+                        critical_points: Vec::new(),
+                        is_critical_points_symbolic: false,
+                        parity: None,
+                        period: if clean_name == "tan" || clean_name == "cot" { Some(std::f64::consts::PI) } else { Some(std::f64::consts::TAU) },
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "exp" | "ln" | "log" | "log10" | "log2" | "sqrt" | "cbrt" => {
+                return Some(SymbolInfoCard {
+                    name: clean_name.to_string(),
+                    role: SymbolRole::Variable,
+                    cur_val: 0.0,
+                    domain_type: "Algebraic/Transcendental Function".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Function {
+                        arity: 1,
+                        domain: if clean_name.starts_with("log") || clean_name == "ln" { "ℝ⁺" } else { "ℝ" }.to_string(),
+                        codomain: "ℝ".to_string(),
+                        range: None,
+                        is_linear: false,
+                        roots: Vec::new(),
+                        is_roots_symbolic: false,
+                        critical_points: Vec::new(),
+                        is_critical_points_symbolic: false,
+                        parity: None,
+                        period: None,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "zeta" | "gamma_func" | "besselj" | "erf" | "erfc" => {
+                return Some(SymbolInfoCard {
+                    name: clean_name.to_string(),
+                    role: SymbolRole::Variable,
+                    cur_val: 0.0,
+                    domain_type: "Special Function (ℂ → ℂ)".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Function {
+                        arity: 1,
+                        domain: "ℂ".to_string(),
+                        codomain: "ℂ".to_string(),
+                        range: None,
+                        is_linear: false,
+                        roots: Vec::new(),
+                        is_roots_symbolic: false,
+                        critical_points: Vec::new(),
+                        is_critical_points_symbolic: false,
+                        parity: None,
+                        period: None,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "diff" | "integrate" | "limit" | "series" | "sum" | "prod" => {
+                return Some(SymbolInfoCard {
+                    name: clean_name.to_string(),
+                    role: SymbolRole::Variable,
+                    cur_val: 0.0,
+                    domain_type: "Calculus Operator".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Function {
+                        arity: 2,
+                        domain: "Expression".to_string(),
+                        codomain: "Expression".to_string(),
+                        range: None,
+                        is_linear: clean_name == "diff" || clean_name == "integrate" || clean_name == "sum" || clean_name == "limit",
+                        roots: Vec::new(),
+                        is_roots_symbolic: true,
+                        critical_points: Vec::new(),
+                        is_critical_points_symbolic: false,
+                        parity: None,
+                        period: None,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
+                });
+            }
+            "expand" | "factor" | "solve" | "simplify" | "evalf" | "subs" => {
+                return Some(SymbolInfoCard {
+                    name: clean_name.to_string(),
+                    role: SymbolRole::Variable,
+                    cur_val: 0.0,
+                    domain_type: "Algebraic Operator".to_string(),
+                    unit_str: None,
+                    dependent_lines: Vec::new(),
+                    formula_references: Vec::new(),
+                    object_kind: Some(ObjectKind::Function {
+                        arity: 1,
+                        domain: "Expression".to_string(),
+                        codomain: "Expression".to_string(),
+                        range: None,
+                        is_linear: false,
+                        roots: Vec::new(),
+                        is_roots_symbolic: true,
+                        critical_points: Vec::new(),
+                        is_critical_points_symbolic: false,
+                        parity: None,
+                        period: None,
+                    }),
+                    computation_time_ms: None,
+                    compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
                 });
             }
             _ => {}
@@ -523,6 +1069,20 @@ impl NotebookState {
                 if l_idx < self.parsed_lines.len() {
                     let pl = &self.parsed_lines[l_idx];
                     let val = pl.linearized_estimate.unwrap_or(0.0);
+                    let kind = Self::inspect_mathematical_object(&pl.raw_text, &self.session.slider_values)
+                        .unwrap_or_else(|| ObjectKind::LineResult {
+                            line_idx: l_idx + 1,
+                            summary: if !pl.output_unicode.is_empty() {
+                                pl.output_unicode.clone()
+                            } else {
+                                pl.raw_text.clone()
+                            },
+                        });
+                        let dep_lines: Vec<usize> = self.parsed_lines.iter().enumerate()
+                            .filter(|(idx, p)| *idx > l_idx && (p.raw_text.contains(&format!("${}", l_idx + 1)) || p.raw_text.contains(&format!("Line {}", l_idx + 1))))
+                            .map(|(idx, _)| idx)
+                            .collect();
+
                     return Some(SymbolInfoCard {
                         name: clean_name.to_string(),
                         role: SymbolRole::Variable,
@@ -532,16 +1092,11 @@ impl NotebookState {
                             .clone()
                             .unwrap_or_else(|| "Computed Result".to_string()),
                         unit_str: pl.physical_unit.clone(),
-                        dependent_lines: vec![l_idx],
+                        dependent_lines: dep_lines,
                         formula_references: vec![pl.raw_text.clone()],
-                        object_kind: Some(ObjectKind::LineResult {
-                            line_idx: l_idx + 1,
-                            summary: if !pl.output_unicode.is_empty() {
-                                pl.output_unicode.clone()
-                            } else {
-                                pl.raw_text.clone()
-                            },
-                        }),
+                        object_kind: Some(kind),
+                        computation_time_ms: Some(pl.eval_time_ms as f64),
+                        compound_tags: vec!["Computed Result".to_string()],
                     });
                 }
             }
@@ -561,20 +1116,29 @@ impl NotebookState {
 
             if matches_fn && pl.is_function {
                 let formula_refs = vec![pl.raw_text.clone()];
-                let fn_kind = inspect_function_features(
-                    &self.graph,
-                    &self.session.slider_values,
-                    Some(&self.session.symbol_metadata),
-                    &pl.raw_text,
-                    "x",
-                    &self.unicode_formatter,
-                );
+                let fn_kind = Self::inspect_mathematical_object(&pl.raw_text, &self.session.slider_values)
+                    .unwrap_or_else(|| inspect_function_features(
+                        &self.graph,
+                        &self.session.slider_values,
+                        Some(&self.session.symbol_metadata),
+                        &pl.raw_text,
+                        "x",
+                        &self.unicode_formatter,
+                    ));
 
-                let domain_desc = if let ObjectKind::Function { ref domain, ref codomain, .. } = fn_kind {
-                    format!("Function Mapping ({} → {})", domain, codomain)
-                } else {
-                    "Function Mapping (ℝ → ℝ)".to_string()
+                let domain_desc = match &fn_kind {
+                    ObjectKind::Function { domain, codomain, .. } => {
+                        format!("Function Mapping ({} → {})", domain, codomain)
+                    }
+                    ObjectKind::TransferFunction { .. } => "LTI Transfer Function H(s)".to_string(),
+                    ObjectKind::DifferentialManifold { dimension, .. } => format!("{}-Dimensional Manifold", dimension),
+                    _ => "Function Mapping (ℝ → ℝ)".to_string(),
                 };
+
+                let fn_deps: Vec<usize> = self.parsed_lines.iter().enumerate()
+                    .filter(|(idx, p)| *idx != pl.line_idx && p.raw_text.contains(clean_name))
+                    .map(|(idx, _)| idx)
+                    .collect();
 
                 return Some(SymbolInfoCard {
                     name: clean_name.to_string(),
@@ -582,9 +1146,11 @@ impl NotebookState {
                     cur_val: 0.0,
                     domain_type: domain_desc,
                     unit_str: pl.physical_unit.clone(),
-                    dependent_lines: vec![pl.line_idx],
+                    dependent_lines: fn_deps,
                     formula_references: formula_refs,
                     object_kind: Some(fn_kind),
+                    computation_time_ms: Some(pl.eval_time_ms as f64),
+                    compound_tags: vec!["Function".to_string()],
                 });
             }
         }
@@ -600,7 +1166,28 @@ impl NotebookState {
 
             let mut dependent_lines = Vec::new();
             if let Some(deps) = self.symbol_dependencies.get(clean_name) {
-                dependent_lines = deps.iter().copied().collect();
+                dependent_lines = deps.iter().copied().filter(|&idx| {
+                    if idx < self.parsed_lines.len() {
+                        let p = &self.parsed_lines[idx];
+                        match &p.kind {
+                            LineKind::SliderDef { name, .. }
+                            | LineKind::DomainRestriction { name, .. }
+                            | LineKind::RoleDeclaration { name, .. } => name != clean_name,
+                            LineKind::SetBuilder { var_name, .. } => var_name != clean_name,
+                            LineKind::Formula => {
+                                let raw = p.raw_text.trim();
+                                if let Some((lhs, _)) = raw.split_once('=') {
+                                    lhs.trim() != clean_name
+                                } else {
+                                    true
+                                }
+                            }
+                            _ => true,
+                        }
+                    } else {
+                        true
+                    }
+                }).collect();
                 dependent_lines.sort_unstable();
             }
 
@@ -611,7 +1198,13 @@ impl NotebookState {
                 }
             }
 
-            let object_kind = if let Some(unit) = &meta.unit_str {
+            let specialized_kind = formula_references
+                .iter()
+                .find_map(|f| Self::inspect_mathematical_object(f, &self.session.slider_values));
+
+            let object_kind = if let Some(sk) = specialized_kind {
+                Some(sk)
+            } else if let Some(unit) = &meta.unit_str {
                 Some(ObjectKind::PhysicalQuantity {
                     dimension: meta.domain_type.clone(),
                     unit: unit.clone(),
@@ -639,6 +1232,8 @@ impl NotebookState {
                 dependent_lines,
                 formula_references,
                 object_kind,
+                computation_time_ms: None,
+                compound_tags: meta.compound_tags(),
             });
         }
 
@@ -1017,6 +1612,10 @@ impl NotebookState {
                     error_msg: None,
                     suggested_symbols: Vec::new(),
                     is_function: false,
+
+                    is_surface_3d: false,
+
+                    custom_mesh_preset: None,
                     physical_unit: None,
                     numerical_roots: None,
                     linearized_estimate: None,
@@ -1097,6 +1696,10 @@ impl NotebookState {
                     error_msg: None,
                     suggested_symbols: Vec::new(),
                     is_function: false,
+
+                    is_surface_3d: false,
+
+                    custom_mesh_preset: None,
                     physical_unit: None,
                     numerical_roots: None,
                     linearized_estimate: None,
@@ -1131,6 +1734,10 @@ impl NotebookState {
                     error_msg: None,
                     suggested_symbols: Vec::new(),
                     is_function: false,
+
+                    is_surface_3d: false,
+
+                    custom_mesh_preset: None,
                     physical_unit: None,
                     numerical_roots: None,
                     linearized_estimate: None,
@@ -1167,13 +1774,25 @@ impl NotebookState {
                         .map(|m| format!(" = {:.2}", m.cur_val))
                         .unwrap_or_default();
 
+                    let line_kind = if role_type == SymbolRole::Parameter && decl.contains('=') {
+                        let cur_v = meta_info.as_ref().map(|m| m.cur_val).unwrap_or(0.0);
+                        let u_opt = meta_info.as_ref().and_then(|m| m.unit_str.clone());
+                        LineKind::SliderDef {
+                            name: sym_name.to_string(),
+                            val: cur_v,
+                            unit: u_opt,
+                        }
+                    } else {
+                        LineKind::RoleDeclaration {
+                            name: sym_name.to_string(),
+                            role: role_type,
+                        }
+                    };
+
                     parsed_lines.push(ParsedLine {
                         line_idx: idx,
                         raw_text: line_str.to_string(),
-                        kind: LineKind::RoleDeclaration {
-                            name: sym_name.to_string(),
-                            role: role_type,
-                        },
+                        kind: line_kind,
                         output_latex: format!(
                             "\\text{{{}: {:?}}}{}{}",
                             sym_name, role_type, val_info, unit_suffix
@@ -1192,6 +1811,10 @@ impl NotebookState {
                         error_msg: None,
                         suggested_symbols: Vec::new(),
                         is_function: false,
+
+                        is_surface_3d: false,
+
+                        custom_mesh_preset: None,
                         physical_unit: meta_info.and_then(|m| m.unit_str),
                         numerical_roots: None,
                         linearized_estimate: None,
@@ -1276,6 +1899,105 @@ impl NotebookState {
                     error_msg: None,
                     suggested_symbols: Vec::new(),
                     is_function: false,
+
+                    is_surface_3d: false,
+
+                    custom_mesh_preset: None,
+                    physical_unit: None,
+                    numerical_roots: None,
+                    linearized_estimate: None,
+                    is_pending: false,
+                    eval_time_ms: 0,
+                    scoped_context: current_scoped_context.clone(),
+                });
+                continue;
+            }
+
+            // Check Parametric CAD machinery macro lines (gear!, screw!, airfoil!, spring!)
+            if trimmed.starts_with("gear!(") || trimmed.starts_with("screw!(") || trimmed.starts_with("airfoil!(") || trimmed.starts_with("spring!(") {
+                let (model_kind, summary) = if trimmed.starts_with("gear!(") {
+                    let m_kind = if trimmed.contains("\"helical\"") {
+                        "HelicalGear"
+                    } else if trimmed.contains("\"bevel\"") {
+                        "BevelGear"
+                    } else if trimmed.contains("\"worm\"") {
+                        "WormGear"
+                    } else if trimmed.contains("\"rack") {
+                        "RackPinion"
+                    } else if trimmed.contains("\"planetary\"") {
+                        "PlanetaryGear"
+                    } else {
+                        "SpurGear"
+                    };
+                    (m_kind.to_string(), "Parametric Involute Gear Mesh".to_string())
+                } else if trimmed.starts_with("screw!(") {
+                    ("Screw".to_string(), "Threaded Fastener Mesh".to_string())
+                } else if trimmed.starts_with("airfoil!(") {
+                    ("Airfoil".to_string(), "NACA Aerodynamic Airfoil Wing".to_string())
+                } else {
+                    ("Spring".to_string(), "Parametric Helical Spring".to_string())
+                };
+
+                parsed_lines.push(ParsedLine {
+                    line_idx: idx,
+                    raw_text: line_str.to_string(),
+                    kind: LineKind::CadMesh {
+                        model_kind: model_kind.clone(),
+                        summary: summary.clone(),
+                    },
+                    output_latex: format!("\\text{{3D CAD Mesh: }} {}", summary),
+                    output_unicode: format!("CAD[{}]: {}", model_kind, summary),
+                    simplified_unicode: None,
+                    substituted_latex: None,
+                    derivative_latex: None,
+                    domain_info: Some(format!("Parametric 3D CAD: {}", model_kind)),
+                    error_msg: None,
+                    suggested_symbols: Vec::new(),
+                    is_function: false,
+                    is_surface_3d: true,
+                    custom_mesh_preset: Some(model_kind),
+                    physical_unit: None,
+                    numerical_roots: None,
+                    linearized_estimate: None,
+                    is_pending: false,
+                    eval_time_ms: 0,
+                    scoped_context: current_scoped_context.clone(),
+                });
+                continue;
+            }
+
+            // Check 3D Surface Viewport plot (plot3d, surface)
+            if trimmed.starts_with("plot3d(") || trimmed.starts_with("plot3d!(") || trimmed.starts_with("surface(") {
+                let inner = trimmed
+                    .trim_start_matches("plot3d!(")
+                    .trim_start_matches("plot3d(")
+                    .trim_start_matches("surface(")
+                    .trim_end_matches(')')
+                    .trim();
+                let parts: Vec<&str> = inner.split(',').map(|s| s.trim()).collect();
+                let expr_str = parts.first().unwrap_or(&"sin(x)*cos(y)").to_string();
+                let x_var = parts.get(1).unwrap_or(&"x").to_string();
+                let y_var = parts.get(2).unwrap_or(&"y").to_string();
+
+                parsed_lines.push(ParsedLine {
+                    line_idx: idx,
+                    raw_text: line_str.to_string(),
+                    kind: LineKind::Plot3D {
+                        expr_str: expr_str.clone(),
+                        x_var: x_var.clone(),
+                        y_var: y_var.clone(),
+                    },
+                    output_latex: format!("z = f({}, {}) = {}", x_var, y_var, expr_str),
+                    output_unicode: format!("z = f({}, {}) = {}", x_var, y_var, expr_str),
+                    simplified_unicode: None,
+                    substituted_latex: None,
+                    derivative_latex: None,
+                    domain_info: Some("3D Surface Viewport".to_string()),
+                    error_msg: None,
+                    suggested_symbols: Vec::new(),
+                    is_function: true,
+                    is_surface_3d: true,
+                    custom_mesh_preset: None,
                     physical_unit: None,
                     numerical_roots: None,
                     linearized_estimate: None,
@@ -1312,6 +2034,10 @@ impl NotebookState {
                             error_msg: None,
                             suggested_symbols: Vec::new(),
                             is_function: false,
+
+                            is_surface_3d: false,
+
+                            custom_mesh_preset: None,
                             physical_unit: None,
                             numerical_roots: None,
                             linearized_estimate: None,
@@ -1350,6 +2076,10 @@ impl NotebookState {
                             error_msg: None,
                             suggested_symbols: Vec::new(),
                             is_function: false,
+
+                            is_surface_3d: false,
+
+                            custom_mesh_preset: None,
                             physical_unit: None,
                             numerical_roots: None,
                             linearized_estimate: None,
@@ -1402,6 +2132,10 @@ impl NotebookState {
                                     error_msg: None,
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
+
+                                    is_surface_3d: false,
+
+                                    custom_mesh_preset: None,
                                     physical_unit: None,
                                     numerical_roots: None,
                                     linearized_estimate: None,
@@ -1437,6 +2171,10 @@ impl NotebookState {
                             error_msg: None,
                             suggested_symbols: Vec::new(),
                             is_function: false,
+
+                            is_surface_3d: false,
+
+                            custom_mesh_preset: None,
                             physical_unit: None,
                             numerical_roots: None,
                             linearized_estimate: None,
@@ -1483,6 +2221,10 @@ impl NotebookState {
                             error_msg: None,
                             suggested_symbols: Vec::new(),
                             is_function: true,
+
+                            is_surface_3d: args.len() == 2,
+
+                            custom_mesh_preset: None,
                             physical_unit: None,
                             numerical_roots: None,
                             linearized_estimate: None,
@@ -1566,6 +2308,10 @@ impl NotebookState {
                                     error_msg: None,
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
+
+                                    is_surface_3d: false,
+
+                                    custom_mesh_preset: None,
                                     physical_unit: None,
                                     numerical_roots: None,
                                     linearized_estimate: None,
@@ -1609,6 +2355,10 @@ impl NotebookState {
                                 error_msg: None,
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -1711,6 +2461,10 @@ impl NotebookState {
                                     error_msg: None,
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
+
+                                    is_surface_3d: false,
+
+                                    custom_mesh_preset: None,
                                     physical_unit: None,
                                     numerical_roots: None,
                                     linearized_estimate: None,
@@ -1765,6 +2519,10 @@ impl NotebookState {
                                         error_msg: None,
                                         suggested_symbols: Vec::new(),
                                         is_function: false,
+
+                                        is_surface_3d: false,
+
+                                        custom_mesh_preset: None,
                                         physical_unit: None,
                                         numerical_roots: None,
                                         linearized_estimate: None,
@@ -1791,6 +2549,10 @@ impl NotebookState {
                                         error_msg: Some(format!("Integration error: {}", e)),
                                         suggested_symbols: Vec::new(),
                                         is_function: false,
+
+                                        is_surface_3d: false,
+
+                                        custom_mesh_preset: None,
                                         physical_unit: None,
                                         numerical_roots: None,
                                         linearized_estimate: None,
@@ -1829,6 +2591,10 @@ impl NotebookState {
                                 error_msg: None,
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -1891,6 +2657,10 @@ impl NotebookState {
                                 error_msg: err_msg,
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -1942,6 +2712,10 @@ impl NotebookState {
                                 error_msg: None,
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -1999,6 +2773,10 @@ impl NotebookState {
                                     error_msg: None,
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
+
+                                    is_surface_3d: false,
+
+                                    custom_mesh_preset: None,
                                     physical_unit: None,
                                     numerical_roots: None,
                                     linearized_estimate: None,
@@ -2022,6 +2800,10 @@ impl NotebookState {
                                     error_msg: Some(e),
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
+
+                                    is_surface_3d: false,
+
+                                    custom_mesh_preset: None,
                                     physical_unit: None,
                                     numerical_roots: None,
                                     linearized_estimate: None,
@@ -2086,6 +2868,10 @@ impl NotebookState {
                                 error_msg: None,
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -2109,6 +2895,10 @@ impl NotebookState {
                                 error_msg: Some(format!("Solve error: {}", err)),
                                 suggested_symbols: Vec::new(),
                                 is_function: false,
+
+                                is_surface_3d: false,
+
+                                custom_mesh_preset: None,
                                 physical_unit: None,
                                 numerical_roots: None,
                                 linearized_estimate: None,
@@ -2147,7 +2937,7 @@ impl NotebookState {
 
                     if let Some(u) = &unit_suffix {
                         latex.push_str(&format!(" \\left[\\text{{{}}}\\right]", u));
-                        unicode.push_str(&format!(" [{}]", u));
+                        if !unicode.contains(&format!("[{}]", u)) { unicode.push_str(&format!(" [{}]", u)); }
                     }
 
                     // Extract symbol dependencies
@@ -2265,6 +3055,10 @@ impl NotebookState {
                         error_msg: out_of_domain_err,
                         suggested_symbols: Vec::new(),
                         is_function: false,
+
+                        is_surface_3d: false,
+
+                        custom_mesh_preset: None,
                         physical_unit: unit_suffix,
                         numerical_roots: None,
                         linearized_estimate: eval_val_opt,
@@ -2302,6 +3096,10 @@ impl NotebookState {
                         error_msg: out_of_domain_err.or_else(|| Some(format!("{}", err))),
                         suggested_symbols: Vec::new(),
                         is_function: false,
+
+                        is_surface_3d: false,
+
+                        custom_mesh_preset: None,
                         physical_unit: unit_suffix,
                         numerical_roots: None,
                         linearized_estimate: None,

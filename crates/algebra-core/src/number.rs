@@ -1,6 +1,9 @@
-//! Scalar numbers and mathematical constants.
+//! Scalar numbers, arbitrary-precision rationals, exact scientific notation, and mathematical constants.
 
 use std::fmt;
+use num_bigint::BigInt;
+use num_rational::BigRational;
+use num_traits::{One, ToPrimitive, Zero};
 
 /// Built-in mathematical constants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -45,15 +48,43 @@ impl fmt::Display for Constant {
     }
 }
 
+/// Greatest Common Divisor helper for 64-bit integers.
+pub const fn gcd_i64(a: i64, b: i64) -> i64 {
+    let mut x = a.unsigned_abs();
+    let mut y = b.unsigned_abs();
+    while y != 0 {
+        let t = y;
+        y = x % y;
+        x = t;
+    }
+    if x > i64::MAX as u64 {
+        i64::MAX
+    } else {
+        x as i64
+    }
+}
+
 /// Scalar numbers representation used in expression DAG nodes.
+///
+/// **Lossless by Default**: All machine integers, rationals, and decimals decompose
+/// into exact lossless types, with arbitrary-precision auto-promotion (`BigInteger`,
+/// `BigRational`) when machine limits are exceeded.
+/// Lossy floating-point representations (`Float`) are strictly reserved for explicit
+/// numerical approximations (`evalf`, `N`), interactive sliders, or insoluble fallbacks.
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Number {
     /// Exact 64-bit signed integer.
     Integer(i64),
-    /// Exact rational fraction (numerator, denominator).
+    /// Arbitrary-precision promoted integer.
+    BigInteger(BigInt),
+    /// Exact rational fraction (numerator, denominator) in canonical reduced form.
     Rational(i64, i64),
-    /// 64-bit floating point number (ordered for hashing).
+    /// Arbitrary-precision promoted rational fraction.
+    BigRational(Box<BigRational>),
+    /// Exact scientific notation: mantissa * 10^exponent using lossless integers.
+    Scientific { mantissa: i64, exponent: i32 },
+    /// 64-bit floating point number (used ONLY for explicit lossy approximation or fallback).
     Float(u64),
     /// Mathematical constant.
     Constant(Constant),
@@ -94,72 +125,352 @@ impl Number {
     /// Static Undefined constant: `Undefined`.
     pub const UNDEFINED: Self = Self::Constant(Constant::Undefined);
 
-    /// Create an exact integer number in const environments.
+    /// Create an exact integer number.
     #[inline]
     pub const fn integer(val: i64) -> Self {
         Self::Integer(val)
     }
 
-    /// Create an exact rational fraction in const environments.
-    #[inline]
-    pub const fn rational(num: i64, den: i64) -> Self {
-        Self::Rational(num, den)
+    /// Create an exact rational fraction in canonical reduced form with gcd=1 and den > 0.
+    pub const fn rational(mut num: i64, mut den: i64) -> Self {
+        if den == 0 {
+            return Self::Constant(Constant::Undefined);
+        }
+        if num == 0 {
+            return Self::Integer(0);
+        }
+        if den < 0 {
+            if num != i64::MIN && den != i64::MIN {
+                num = -num;
+                den = -den;
+            }
+        }
+        let g = gcd_i64(num, den);
+        if g > 1 {
+            num /= g;
+            den /= g;
+        }
+        if den < 0 && num != i64::MIN && den != i64::MIN {
+            num = -num;
+            den = -den;
+        }
+        if den == 1 {
+            Self::Integer(num)
+        } else {
+            Self::Rational(num, den)
+        }
     }
 
-    /// Create a mathematical constant in const environments.
+    /// Create an exact scientific notation number: $m \times 10^e$.
+    pub fn scientific(mantissa: i64, exponent: i32) -> Self {
+        if mantissa == 0 {
+            return Self::Integer(0);
+        }
+        if exponent == 0 {
+            return Self::Integer(mantissa);
+        }
+        if exponent > 0 && exponent <= 18 {
+            if let Some(pow10) = 10i64.checked_pow(exponent as u32) {
+                if let Some(val) = mantissa.checked_mul(pow10) {
+                    return Self::Integer(val);
+                }
+            }
+        } else if exponent < 0 && exponent >= -18 {
+            let neg_exp = (-exponent) as u32;
+            if let Some(pow10) = 10i64.checked_pow(neg_exp) {
+                return Self::rational(mantissa, pow10);
+            }
+        }
+        Self::Scientific { mantissa, exponent }
+    }
+
+    /// Create a mathematical constant.
     #[inline]
     pub const fn constant(c: Constant) -> Self {
         Self::Constant(c)
     }
 
-    /// Create a float number from raw IEEE-754 bit pattern in const environments.
+    /// Create an explicit lossy float number from raw IEEE-754 bit pattern.
     #[inline]
     pub const fn from_bits(bits: u64) -> Self {
         Self::Float(bits)
     }
 
-    /// Create a float number from `f64`, converting bit pattern for hash consistency.
+    /// Create an explicit lossy float number from `f64`.
     #[inline]
     pub const fn float(val: f64) -> Self {
         Self::Float(val.to_bits())
     }
 
-    /// Extract `f64` float value if float node.
+    /// Returns `true` if this number is exact and lossless (not an approximate Float).
     #[inline]
-    pub const fn as_f64(&self) -> Option<f64> {
+    pub fn is_lossless(&self) -> bool {
+        !matches!(self, Self::Float(_))
+    }
+
+    /// Decompose a decimal or scientific string losslessly into an exact Number.
+    pub fn from_decimal_str(s: &str) -> Option<Self> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        // 1. Check scientific notation e.g. "1.5e-3", "2E6"
+        if let Some(e_idx) = trimmed.find(|c| c == 'e' || c == 'E') {
+            let base_str = &trimmed[..e_idx];
+            let exp_str = &trimmed[e_idx + 1..];
+            let exp_val: i32 = exp_str.parse().ok()?;
+
+            if let Some(dot_idx) = base_str.find('.') {
+                let int_part = &base_str[..dot_idx];
+                let frac_part = &base_str[dot_idx + 1..];
+                let frac_len = frac_part.len() as i32;
+                let combined = format!("{}{}", int_part, frac_part);
+                let mantissa: i64 = combined.parse().ok()?;
+                let final_exp = exp_val - frac_len;
+                return Some(Self::scientific(mantissa, final_exp));
+            } else {
+                let mantissa: i64 = base_str.parse().ok()?;
+                return Some(Self::scientific(mantissa, exp_val));
+            }
+        }
+
+        // 2. Standard decimal e.g. "0.5", "1.25", "-3.1415"
+        if let Some(dot_idx) = trimmed.find('.') {
+            let int_part = &trimmed[..dot_idx];
+            let frac_part = &trimmed[dot_idx + 1..];
+            let frac_len = frac_part.len() as u32;
+
+            if frac_len == 0 {
+                let int_val: i64 = int_part.parse().ok()?;
+                return Some(Self::Integer(int_val));
+            }
+
+            if frac_len <= 18 {
+                let combined = format!("{}{}", int_part, frac_part);
+                if let Ok(num) = combined.parse::<i64>() {
+                    let den: i64 = 10i64.pow(frac_len);
+                    return Some(Self::rational(num, den));
+                }
+            }
+
+            // Arbitrary-precision decimal fraction
+            let combined = format!("{}{}", int_part, frac_part);
+            let big_num = combined.parse::<BigInt>().ok()?;
+            let big_den = num_traits::pow(BigInt::from(10), frac_len as usize);
+            let r = BigRational::new(big_num, big_den);
+            return Some(Self::BigRational(Box::new(r)));
+        }
+
+        if let Ok(i) = trimmed.parse::<i64>() {
+            return Some(Self::Integer(i));
+        }
+        if let Ok(bi) = trimmed.parse::<BigInt>() {
+            return Some(Self::BigInteger(bi));
+        }
+
+        None
+    }
+
+    /// Decompose an `f64` into a lossless representation using continued fractions / decimal expansion.
+    pub fn from_f64_lossless(val: f64) -> Self {
+        if val.is_nan() {
+            return Self::Constant(Constant::Undefined);
+        }
+        if val == f64::INFINITY {
+            return Self::Constant(Constant::Infinity);
+        }
+        if val == f64::NEG_INFINITY {
+            return Self::Constant(Constant::NegInfinity);
+        }
+        if val == 0.0 {
+            return Self::Integer(0);
+        }
+        if val.fract() == 0.0 && val >= i64::MIN as f64 && val <= i64::MAX as f64 {
+            return Self::Integer(val as i64);
+        }
+
+        // Continued fraction convergent search up to 1e-12 tolerance
+        let sign = if val < 0.0 { -1.0 } else { 1.0 };
+        let abs_val = val.abs();
+        let mut x = abs_val;
+        let mut h_prev2 = 0i64;
+        let mut h_prev1 = 1i64;
+        let mut k_prev2 = 1i64;
+        let mut k_prev1 = 0i64;
+
+        for _ in 0..20 {
+            let a = x.floor() as i64;
+            let h = match a.checked_mul(h_prev1).and_then(|t| t.checked_add(h_prev2)) {
+                Some(v) => v,
+                None => break,
+            };
+            let k = match a.checked_mul(k_prev1).and_then(|t| t.checked_add(k_prev2)) {
+                Some(v) => v,
+                None => break,
+            };
+
+            let frac_approx = h as f64 / k as f64;
+            if (frac_approx - abs_val).abs() < 1e-12 {
+                let num = if sign < 0.0 { -h } else { h };
+                return Self::rational(num, k);
+            }
+
+            h_prev2 = h_prev1;
+            h_prev1 = h;
+            k_prev2 = k_prev1;
+            k_prev1 = k;
+
+            let remainder = x - (a as f64);
+            if remainder.abs() < 1e-12 {
+                let num = if sign < 0.0 { -h } else { h };
+                return Self::rational(num, k);
+            }
+            x = 1.0 / remainder;
+        }
+
+        // Decimal string fallback
+        let s = format!("{}", val);
+        if let Some(dec) = Self::from_decimal_str(&s) {
+            return dec;
+        }
+
+        Self::float(val)
+    }
+
+    /// Decompose an `f32` into a lossless representation.
+    pub fn from_f32_lossless(val: f32) -> Self {
+        Self::from_f64_lossless(val as f64)
+    }
+
+    /// Extract `f64` float value if numerical evaluation or approximation is requested.
+    #[inline]
+    pub fn as_f64(&self) -> Option<f64> {
         match self {
             Self::Float(bits) => Some(f64::from_bits(*bits)),
             Self::Integer(i) => Some(*i as f64),
+            Self::BigInteger(b) => b.to_f64(),
             Self::Rational(num, den) => Some(*num as f64 / *den as f64),
+            Self::BigRational(r) => r.to_f64(),
+            Self::Scientific { mantissa, exponent } => {
+                Some(*mantissa as f64 * 10.0f64.powi(*exponent))
+            }
             Self::Constant(c) => c.approx_f64(),
         }
     }
 
-    /// Returns `true` if number represents zero (integer 0, rational 0/n, or float 0.0).
+    /// Returns `true` if number represents mathematical zero.
     #[inline]
-    pub const fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         match self {
             Self::Integer(i) => *i == 0,
+            Self::BigInteger(b) => b.is_zero(),
             Self::Rational(num, _) => *num == 0,
-            Self::Float(bits) => {
-                let f = f64::from_bits(*bits);
-                f == 0.0
-            }
+            Self::BigRational(r) => r.is_zero(),
+            Self::Scientific { mantissa, .. } => *mantissa == 0,
+            Self::Float(bits) => f64::from_bits(*bits) == 0.0,
             _ => false,
         }
     }
 
-    /// Returns `true` if number represents unity (integer 1, rational n/n, float 1.0).
+    /// Returns `true` if number represents mathematical unity (1).
     #[inline]
-    pub const fn is_one(&self) -> bool {
+    pub fn is_one(&self) -> bool {
         match self {
             Self::Integer(i) => *i == 1,
+            Self::BigInteger(b) => b.is_one(),
             Self::Rational(num, den) => *num == *den && *den != 0,
-            Self::Float(bits) => {
-                let f = f64::from_bits(*bits);
-                f == 1.0
-            }
+            Self::BigRational(r) => r.is_one(),
+            Self::Scientific { mantissa, exponent } => *mantissa == 1 && *exponent == 0,
+            Self::Float(bits) => f64::from_bits(*bits) == 1.0,
             _ => false,
+        }
+    }
+
+    /// Lossless addition with auto-promotion to `BigInteger` / `BigRational` on overflow.
+    pub fn add_lossless(&self, rhs: &Self) -> Option<Self> {
+        match (self, rhs) {
+            (Self::Integer(a), Self::Integer(b)) => {
+                if let Some(c) = a.checked_add(*b) {
+                    Some(Self::Integer(c))
+                } else {
+                    Some(Self::BigInteger(BigInt::from(*a) + BigInt::from(*b)))
+                }
+            }
+            (Self::Rational(n1, d1), Self::Rational(n2, d2)) => {
+                if let (Some(t1), Some(t2), Some(d)) = (
+                    n1.checked_mul(*d2),
+                    n2.checked_mul(*d1),
+                    d1.checked_mul(*d2),
+                ) {
+                    if let Some(num) = t1.checked_add(t2) {
+                        return Some(Self::rational(num, d));
+                    }
+                }
+                let r1 = BigRational::new(BigInt::from(*n1), BigInt::from(*d1));
+                let r2 = BigRational::new(BigInt::from(*n2), BigInt::from(*d2));
+                Some(Self::BigRational(Box::new(r1 + r2)))
+            }
+            (Self::Integer(a), Self::Rational(n, d)) | (Self::Rational(n, d), Self::Integer(a)) => {
+                if let Some(ad) = a.checked_mul(*d) {
+                    if let Some(num) = ad.checked_add(*n) {
+                        return Some(Self::rational(num, *d));
+                    }
+                }
+                let r1 = BigRational::from(BigInt::from(*a));
+                let r2 = BigRational::new(BigInt::from(*n), BigInt::from(*d));
+                Some(Self::BigRational(Box::new(r1 + r2)))
+            }
+            (Self::BigInteger(a), Self::BigInteger(b)) => {
+                Some(Self::BigInteger(a + b))
+            }
+            (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
+                Some(Self::BigInteger(a + BigInt::from(*b)))
+            }
+            (Self::BigRational(a), Self::BigRational(b)) => {
+                Some(Self::BigRational(Box::new((**a).clone() + (**b).clone())))
+            }
+            _ => None,
+        }
+    }
+
+    /// Lossless multiplication with auto-promotion.
+    pub fn mul_lossless(&self, rhs: &Self) -> Option<Self> {
+        match (self, rhs) {
+            (Self::Integer(a), Self::Integer(b)) => {
+                if let Some(c) = a.checked_mul(*b) {
+                    Some(Self::Integer(c))
+                } else {
+                    Some(Self::BigInteger(BigInt::from(*a) * BigInt::from(*b)))
+                }
+            }
+            (Self::Rational(n1, d1), Self::Rational(n2, d2)) => {
+                if let (Some(num), Some(den)) = (n1.checked_mul(*n2), d1.checked_mul(*d2)) {
+                    Some(Self::rational(num, den))
+                } else {
+                    let r1 = BigRational::new(BigInt::from(*n1), BigInt::from(*d1));
+                    let r2 = BigRational::new(BigInt::from(*n2), BigInt::from(*d2));
+                    Some(Self::BigRational(Box::new(r1 * r2)))
+                }
+            }
+            (Self::Integer(a), Self::Rational(n, d)) | (Self::Rational(n, d), Self::Integer(a)) => {
+                if let Some(num) = a.checked_mul(*n) {
+                    Some(Self::rational(num, *d))
+                } else {
+                    let r = BigRational::new(BigInt::from(*a * *n), BigInt::from(*d));
+                    Some(Self::BigRational(Box::new(r)))
+                }
+            }
+            (Self::BigInteger(a), Self::BigInteger(b)) => {
+                Some(Self::BigInteger(a * b))
+            }
+            (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
+                Some(Self::BigInteger(a * BigInt::from(*b)))
+            }
+            (Self::BigRational(a), Self::BigRational(b)) => {
+                Some(Self::BigRational(Box::new((**a).clone() * (**b).clone())))
+            }
+            _ => None,
         }
     }
 }
@@ -170,7 +481,16 @@ impl fmt::Display for Number {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Integer(i) => write!(f, "{}", i),
+            Self::BigInteger(b) => write!(f, "{}", b),
             Self::Rational(num, den) => write!(f, "{}/{}", num, den),
+            Self::BigRational(r) => write!(f, "{}", r),
+            Self::Scientific { mantissa, exponent } => {
+                if *exponent == 0 {
+                    write!(f, "{}", mantissa)
+                } else {
+                    write!(f, "{}e{}", mantissa, exponent)
+                }
+            }
             Self::Float(bits) => write!(f, "{}", f64::from_bits(*bits)),
             Self::Constant(c) => write!(f, "{}", c),
         }

@@ -1,0 +1,21 @@
+# URAE Mathematics Notepad: Abstract Algebra & Galois Theory
+# Interactive study of polynomial splitting fields, Galois groups, quotient rings, and radical solvability.
+
+x: Variable
+
+# 1. Polynomial Splitting Field & Galois Group
+# P(x) = x⁵ - 4x + 2 is irreducible by Eisenstein (p=2) with 3 real roots -> Gal(P) ≅ S₅ (not solvable by radicals)
+poly = x^5 - 4*x + 2
+galois_group(poly, x)
+is_solvable_by_radicals(poly, x)
+
+# 2. Cyclotomic Polynomials & Automorphisms
+# Φ_n(x) has Galois group isomorphic to (Z/nZ)ˣ
+cyclotomic_poly(n = 12, var = x)
+splitting_field(x^3 - 2, x)
+
+# 3. Finite Group Structures & Quotient Rings
+G = symmetric_group(4)
+group_order(G)
+group_conjugacy_classes(G)
+group_character_table(G)

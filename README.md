@@ -2,7 +2,7 @@
 
 [![Rust Workspace](https://img.shields.io/badge/Rust-1.85%2B%20%7C%202024%20Edition-orange?logo=rust)](https://www.rust-lang.org/)
 [![License: CC-BY-NC-SA 4.0](https://img.shields.io/badge/License-CC--BY--NC--SA--4.0-lightgrey.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/Tests-470%2B%20Passing%20%7C%200%20Failures-brightgreen.svg)](tests/)
+[![Tests Passing](https://img.shields.io/badge/Tests-480%2B%20Passing%20%7C%200%20Failures-brightgreen.svg)](tests/)
 [![Clippy](https://img.shields.io/badge/Clippy-0%20Warnings-brightgreen.svg)](Cargo.toml)
 [![WASM Ready](https://img.shields.io/badge/WebAssembly-Cloudflare%20Pages%20%7C%20PWA-9cf?logo=webassembly)](crates/urae-wasm)
 
@@ -14,27 +14,28 @@ Designed for dual deployment as an ultra-responsive **Native Desktop Application
 
 ## 🏛️ Layered Architecture & Workspace Crates
 
-The workspace is organized into **11 cohesive, modular crates** with a centralized integration test suite under `tests/`:
+The workspace is organized into **12 cohesive, modular crates** with a centralized integration test suite under `tests/`:
 
 ```mermaid
 graph TD
-    subgraph Layer 1: Foundation
+    subgraph L1 ["Layer 1: Foundation & Low-Level Arithmetic"]
         Core["crates/algebra-core<br/>• ExprGraph Arena DAG Storage<br/>• Symbol Table & Interning<br/>• Certified Interval Arithmetic<br/>• Multi-Notation Parser & 2D Formatters"]
+        Promoters["crates/auto-promoters<br/>• Machine-to-BigUint Auto-Promotion<br/>• Overflow-Free Integer Arithmetic<br/>• Zero-Heap Register Fast-Path"]
     end
 
-    subgraph Layer 2: Core Computational CAS Engine
+    subgraph L2 ["Layer 2: Core Computational CAS Engine"]
         Engine["crates/algebra-engine<br/>• E-Graph Simplification (egg)<br/>• Symbolic Solvers & Calculus<br/>• Polynomials, Linear Algebra & Tensors<br/>• Combinatorics & Topology<br/>• Number Theory & Control Systems<br/>• Knuth Up-Arrows, Tetration & Tropical Semirings"]
     end
 
-    subgraph Layer 3: Advanced Mathematics, Physics & Proofs
+    subgraph L3 ["Layer 3: Advanced Mathematics, Physics & Proofs"]
         Advanced["crates/algebra-advanced<br/>• Formal Proof Export (Lean 4 / Coq / SMT-LIB2)<br/>• Category Theory, Monads & Isomorphisms<br/>• Quantum Bra-Kets & Spinor Helicity<br/>• Stochastic Itô Calculus & Galois Fields<br/>• Statistical Mechanics & Thermofluids<br/>• Parametric CAD Machinery & B-Spline IGA<br/>• Exceptional Lie Groups & Octonions<br/>• Holonomic D-Modules & Zeilberger Proofs<br/>• AI Mathematical Copilot"]
     end
 
-    subgraph Layer 4: Master Facade & Prelude
+    subgraph L4 ["Layer 4: Master Facade & Prelude"]
         Urae["crates/urae<br/>Master Facade & Unified Prelude (`use urae::prelude::*;`)"]
     end
 
-    subgraph Layer 5: Applications, Protocols & Interfaces
+    subgraph L5 ["Layer 5: Applications, Protocols & Interfaces"]
         Notebook["crates/urae-notebook<br/>Reactive Continuous Notepad (egui/eframe)"]
         CLI["crates/urae-cli<br/>Interactive REPL & JSON Streaming CLI"]
         WASM["crates/urae-wasm<br/>Cloudflare Pages / Edge WASM Engine"]
@@ -44,10 +45,12 @@ graph TD
         FFI["crates/urae-ffi<br/>C ABI Foreign Function Interface"]
     end
 
-    subgraph Layer 6: Workspace Test Suite
-        Tests["tests/<br/>Centralized Workspace Test Suite (470+ Tests)"]
+    subgraph L6 ["Layer 6: Workspace Test Suite"]
+        Tests["tests/<br/>Centralized Workspace Test Suite (480+ Tests)"]
     end
 
+    Promoters --> Core
+    Promoters --> Urae
     Core --> Engine
     Core --> Advanced
     Engine --> Advanced
@@ -74,6 +77,7 @@ graph TD
 
 | Crate | Path | Description |
 | :--- | :--- | :--- |
+| **`auto-promoters`** | [`crates/auto-promoters`](crates/auto-promoters) | Fast-path machine word integer arithmetic (`usize`) with seamless automatic promotion to arbitrary-precision `BigUint` on arithmetic overflow. |
 | **`algebra-core`** | [`crates/algebra-core`](crates/algebra-core) | Memory-safe arena DAG storage (`ExprGraph`), symbol table interning, certified interval arithmetic ($[a, b]$ with directed rounding), multi-notation parser (`nom`), and 2D Unicode / LaTeX formatters. |
 | **`algebra-engine`** | [`crates/algebra-engine`](crates/algebra-engine) | Core symbolic CAS: non-greedy E-Graph equality saturation (`egg`), ODE/PDE solvers, calculus, dense/CSR sparse linear algebra, covariant/contravariant tensors, topological Betti numbers, Knuth up-arrows, and tropical semirings. |
 | **`algebra-advanced`** | [`crates/algebra-advanced`](crates/algebra-advanced) | Advanced formal mathematical structures: formal proof certificates (Lean 4, Coq, SMT-LIB2), Category Theory, Quantum Spinors & Helicity, Parametric CAD & Isogeometric Analysis (IGA), Exceptional Lie Groups ($E_8, G_2$) & Octonions, Holonomic $D$-Modules, and AI copilot integration. |
@@ -110,6 +114,11 @@ graph TD
 - **Formal Proof Export**: Automatic translation of algebraic transformation traces to formal verification scripts in **Lean 4**, **Coq**, and **SMT-LIB2**.
 - **Cross-Format Interoperability**: Dual `.urae` (compressed BSON/JSON) and `.ipynb` (Jupyter notebook format) import/export.
 
+### 5. Automatic Differential Equations & Modern Control Systems
+- **Automatic ODE vs. PDE Classification**: AST inspection automatically extracts independent variables ($1 \implies$ ODE, $\ge 2 \implies$ PDE), determines differentiation order, evaluates linearity (Linear, Semilinear, Quasilinear, Nonlinear), and recommends optimal solving strategies while respecting user manual overrides.
+- **Closed-Form Nonlinear PDE Traveling Wave Reductions**: Exact analytical solutions for Korteweg-de Vries (KdV) $\operatorname{sech}^2$ solitons, Viscous Burgers $\tanh$ shock fronts, and Fisher-KPP reaction-diffusion invasion fronts.
+- **Comprehensive State-Space Control Systems**: Complete SISO and MIMO support across continuous and discrete domains ($\dot{\mathbf{x}} = \mathbf{A}\mathbf{x} + \mathbf{B}\mathbf{u}$ and $\mathbf{x}_{k+1} = \mathbf{A}_d \mathbf{x}_k + \mathbf{B}_d \mathbf{u}_k$), Kalman Controllability and Observability Gramian / rank tests, Zero-Order Hold (ZOH) discretization via augmented block matrix exponentials, Ackermann state-feedback pole placement, and analytical Bode frequency response evaluation.
+
 ---
 
 ## 🖥️ URAE Continuous Reactive Notepad
@@ -123,9 +132,24 @@ The **URAE Notebook** (`urae-notebook`) is an interactive desktop and browser GU
   - **Automatic Root & Critical Point Framing**: Identifies all real $x$-intercepts ($f(x) = 0$) and critical points ($f'(x) = 0$, local minima, maxima, and inflection points) via bytecode execution, with 20% margin padding.
   - **Periodic Sub-Period & Harmonic Frequency Analysis**: Detects trigonometric components ($\sin, \cos, \tan, \sec, \csc, \cot, \text{sinc}$) and calculates base periods $T_k = 2\pi / \omega_k$. Ranges over 2–2.5 full periods for fundamental waves or 1.5 periods of the modulation envelope for multi-frequency carrier waves (e.g. $\sin(10x) + \cos(x)$).
   - **Natural Domain Clamping & Asymptote Handling**: Clamps non-negative functions ($\sqrt{x} \implies x \ge 0$, $\ln(x) \implies x > 0$) and splits curves across infinite poles into discrete segments without artificial vertical connection lines.
-- **Function Object Feature Inspector & Tooltips**:
+- **Function & Object Feature Inspector Hover Cards**:
   - **Symbolic vs. VM Hierarchy**: Resolves exact symbolic roots and extrema via `solveset` when algebraically accessible (`✓ Exact Symbolic`). Seamlessly falls back to fast BytecodeVM numerical approximations (`⚡ VM Discovered`) while solving is pending.
   - **Comprehensive Properties**: Displays domain, codomain, inferred range (e.g. $[-9.00, +\infty)$), even/odd parity symmetry ($f(-x) = \pm f(x)$), fundamental period $T$, and linearity status.
+  - **Universal Domain Classifications (`ObjectKind`)**:
+    - **Physical & Math Constants**: Exact 2019 SI Redefinition values ($c, h, \hbar, k_B, N_A, e$) and CODATA 2018 standards ($G, m_e, \pi, e, \tau, \gamma, \phi, \infty$).
+    - **Linear Time-Invariant Transfer Functions $H(s)$**: Automated denominator/numerator order extraction, properness verification, complex pole-zero decomposition, and asymptotic stability testing ($\operatorname{Re}(p) < 0$).
+    - **Itô Stochastic Differentials**: Automated decomposition of $dX_t = a(X, t) dt + b(X, t) dW_t$ into drift and diffusion terms with local martingale classification.
+    - **Thermodynamic States & Cycles**: Real gas equations of state (Van der Waals, Ideal Gas), state relations, and dynamic Carnot efficiency computation $\eta = 1 - T_{\text{cold}} / T_{\text{hot}}$.
+    - **Formal Logic Systems**: Multi-valued logics (Kleene $K_3$, Łukasiewicz $Ł_3$, Bochvar $B_3$, Gödel-Dummett $G_3$, Modal $S_5$ necessity $\Box$ and possibility $\Diamond$, and classical DPLL SAT).
+    - **Differential Manifolds & General Relativity**: Spacetime dimension, metric signature, and Ricci curvature scalar $R$.
+    - **CAD & Isogeometric Analysis (IGA)**: NURBS B-spline control net grids, parametric dimensions, and Gauss-Legendre quadrature stiffness properties.
+    - **Probability Distributions**: Expectation $E[X]$, variance $\operatorname{Var}(X)$, standard deviation, and discrete PMF vs. continuous PDF classification.
+    - **Cryptographic Curves & Networks**: Elliptic curve Weierstrass forms over finite fields $\mathbb{F}_p$ (`secp256k1`), and discrete graph algebraic connectivity / spectral gap $\lambda_2$.
+    - **Canonical Algebraic Forms**: Horner polynomial complexity scoring, factored irreducibles, and tropical semirings.
+- **In-Situ Interactive Parameter Sliders (`LineKind::SliderDef`)**:
+  - Declaring assigned parameters (`a: Parameter = 2.00 [m]` or `mode_idx: Parameter = 0`) renders an interactive slider directly inside the document.
+  - Coupled with domain declarations (e.g., `mode_idx in Integers [0, 3]`), sliders automatically clamp to bounds and snap to discrete integer steps.
+  - Interactive **Alt + Drag Live Scrubbing** allows seamless numerical experimentation directly from the line text.
 - **Reactive Results Stream & Vertical Fold-Outs**:
   - **Unhideable Resizable Bars**: Left parameter bar and right results stream feature collapsible tabs (`[▶ Params]`, `[◀ Results]`), adjustable width drag handles, and `Ctrl+B` / `Ctrl+J` shortcuts.
   - **Vertical Fold-Out Layout**: Inline plots and notes expand vertically **below** their fold-out headers, occupying full pane width without horizontal pushing.
@@ -149,7 +173,36 @@ The **URAE Notebook** (`urae-notebook`) is an interactive desktop and browser GU
   - **Physical Units & Dimensions Palette**: SI unit selection and automatic dimensional consistency verification.
   - **Branch Cut & Interval Pickers**: Complex branch cut topology and domain bounds.
 - **In-App Example Gallery & Interactive Tutorials**:
-  - 12 production-grade mathematical example notebooks across 7 domains with one-click editor loading.
+  - **29 production-grade mathematical example notebooks** across 10 STEM domains with one-click editor loading:
+    1. *Advanced Calculus, Special Functions & ODEs*
+    2. *Relativistic Kinematics & 4-Vector Dynamics*
+    3. *Quantum Field Theory & Spinor Scattering*
+    4. *Isogeometric Analysis & B-Spline CAD*
+    5. *Non-Euclidean & Hyperbolic Geometry*
+    6. *Exceptional Lie Algebras & Octonions*
+    7. *Holonomic D-Modules & Zeilberger Proofs*
+    8. *Finite Difference Wave Equations*
+    9. *Coupled Chemical Kinetics*
+    10. *Nonlinear FEA Structural Analysis*
+    11. *Hamiltonian Phase Space Systems*
+    12. *Stochastic Itô Calculus & Diffusion*
+    13. *Transfer Functions & Control Engineering*
+    14. *Thermodynamics & Statistical Mechanics*
+    15. *Algebraic Forms & Horner Polynomials*
+    16. *Formal Logic Systems & DPLL SAT*
+    17. *Elliptic Curve Cryptography & Finite Fields*
+    18. *Discrete Graph Topologies & Networks*
+    19. *Number Theory & Modular Arithmetic*
+    20. *Graph Theory & Network Topologies*
+    21. *Differential Geometry & General Relativity*
+    22. *Abstract Algebra & Finite Field Galois Extensions*
+    23. *Complex Analysis & Contour Integration*
+    24. *Fluid Dynamics & Incompressible Navier-Stokes*
+    25. *Statistical Mechanics & Bayesian Inference*
+    26. *Linear Algebra & Matrix Decompositions*
+    27. *Silicon Photonics & Graphene Mode Distribution*
+    28. *Automatic Differential Equation Solving (Linear & Nonlinear ODEs, PDEs & Solitons)*
+    29. *Modern & Classical Control Systems (SISO, MIMO, Continuous, Discrete, ZOH & Ackermann)*
 - **Fuzzy Command Palette (`Ctrl+K` / `Cmd+K`)**: Search and execute commands, templates, and example notebooks instantaneously.
 
 ---
@@ -227,11 +280,11 @@ fn main() {
 All workspace integration and unit tests are centralized in the `tests/` directory:
 
 ```bash
-# Run all 470+ workspace unit, integration, and doc tests
+# Run all 480+ workspace unit, integration, and doc tests
 cargo test --workspace
 
 # Run specific integration suites
-cargo test --test notebook_suite    # GUI notepad, smart stream, plot bounds & inspector (92 tests)
+cargo test --test notebook_suite    # GUI notepad, smart stream, plot bounds, sliders & inspector (100 tests)
 cargo test --test engine_suite      # Core symbolic engine & physics (281 tests)
 cargo test --test advanced_suite    # Category theory, proofs, CAD, IGA & quantum (50 tests)
 cargo test --test core_suite        # ExprGraph, intervals, numbers & formatters (31 tests)

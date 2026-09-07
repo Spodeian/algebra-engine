@@ -52,6 +52,19 @@ impl SymbolicPdeSolver {
         x: SymbolId,
         t: SymbolId,
     ) -> AlgebraResult<ExprId> {
+        let c_node = graph.float(c_speed);
+        Self::solve_wave_dalembert_exact(graph, f_init, g_init, c_node, x, t)
+    }
+
+    /// Exact symbolic d'Alembert wave solution accepting lossless `c_node: ExprId`.
+    pub fn solve_wave_dalembert_exact(
+        graph: &ExprGraph,
+        f_init: ExprId,
+        g_init: Option<ExprId>,
+        c_node: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId> {
         let var_x = if let Some(s_str) = graph.symbols.resolve(x) {
             graph.symbol(&s_str)
         } else {
@@ -62,7 +75,6 @@ impl SymbolicPdeSolver {
         } else {
             graph.symbol("t")
         };
-        let c_node = graph.float(c_speed);
         let ct = graph.mul([c_node, var_t]);
 
         let x_minus_ct = graph.sub(var_x, ct);
@@ -164,5 +176,129 @@ impl SymbolicPdeSolver {
 
         let kernel = graph.mul([inv_norm, exp_term]);
         Ok(Simplifier::simplify(graph, kernel).unwrap_or(kernel))
+    }
+
+    /// Solve 1D Wave Equation $u_{tt} = c^2 u_{xx}$ on $[0, L]$ with fixed Dirichlet boundary conditions $u(0, t) = u(L, t) = 0$.
+    ///
+    /// Spatial and temporal separation modes:
+    /// $$X_n(x) = \sin\left(\frac{n\pi x}{L}\right), \quad T_n(t) = \cos\left(\frac{n\pi c t}{L}\right)$$
+    pub fn solve_wave_1d_separated(
+        graph: &ExprGraph,
+        c_node: ExprId,
+        l_node: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)> {
+        let var_x = if let Some(s_str) = graph.symbols.resolve(x) {
+            graph.symbol(&s_str)
+        } else {
+            graph.symbol("x")
+        };
+        let var_t = if let Some(t_str) = graph.symbols.resolve(t) {
+            graph.symbol(&t_str)
+        } else {
+            graph.symbol("t")
+        };
+
+        let pi = graph.symbol("pi");
+        let n_sym = graph.symbol("n");
+
+        // Spatial mode: sin(n * pi * x / L)
+        let n_pi_x = graph.mul([n_sym, pi, var_x]);
+        let k_x = graph.div(n_pi_x, l_node);
+        let spatial_mode = graph.function("sin", [k_x]);
+
+        // Temporal mode: cos(n * pi * c * t / L)
+        let omega_t = graph.mul([n_sym, pi, c_node, var_t]);
+        let arg_t = graph.div(omega_t, l_node);
+        let temporal_mode = graph.function("cos", [arg_t]);
+
+        Ok((spatial_mode, temporal_mode))
+    }
+
+    /// Solve 2D Laplace Equation $u_{xx} + u_{yy} = 0$ on rectangular domain $[0, a] \times [0, b]$
+    /// with boundary conditions $u(0, y) = u(a, y) = 0, u(x, 0) = 0$.
+    ///
+    /// Harmonic separation eigenbasis:
+    /// $$X_n(x) = \sin\left(\frac{n\pi x}{a}\right), \quad Y_n(y) = \sinh\left(\frac{n\pi y}{a}\right)$$
+    pub fn solve_laplace_2d_separated(
+        graph: &ExprGraph,
+        a_node: ExprId,
+        x: SymbolId,
+        y: SymbolId,
+    ) -> AlgebraResult<(ExprId, ExprId)> {
+        let var_x = if let Some(s_str) = graph.symbols.resolve(x) {
+            graph.symbol(&s_str)
+        } else {
+            graph.symbol("x")
+        };
+        let var_y = if let Some(s_str) = graph.symbols.resolve(y) {
+            graph.symbol(&s_str)
+        } else {
+            graph.symbol("y")
+        };
+
+        let pi = graph.symbol("pi");
+        let n_sym = graph.symbol("n");
+
+        let n_pi_x = graph.mul([n_sym, pi, var_x]);
+        let k_x = graph.div(n_pi_x, a_node);
+        let spatial_x = graph.function("sin", [k_x]);
+
+        let n_pi_y = graph.mul([n_sym, pi, var_y]);
+        let k_y = graph.div(n_pi_y, a_node);
+        let spatial_y = graph.function("sinh", [k_y]);
+
+        Ok((spatial_x, spatial_y))
+    }
+
+    /// Solve 1D Transport / Advection Equation via method of characteristics:
+    ///
+    /// $$u_t + c u_x = 0, \quad u(x, 0) = f(x) \implies u(x, t) = f(x - c t)$$
+    pub fn solve_transport_1d(
+        graph: &ExprGraph,
+        f_init: ExprId,
+        c_node: ExprId,
+        x: SymbolId,
+        t: SymbolId,
+    ) -> AlgebraResult<ExprId> {
+        let var_x = if let Some(s_str) = graph.symbols.resolve(x) {
+            graph.symbol(&s_str)
+        } else {
+            graph.symbol("x")
+        };
+        let var_t = if let Some(t_str) = graph.symbols.resolve(t) {
+            graph.symbol(&t_str)
+        } else {
+            graph.symbol("t")
+        };
+
+        let ct = graph.mul([c_node, var_t]);
+        let char_coord = graph.sub(var_x, ct);
+        let sol = graph.substitute(f_init, x, char_coord);
+        Ok(Simplifier::simplify(graph, sol).unwrap_or(sol))
+    }
+
+    /// Solve 2D Cylindrical / Radial Laplacian Eigenproblem:
+    ///
+    /// $$\nabla^2 u + k^2 u = 0 \implies \frac{1}{r} \frac{d}{dr}\left( r \frac{dR}{dr} \right) + \left( k^2 - \frac{n^2}{r^2} \right) R = 0$$
+    ///
+    /// Yields exact Bessel radical / transcendental eigenfunction:
+    /// $$R_n(r) = J_n(k r)$$
+    pub fn solve_bessel_radial(
+        graph: &ExprGraph,
+        k_node: ExprId,
+        r: SymbolId,
+        order: usize,
+    ) -> AlgebraResult<ExprId> {
+        let var_r = if let Some(s_str) = graph.symbols.resolve(r) {
+            graph.symbol(&s_str)
+        } else {
+            graph.symbol("r")
+        };
+        let kr = graph.mul([k_node, var_r]);
+        let n_order = graph.integer(order as i64);
+        let radial_sol = graph.function("besselj", [n_order, kr]);
+        Ok(radial_sol)
     }
 }

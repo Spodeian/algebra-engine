@@ -381,12 +381,12 @@ impl Simplifier {
         let node = graph.get(id);
         match &node.kind {
             ExprKind::Number(Number::Integer(i)) => Ok(rec.add(SymbolicLang::Num(*i))),
-            ExprKind::Number(Number::Float(bits)) => {
-                let f = f64::from_bits(*bits);
-                if f.fract() == 0.0 {
-                    Ok(rec.add(SymbolicLang::Num(f as i64)))
+            ExprKind::Number(Number::BigInteger(b)) => {
+                use num_traits::ToPrimitive;
+                if let Some(i) = b.to_i64() {
+                    Ok(rec.add(SymbolicLang::Num(i)))
                 } else {
-                    Ok(rec.add(SymbolicLang::Num(f.round() as i64)))
+                    Ok(rec.add(SymbolicLang::Symbol(b.to_string())))
                 }
             }
             ExprKind::Number(Number::Rational(num, den)) => {
@@ -396,6 +396,51 @@ impl Simplifier {
                     let n = rec.add(SymbolicLang::Num(*num));
                     let d = rec.add(SymbolicLang::Num(*den));
                     Ok(rec.add(SymbolicLang::Div([n, d])))
+                }
+            }
+            ExprKind::Number(Number::BigRational(r)) => {
+                use num_traits::ToPrimitive;
+                if let (Some(n), Some(d)) = (r.numer().to_i64(), r.denom().to_i64()) {
+                    if d == 1 {
+                        Ok(rec.add(SymbolicLang::Num(n)))
+                    } else {
+                        let n_id = rec.add(SymbolicLang::Num(n));
+                        let d_id = rec.add(SymbolicLang::Num(d));
+                        Ok(rec.add(SymbolicLang::Div([n_id, d_id])))
+                    }
+                } else {
+                    Ok(rec.add(SymbolicLang::Symbol(r.to_string())))
+                }
+            }
+            ExprKind::Number(Number::Scientific { mantissa, exponent }) => {
+                let n = Number::scientific(*mantissa, *exponent);
+                if let Number::Rational(num, den) = n {
+                    let n_id = rec.add(SymbolicLang::Num(num));
+                    let d_id = rec.add(SymbolicLang::Num(den));
+                    Ok(rec.add(SymbolicLang::Div([n_id, d_id])))
+                } else if let Number::Integer(i) = n {
+                    Ok(rec.add(SymbolicLang::Num(i)))
+                } else {
+                    let m_id = rec.add(SymbolicLang::Num(*mantissa));
+                    let ten_id = rec.add(SymbolicLang::Num(10));
+                    let exp_id = rec.add(SymbolicLang::Num(*exponent as i64));
+                    let pow_id = rec.add(SymbolicLang::Pow([ten_id, exp_id]));
+                    Ok(rec.add(SymbolicLang::Mul([m_id, pow_id])))
+                }
+            }
+            ExprKind::Number(Number::Float(bits)) => {
+                let f = f64::from_bits(*bits);
+                let decomp = Number::from_f64_lossless(f);
+                if let Number::Integer(i) = decomp {
+                    Ok(rec.add(SymbolicLang::Num(i)))
+                } else if let Number::Rational(num, den) = decomp {
+                    let n = rec.add(SymbolicLang::Num(num));
+                    let d = rec.add(SymbolicLang::Num(den));
+                    Ok(rec.add(SymbolicLang::Div([n, d])))
+                } else if f.fract() == 0.0 {
+                    Ok(rec.add(SymbolicLang::Num(f as i64)))
+                } else {
+                    Ok(rec.add(SymbolicLang::Num(f.round() as i64)))
                 }
             }
             ExprKind::Symbol(sym) => {
@@ -498,6 +543,11 @@ impl Simplifier {
                 let e1 = Self::egg_node_to_expr(graph, rec, *a)?;
                 let e2 = Self::egg_node_to_expr(graph, rec, *b)?;
                 Ok(graph.pow(e1, e2))
+            }
+            SymbolicLang::Div([a, b]) => {
+                let e1 = Self::egg_node_to_expr(graph, rec, *a)?;
+                let e2 = Self::egg_node_to_expr(graph, rec, *b)?;
+                Ok(graph.div(e1, e2))
             }
             SymbolicLang::Neg(a) => {
                 let e1 = Self::egg_node_to_expr(graph, rec, *a)?;

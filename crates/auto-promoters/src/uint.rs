@@ -18,23 +18,16 @@ mod roots;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Uint {
     Machine(usize),
-    Intermediate([usize; 3]),
     Promoted(BigUint),
-    Infinite,
 }
 
-// Machine is ALWAYS less than Promoted.
 impl Ord for Uint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if let std::cmp::Ordering::Equal = mem::discriminant(&self).cmp(&mem::discriminant(&other)) {
-            match (self, other) {
-                (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
-                (Uint::Intermediate(a), Uint::Intermediate(b)) => a.cmp(b),
-                (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
-                (Uint::Infinite, Uint::Infinite) => std::cmp::Ordering::Equal,
-            }
-        } else {
-            std::cmp::Ordering::Equal
+        match (self, other) {
+            (Uint::Machine(a), Uint::Machine(b)) => a.cmp(b),
+            (Uint::Machine(a), Uint::Promoted(b)) => BigUint::from(*a).cmp(b),
+            (Uint::Promoted(a), Uint::Machine(b)) => a.cmp(&BigUint::from(*b)),
+            (Uint::Promoted(a), Uint::Promoted(b)) => a.cmp(b),
         }
     }
 }

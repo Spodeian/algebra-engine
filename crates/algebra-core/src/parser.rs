@@ -295,14 +295,50 @@ impl<'a> ExprParser<'a> {
     }
 
     fn parse_number<'i>(&self, input: &'i str) -> IResult<&'i str, ExprId> {
-        let (input, num_str) = take_while1(|c: char| c.is_ascii_digit() || c == '.')(input)?;
-        if num_str.contains('.') {
-            if let Ok(val) = num_str.parse::<f64>() {
-                return Ok((input, self.graph.float(val)));
+        let mut chars = input.char_indices().peekable();
+        let mut end_idx = 0;
+        let mut has_digit = false;
+        let mut has_dot = false;
+        let mut has_exp = false;
+
+        while let Some(&(i, c)) = chars.peek() {
+            if c.is_ascii_digit() {
+                has_digit = true;
+                end_idx = i + c.len_utf8();
+                chars.next();
+            } else if c == '.' && !has_dot && !has_exp {
+                has_dot = true;
+                end_idx = i + c.len_utf8();
+                chars.next();
+            } else if (c == 'e' || c == 'E') && has_digit && !has_exp {
+                has_exp = true;
+                end_idx = i + c.len_utf8();
+                chars.next();
+                if let Some(&(si, sc)) = chars.peek() {
+                    if sc == '+' || sc == '-' {
+                        end_idx = si + sc.len_utf8();
+                        chars.next();
+                    }
+                }
+            } else {
+                break;
             }
-        } else if let Ok(val) = num_str.parse::<i64>() {
-            return Ok((input, self.graph.integer(val)));
         }
+
+        if !has_digit {
+            return Err(nom::Err::Error(nom::error::Error::new(
+                input,
+                nom::error::ErrorKind::Digit,
+            )));
+        }
+
+        let num_str = &input[..end_idx];
+        let rem = &input[end_idx..];
+
+        if let Some(num) = crate::Number::from_decimal_str(num_str) {
+            return Ok((rem, self.graph.number(num)));
+        }
+
         Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Digit,
@@ -1602,16 +1638,130 @@ pub fn parse_operation(input: &str) -> MathOperation {
         };
     }
 
-    // 10. Numerical Evaluation
+    // 9b. Polynomial Roots Command
+    if let Some(body) = input.strip_prefix("roots ") {
+        return MathOperation::Polynomial(PolynomialOpKind::Roots {
+            poly_str: body.trim().to_string(),
+        });
+    }
+
+    // 9c. Partial Differential Equations (Wave, Heat, Laplace, Transport, Bessel)
+    if let Some(body) = input.strip_prefix("pde ") {
+        let trimmed_body = body.trim();
+        if let Some(wave_args) = trimmed_body.strip_prefix("wave ") {
+            let parts: Vec<&str> = if wave_args.contains(',') {
+                wave_args.split(',').map(|s| s.trim()).collect()
+            } else {
+                wave_args.split_whitespace().collect()
+            };
+            let speed = parts.get(0).copied().unwrap_or("c").to_string();
+            let x_var = parts.get(1).copied().unwrap_or("x").to_string();
+            let t_var = parts.get(2).copied().unwrap_or("t").to_string();
+            let initial_pos = parts.get(3).copied().map(|s| s.to_string());
+            let initial_vel = parts.get(4).copied().map(|s| s.to_string());
+            return MathOperation::Pde(PdeOpKind::Wave1D {
+                speed,
+                x_var,
+                t_var,
+                initial_pos,
+                initial_vel,
+            });
+        }
+        if let Some(heat_args) = trimmed_body.strip_prefix("heat ") {
+            let parts: Vec<&str> = if heat_args.contains(',') {
+                heat_args.split(',').map(|s| s.trim()).collect()
+            } else {
+                heat_args.split_whitespace().collect()
+            };
+            let alpha = parts.get(0).copied().unwrap_or("alpha").to_string();
+            let x_var = parts.get(1).copied().unwrap_or("x").to_string();
+            let t_var = parts.get(2).copied().unwrap_or("t").to_string();
+            let length = parts.get(3).copied().map(|s| s.to_string());
+            return MathOperation::Pde(PdeOpKind::Heat1D {
+                alpha,
+                x_var,
+                t_var,
+                length,
+            });
+        }
+        if let Some(laplace_args) = trimmed_body.strip_prefix("laplace ") {
+            let parts: Vec<&str> = if laplace_args.contains(',') {
+                laplace_args.split(',').map(|s| s.trim()).collect()
+            } else {
+                laplace_args.split_whitespace().collect()
+            };
+            let x_var = parts.get(0).copied().unwrap_or("x").to_string();
+            let y_var = parts.get(1).copied().unwrap_or("y").to_string();
+            let a_bound = parts.get(2).copied().map(|s| s.to_string());
+            let b_bound = parts.get(3).copied().map(|s| s.to_string());
+            return MathOperation::Pde(PdeOpKind::Laplace2D {
+                x_var,
+                y_var,
+                a_bound,
+                b_bound,
+            });
+        }
+        if let Some(trans_args) = trimmed_body
+            .strip_prefix("transport ")
+            .or_else(|| trimmed_body.strip_prefix("advection "))
+        {
+            let parts: Vec<&str> = if trans_args.contains(',') {
+                trans_args.split(',').map(|s| s.trim()).collect()
+            } else {
+                trans_args.split_whitespace().collect()
+            };
+            let speed = parts.get(0).copied().unwrap_or("c").to_string();
+            let x_var = parts.get(1).copied().unwrap_or("x").to_string();
+            let t_var = parts.get(2).copied().unwrap_or("t").to_string();
+            let initial_state = parts.get(3).copied().map(|s| s.to_string());
+            return MathOperation::Pde(PdeOpKind::Transport1D {
+                speed,
+                x_var,
+                t_var,
+                initial_state,
+            });
+        }
+        if let Some(bessel_args) = trimmed_body.strip_prefix("bessel ") {
+            let parts: Vec<&str> = if bessel_args.contains(',') {
+                bessel_args.split(',').map(|s| s.trim()).collect()
+            } else {
+                bessel_args.split_whitespace().collect()
+            };
+            let wave_num = parts.get(0).copied().unwrap_or("k").to_string();
+            let r_var = parts.get(1).copied().unwrap_or("r").to_string();
+            let order = parts.get(2).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+            return MathOperation::Pde(PdeOpKind::RadialBessel {
+                wave_num,
+                r_var,
+                order,
+            });
+        }
+    }
+
+    // 10. Numerical Evaluation (Explicit lossy floating-point evaluation)
     if let Some(body) = input
         .strip_prefix("eval ")
         .or_else(|| input.strip_prefix("evalf "))
+        .or_else(|| input.strip_prefix("N "))
+        .or_else(|| input.strip_prefix("approx "))
     {
         return MathOperation::Evaluate {
             expression: body.trim().to_string(),
             precision_digits: None,
             bindings: HashMap::new(),
         };
+    }
+    if (input.starts_with("N(") || input.starts_with("evalf(") || input.starts_with("approx("))
+        && input.ends_with(')')
+    {
+        if let Some(open) = input.find('(') {
+            let inner = &input[open + 1..input.len() - 1];
+            return MathOperation::Evaluate {
+                expression: inner.trim().to_string(),
+                precision_digits: None,
+                bindings: HashMap::new(),
+            };
+        }
     }
 
     // 11. Symbol Declarations (Notebook style e.g. `a: Parameter = 2.0 [m]`, `x: Variable`, `a = 5.0 [kg]`)

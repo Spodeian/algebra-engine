@@ -235,11 +235,35 @@ impl ProbabilisticVerifier {
                     let rem = n.rem_euclid(p as i64);
                     Some(rem as u64)
                 }
+                Number::BigInteger(b) => {
+                    use num::Integer;
+                    use num_traits::ToPrimitive;
+                    let p_bi = num_bigint::BigInt::from(p);
+                    let rem = b.mod_floor(&p_bi);
+                    rem.to_u64()
+                }
                 Number::Rational(num, den) => {
                     let num_rem = num.rem_euclid(p as i64) as u64;
                     let den_rem = den.rem_euclid(p as i64) as u64;
                     let den_inv = Self::mod_inv(den_rem, p)?;
                     Some(((num_rem as u128 * den_inv as u128) % p_u128) as u64)
+                }
+                Number::BigRational(r) => {
+                    use num::Integer;
+                    use num_traits::ToPrimitive;
+                    let p_bi = num_bigint::BigInt::from(p);
+                    let num_rem = r.numer().mod_floor(&p_bi).to_u64()?;
+                    let den_rem = r.denom().mod_floor(&p_bi).to_u64()?;
+                    let den_inv = Self::mod_inv(den_rem, p)?;
+                    Some(((num_rem as u128 * den_inv as u128) % p_u128) as u64)
+                }
+                Number::Scientific { mantissa, exponent } => {
+                    if let Some(r) = Number::scientific(*mantissa, *exponent).as_f64() {
+                        let i = (r.round() as i64).rem_euclid(p as i64);
+                        Some(i as u64)
+                    } else {
+                        None
+                    }
                 }
                 Number::Float(u) => {
                     let f = f64::from_bits(*u);
@@ -310,7 +334,12 @@ impl ProbabilisticVerifier {
         match &node.kind {
             ExprKind::Number(num) => match num {
                 Number::Integer(n) => Some(*n as f64),
+                Number::BigInteger(b) => num_traits::ToPrimitive::to_f64(b),
                 Number::Rational(num, den) => Some(*num as f64 / *den as f64),
+                Number::BigRational(r) => num_traits::ToPrimitive::to_f64(r.as_ref()),
+                Number::Scientific { mantissa, exponent } => {
+                    Some(*mantissa as f64 * 10.0f64.powi(*exponent))
+                }
                 Number::Float(u) => Some(f64::from_bits(*u)),
                 Number::Constant(c) => match c {
                     Constant::Pi => Some(std::f64::consts::PI),
@@ -418,7 +447,14 @@ impl ProbabilisticVerifier {
         match &node.kind {
             ExprKind::Number(num) => match num {
                 Number::Integer(n) => Some(RealInterval::point(*n as f64)),
+                Number::BigInteger(b) => num_traits::ToPrimitive::to_f64(b).map(RealInterval::point),
                 Number::Rational(num, den) => Some(RealInterval::point(*num as f64 / *den as f64)),
+                Number::BigRational(r) => {
+                    num_traits::ToPrimitive::to_f64(r.as_ref()).map(RealInterval::point)
+                }
+                Number::Scientific { mantissa, exponent } => {
+                    Some(RealInterval::point(*mantissa as f64 * 10.0f64.powi(*exponent)))
+                }
                 Number::Float(u) => Some(RealInterval::point(f64::from_bits(*u))),
                 Number::Constant(c) => match c {
                     Constant::Pi => Some(RealInterval::point(std::f64::consts::PI)),

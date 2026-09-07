@@ -1,0 +1,26 @@
+# URAE Mathematics Notepad: Number Theory & Elliptic Curve Cryptography
+# Interactive exploration of prime numbers, modular arithmetic, RSA, and Weierstrass elliptic curves over finite fields GF(p).
+
+# 1. Modular Arithmetic & Large Prime Testing
+p = 6277101735386680763835789423207666416083908700390324961279
+is_prime(p)
+
+# Modular exponentiation & multiplicative inverse: a^(p-1) ≡ 1 (mod p)
+base: Parameter = 7.0
+exp: Parameter = 100.0
+mod: Parameter = 101.0
+mod_pow(7, 100, 101)
+mod_inverse(17, 3120)
+
+# 2. Elliptic Curves over Finite Fields GF(p)
+# Weierstrass normal form: y² ≡ x³ + ax + b (mod p)
+# secp256k1 parameters: a = 0, b = 7
+curve_ecc = elliptic_curve(a = 0, b = 7, p = p)
+G = curve_point(curve_ecc, x = 12, y = 34)
+pub_key = curve_mul(G, 1337)
+curve_point_add(G, pub_key)
+
+# 3. Factorization & Discrete Logarithm
+composite_n = 10403
+pollard_rho(composite_n)
+euler_totient(composite_n)

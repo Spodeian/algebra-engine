@@ -15,6 +15,8 @@ pub enum WorkspaceTab {
     PalettesBuilder,
     ExampleGallery,
     StorageDiagnostics,
+    DependencyGraph,
+    PresentationReport,
     Settings,
 }
 
@@ -28,6 +30,8 @@ impl WorkspaceTab {
             Self::PalettesBuilder => "🧮 Builder Wizards",
             Self::ExampleGallery => "📚 Example Gallery",
             Self::StorageDiagnostics => "💾 Storage & Sync",
+            Self::DependencyGraph => "🕸️ Dependency Graph",
+            Self::PresentationReport => "📑 Presentation Report",
             Self::Settings => "⚙️ Settings",
         }
     }
@@ -41,6 +45,8 @@ impl WorkspaceTab {
             Self::PalettesBuilder => "🧮",
             Self::ExampleGallery => "📚",
             Self::StorageDiagnostics => "💾",
+            Self::DependencyGraph => "🕸️",
+            Self::PresentationReport => "📑",
             Self::Settings => "⚙️",
         }
     }
@@ -50,7 +56,10 @@ impl WorkspaceTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum WorkspaceLayoutPreset {
     #[default]
+    DualHalves,
     FluidNotepad,
+    PresentationReport,
+    DependencyGraph,
     SplitDual,
     TripleIDE,
     ZenMode,
@@ -60,7 +69,10 @@ pub enum WorkspaceLayoutPreset {
 impl WorkspaceLayoutPreset {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::DualHalves => "Dual Halves (Left Inputs & Sliders / Right Outputs & 3D)",
             Self::FluidNotepad => "Fluid Inline Notepad",
+            Self::PresentationReport => "Presentation & Reporting Mode",
+            Self::DependencyGraph => "Dependency Graph View",
             Self::SplitDual => "Dual Split (Editor + Visualizer)",
             Self::TripleIDE => "Triple IDE (Editor + Plots + Terminal)",
             Self::ZenMode => "Zen Mode (Full Screen Canvas)",
@@ -87,8 +99,8 @@ impl Default for WorkspaceState {
         Self {
             active_tab: WorkspaceTab::MathDocument,
             secondary_tab: Some(WorkspaceTab::Plot2D),
-            layout_preset: WorkspaceLayoutPreset::FluidNotepad,
-            split_ratio: 0.55,
+            layout_preset: WorkspaceLayoutPreset::DualHalves,
+            split_ratio: 0.50,
             show_sidebar: true,
             show_bottom_panel: false,
             simplified_single_tab: false,
@@ -96,6 +108,8 @@ impl Default for WorkspaceState {
                 WorkspaceTab::MathDocument,
                 WorkspaceTab::Plot2D,
                 WorkspaceTab::Viewport3D,
+                WorkspaceTab::DependencyGraph,
+                WorkspaceTab::PresentationReport,
                 WorkspaceTab::TerminalCLI,
             ],
         }
@@ -118,6 +132,24 @@ impl WorkspaceState {
     pub fn set_layout(&mut self, preset: WorkspaceLayoutPreset) {
         self.layout_preset = preset;
         match preset {
+            WorkspaceLayoutPreset::DualHalves => {
+                self.show_sidebar = true;
+                self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
+                self.split_ratio = 0.50;
+            }
+            WorkspaceLayoutPreset::PresentationReport => {
+                self.show_sidebar = false;
+                self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
+                self.split_ratio = 1.0;
+            }
+            WorkspaceLayoutPreset::DependencyGraph => {
+                self.show_sidebar = false;
+                self.show_bottom_panel = false;
+                self.simplified_single_tab = false;
+                self.split_ratio = 1.0;
+            }
             WorkspaceLayoutPreset::FluidNotepad => {
                 self.show_sidebar = true;
                 self.show_bottom_panel = false;

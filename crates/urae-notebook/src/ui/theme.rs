@@ -633,5 +633,26 @@ impl ThemePalette {
 
         ui.fonts_mut(|f| f.layout_job(job))
     }
+
+    /// Layout plain text in monospace font without semantic syntax highlighting.
+    pub fn plain_monospace_layouter(
+        &self,
+        ui: &egui::Ui,
+        text: &str,
+        wrap_width: f32,
+    ) -> std::sync::Arc<egui::Galley> {
+        let mut job = egui::text::LayoutJob::default();
+        job.wrap.max_width = wrap_width;
+        job.append(
+            text,
+            0.0,
+            egui::TextFormat {
+                font_id: egui::FontId::monospace(13.0),
+                color: self.text_primary,
+                ..Default::default()
+            },
+        );
+        ui.fonts_mut(|f| f.layout_job(job))
+    }
 }
 

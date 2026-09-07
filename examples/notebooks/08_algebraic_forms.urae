@@ -1,0 +1,30 @@
+# URAE Mathematics Notepad: Canonical Algebraic Forms & E-Graph Simplification
+# Interactive workflow for exploring polynomial normal forms, Horner representations, tropical semirings, and equality saturation.
+
+# Variable declarations
+x: Variable
+y: Variable
+
+# Set-builder domain constraints
+{ x in Reals | -10.0 <= x <= 10.0 }
+{ y in Reals | -10.0 <= y <= 10.0 }
+
+# 1. Polynomial Expansion vs Factored Forms
+p1 = (x + 2)^3 * (x - 5)^2
+expand(p1)
+factor(expand(p1))
+
+# 2. Horner's Nested Rule for Optimal Numerical Evaluation
+# P(x) = a0 + x*(a1 + x*(a2 + x*(a3)))
+horner_form(expand(p1), x)
+
+# 3. Rational Function Normalization & Partial Fractions
+r1 = (2*x + 1) / (x^2 - 1)
+apart(r1, x)
+together(apart(r1, x))
+
+# 4. Tropical Semiring Max-Plus Algebraic Form
+# In tropical algebra: a ⊕ b = max(a, b), a ⊗ b = a + b
+tropical_add(12.0, 19.5)
+tropical_mul(5.0, 8.0)
+tropical_poly_eval([0.0, 2.0, 5.0], 3.0)

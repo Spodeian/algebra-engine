@@ -26,8 +26,13 @@ impl CodeGenerator {
         match &node.kind {
             ExprKind::Number(n) => match n {
                 algebra_core::Number::Integer(i) => Ok(format!("{i}.0")),
+                algebra_core::Number::BigInteger(b) => Ok(format!("{b}.0")),
                 algebra_core::Number::Float(bits) => Ok(format!("{}", f64::from_bits(*bits))),
                 algebra_core::Number::Rational(num, den) => Ok(format!("({num}.0 / {den}.0)")),
+                algebra_core::Number::BigRational(r) => Ok(format!("({}.0 / {}.0)", r.numer(), r.denom())),
+                algebra_core::Number::Scientific { mantissa, exponent } => {
+                    Ok(format!("({mantissa}.0 * 10.0f64.powi({exponent}))"))
+                }
                 algebra_core::Number::Constant(c) => match c {
                     algebra_core::Constant::Pi => Ok("std::f64::consts::PI".into()),
                     algebra_core::Constant::E => Ok("std::f64::consts::E".into()),

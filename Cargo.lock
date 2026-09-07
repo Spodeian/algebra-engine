@@ -55,7 +55,7 @@ dependencies = [
 
 [[package]]
 name = "algebra-advanced"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ahash 0.8.12",
  "algebra-core",
@@ -80,14 +80,16 @@ dependencies = [
 
 [[package]]
 name = "algebra-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ahash 0.8.12",
+ "auto-promoters",
  "bnum",
  "criterion",
  "dashmap",
  "nom",
  "num",
+ "num-bigint",
  "num-rational",
  "num-traits",
  "parking_lot",
@@ -101,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "algebra-engine"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ahash 0.8.12",
  "algebra-core",
@@ -203,6 +205,16 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
+
+[[package]]
+name = "auto-promoters"
+version = "0.2.3"
+dependencies = [
+ "bnum",
+ "criterion",
+ "num",
+ "serde",
+]
 
 [[package]]
 name = "autocfg"
@@ -2059,6 +2071,7 @@ checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2068,6 +2081,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2120,6 +2134,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -3765,18 +3780,19 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urae"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "algebra-advanced",
  "algebra-core",
  "algebra-engine",
+ "auto-promoters",
  "criterion",
  "urae-cli",
 ]
 
 [[package]]
 name = "urae-cli"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "algebra-advanced",
  "algebra-core",
@@ -3791,7 +3807,7 @@ dependencies = [
 
 [[package]]
 name = "urae-ffi"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "algebra-core",
  "algebra-engine",
@@ -3800,7 +3816,7 @@ dependencies = [
 
 [[package]]
 name = "urae-kernel"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -3810,7 +3826,7 @@ dependencies = [
 
 [[package]]
 name = "urae-lsp"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "mimalloc",
  "serde",
@@ -3821,7 +3837,7 @@ dependencies = [
 
 [[package]]
 name = "urae-notebook"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "base64",
  "bson",
@@ -3849,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "urae-py"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -3859,7 +3875,7 @@ dependencies = [
 
 [[package]]
 name = "urae-tests"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "ahash 0.8.12",
  "algebra-advanced",
@@ -3886,7 +3902,7 @@ dependencies = [
 
 [[package]]
 name = "urae-wasm"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "algebra-core",
  "algebra-engine",

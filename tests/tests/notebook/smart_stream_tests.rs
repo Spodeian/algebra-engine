@@ -307,23 +307,24 @@ fn test_compute_line_upstream_dependencies() {
     state.evaluate_all();
 
     // Line 2 (c = b + $1) depends directly on Line 1 (b), Line 0 ($1), and transitively on Line 0 (a)
+    // BUT line 2 must NEVER be marked as its own dependency
     let deps_line2 = compute_line_upstream_dependencies(2, &state.parsed_lines);
-    assert!(deps_line2.contains(&2)); // self
+    assert!(!deps_line2.contains(&2)); // NOT self
     assert!(deps_line2.contains(&1)); // b
     assert!(deps_line2.contains(&0)); // $1 and a
     assert!(!deps_line2.contains(&3)); // z is independent
 
-    // Line 1 (b = a * 2) depends on Line 0 (a) and self
+    // Line 1 (b = a * 2) depends on Line 0 (a) and NEVER on self
     let deps_line1 = compute_line_upstream_dependencies(1, &state.parsed_lines);
-    assert!(deps_line1.contains(&1));
+    assert!(!deps_line1.contains(&1)); // NOT self
     assert!(deps_line1.contains(&0));
     assert!(!deps_line1.contains(&2));
     assert!(!deps_line1.contains(&3));
 
-    // Line 3 (z = 99) depends only on self
+    // Line 3 (z = 99) has no upstream dependencies (empty set, never self)
     let deps_line3 = compute_line_upstream_dependencies(3, &state.parsed_lines);
-    assert_eq!(deps_line3.len(), 1);
-    assert!(deps_line3.contains(&3));
+    assert_eq!(deps_line3.len(), 0);
+    assert!(!deps_line3.contains(&3));
 }
 
 #[test]
@@ -365,13 +366,14 @@ fn test_wrapped_lines_do_not_get_duplicate_line_numbers() {
     let doc_text = format!("{}\ny = 42", long_formula);
 
     let mut galley_opt = None;
-    let _ = ctx.run(Default::default(), |ctx| {
+    let mut output = ctx.run_ui(Default::default(), |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| {
             let palette = urae_notebook::ui::ThemeKind::Dark.palette();
             let galley = palette.math_syntax_layouter(ui, &doc_text, 120.0);
             galley_opt = Some(galley);
         });
     });
+    output.textures_delta.clear();
 
     let galley = galley_opt.expect("Galley must be produced by layouter");
     assert!(galley.rows.len() > 2, "Expected wrapped lines across multiple visual rows (got {})", galley.rows.len());
@@ -609,3 +611,344 @@ fn test_accessibility_themes_and_workspace_modes() {
     assert!(ws.simplified_single_tab);
     assert_eq!(ws.split_ratio, 1.0);
 }
+
+#[test]
+fn test_is_variable_or_param_assignment() {
+    use urae_notebook::app::is_variable_or_param_assignment;
+
+    // Positive cases: Variable, parameter, or constant assignments
+    assert!(is_variable_or_param_assignment("x = 5"));
+    assert!(is_variable_or_param_assignment("  a = 12.3 [m/s]  "));
+    assert!(is_variable_or_param_assignment("k = 2.5"));
+    assert!(is_variable_or_param_assignment("slider a = 10"));
+    assert!(is_variable_or_param_assignment("param k = 2.5"));
+    assert!(is_variable_or_param_assignment("const c = 299792458"));
+    assert!(is_variable_or_param_assignment("E = m * c^2"));
+    assert!(is_variable_or_param_assignment("var radius = 100"));
+    assert!(is_variable_or_param_assignment("let count = 42"));
+
+    // Negative cases: Calculations, functions, and equation solutions
+    assert!(!is_variable_or_param_assignment("2 + 2"));
+    assert!(!is_variable_or_param_assignment("sin(pi / 4)"));
+    assert!(!is_variable_or_param_assignment("integrate(x^2, x)"));
+    assert!(!is_variable_or_param_assignment("x^2 - 4 = 0 =?"));
+    assert!(!is_variable_or_param_assignment("solve(x + 5 = 10)"));
+    assert!(!is_variable_or_param_assignment("x == 5"));
+    assert!(!is_variable_or_param_assignment("f(x) = x^2"));
+}
+
+#[test]
+fn test_dual_halves_resizing_and_single_display() {
+    use urae_notebook::ui::WorkspaceLayoutPreset;
+
+    let mut app = UraeNotebookApp::default();
+    assert_eq!(app.workspace.layout_preset, WorkspaceLayoutPreset::DualHalves);
+
+    // Initial default split
+    assert_eq!(app.workspace.split_ratio, 0.50);
+
+    // Test dragging/resizing results column
+    let available_space = 1000.0_f32;
+    let initial_width = app.right_sidebar_width;
+    let delta_x = -50.0_f32; // Drag 50px to the left (widening results column)
+    app.right_sidebar_width = (app.right_sidebar_width - delta_x)
+        .clamp(180.0, (available_space - 120.0).max(200.0));
+    app.workspace.split_ratio = (1.0 - (app.right_sidebar_width / available_space)).clamp(0.15, 0.85);
+
+    // Right sidebar width adjusted
+    assert!(app.right_sidebar_width > initial_width);
+    assert!(app.workspace.split_ratio < 0.75);
+
+    // Floating results panel flag
+    assert!(!app.right_panel_floating);
+    app.right_panel_floating = true;
+    assert!(app.right_panel_floating);
+}
+
+#[test]
+fn test_modular_panel_settings_and_floating_controls() {
+    use urae_notebook::app::{UraeNotebookApp, WindowDockPosition};
+
+    let mut app = UraeNotebookApp::default();
+
+    // 1. Initial panel visibilities & dock states
+    assert!(app.show_left_sidebar);
+    assert!(!app.left_panel_floating);
+
+    assert!(app.show_editor);
+    assert!(!app.editor_floating);
+
+    assert!(app.show_right_sidebar);
+    assert!(!app.right_panel_floating);
+
+    assert!(!app.show_cli_terminal);
+    assert_eq!(app.terminal_dock, WindowDockPosition::DockBottom);
+
+    // 2. Modular display settings defaults
+    let s = &app.state.session.settings;
+    assert!(s.left_panel_show_sliders);
+    assert!(s.left_panel_show_domains);
+    assert!(s.left_panel_show_values);
+    assert!(s.left_panel_show_badges);
+
+    assert!(s.show_editor);
+    assert!(s.editor_syntax_highlighting);
+    assert!(s.editor_word_wrap);
+    assert!(s.editor_alt_scrubbing);
+
+    assert!(s.right_panel_show_plots);
+    assert!(s.right_panel_show_3d);
+    assert!(s.right_panel_show_cad);
+    assert!(s.right_panel_show_solutions);
+    assert!(!s.right_panel_compact_mode);
+    assert!(s.right_panel_show_inbound_refs);
+
+    assert!(s.terminal_show_timing);
+
+    // 3. Popping out and hiding panels independently
+    // Left panel pop & hide
+    app.left_panel_floating = true;
+    assert!(app.left_panel_floating);
+    app.show_left_sidebar = false;
+    assert!(!app.show_left_sidebar);
+
+    // Editor pop & hide
+    app.editor_floating = true;
+    assert!(app.editor_floating);
+    app.show_editor = false;
+    assert!(!app.show_editor);
+
+    // Right panel pop & hide
+    app.right_panel_floating = true;
+    assert!(app.right_panel_floating);
+    app.show_right_sidebar = false;
+    assert!(!app.show_right_sidebar);
+
+    // Terminal dock switching
+    app.show_cli_terminal = true;
+    assert!(app.show_cli_terminal);
+    app.terminal_dock = WindowDockPosition::DockBottom;
+    assert_eq!(app.terminal_dock, WindowDockPosition::DockBottom);
+    app.terminal_dock = WindowDockPosition::DockRight;
+    assert_eq!(app.terminal_dock, WindowDockPosition::DockRight);
+}
+
+#[test]
+fn test_terminal_document_line_references_resolution() {
+    use std::collections::HashMap;
+    use urae_notebook::notebook::NotebookState;
+
+    let mut line_results = HashMap::new();
+    line_results.insert(0, 10.0); // Line 1 ($1)
+    line_results.insert(1, 20.0); // Line 2 ($2)
+    line_results.insert(2, 30.0); // Line 3 ($3)
+    let last_val = Some(30.0);
+
+    // 1. Resolve $N references
+    let res = NotebookState::resolve_line_references("$1 + $2", last_val, &line_results);
+    assert_eq!(res, "10 + 20");
+
+    // 2. Resolve ans
+    let res_ans = NotebookState::resolve_line_references("ans * 2", last_val, &line_results);
+    assert_eq!(res_ans, "30 * 2");
+
+    // 3. Resolve range mathematical aggregations
+    let res_sum = NotebookState::resolve_line_references("sum($1..$3)", last_val, &line_results);
+    assert_eq!(res_sum, "60");
+
+    // 4. Combined document references
+    let res_comb = NotebookState::resolve_line_references("$1 + ans", last_val, &line_results);
+    assert_eq!(res_comb, "10 + 30");
+}
+
+#[test]
+fn test_left_panel_parameter_distinct_badges_and_graph_options() {
+    use urae_notebook::app::{PlotScaleMode, UraeNotebookApp};
+    use urae_notebook::notebook::{SymbolMetadata, SymbolRole};
+
+    // 1. Symbol distinct badges: standard scalar real parameter should have NO redundant duplicate tags
+    let mut meta = SymbolMetadata::new("a", 5.0, SymbolRole::Parameter);
+    meta.domain_type = "Real".to_string();
+    meta.unit_str = Some("m/s".to_string());
+
+    // compound_tags contains redundant: ["Parameter", "Real", "Scalar", "[m/s]"]
+    let compound = meta.compound_tags();
+    assert!(compound.contains(&"Parameter".to_string()));
+    assert!(compound.contains(&"Real".to_string()));
+    assert!(compound.contains(&"Scalar".to_string()));
+    assert!(compound.contains(&"[m/s]".to_string()));
+
+    // distinct_badges filters out Parameter (role), Real (domain), Scalar (redundant default), and [m/s] (unit)
+    let distinct = meta.distinct_badges();
+    assert!(!distinct.contains(&"Parameter".to_string()));
+    assert!(!distinct.contains(&"Real".to_string()));
+    assert!(!distinct.contains(&"Scalar".to_string()));
+    assert!(!distinct.contains(&"[m/s]".to_string()));
+    assert!(distinct.is_empty());
+
+    // If function of args, matrix, or distribution, distinct_badges preserves those informative badges
+    meta.is_distribution = true;
+    let distinct_dist = meta.distinct_badges();
+    assert_eq!(distinct_dist, vec!["Distribution".to_string()]);
+
+    meta.is_distribution = false;
+    meta.tensor_rank = Some(2);
+    meta.tensor_shape = vec![3, 3];
+    let distinct_mat = meta.distinct_badges();
+    assert_eq!(distinct_mat, vec!["Matrix (3×3)".to_string()]);
+
+    meta.tensor_rank = None;
+    meta.is_function = true;
+    meta.function_args = vec!["x".to_string(), "y".to_string()];
+    let distinct_fn = meta.distinct_badges();
+    assert_eq!(distinct_fn, vec!["Function of (x, y)".to_string()]);
+
+    // 2. Plot scale modes & collapsed plot states in UraeNotebookApp
+    let mut app = UraeNotebookApp::default();
+    assert_eq!(app.plot_scale_modes.get(&0).copied(), None);
+
+    // Scaling mode persistence
+    app.plot_scale_modes.insert(0, PlotScaleMode::SemiLogY);
+    app.plot_scale_modes.insert(1, PlotScaleMode::LogLog);
+    assert_eq!(app.plot_scale_modes.get(&0).copied(), Some(PlotScaleMode::SemiLogY));
+    assert_eq!(app.plot_scale_modes.get(&1).copied(), Some(PlotScaleMode::LogLog));
+
+    // Plot collapse tracking
+    assert!(!app.collapsed_plot_lines.contains(&0));
+    app.collapsed_plot_lines.insert(0);
+    assert!(app.collapsed_plot_lines.contains(&0));
+    app.collapsed_plot_lines.remove(&0);
+    assert!(!app.collapsed_plot_lines.contains(&0));
+}
+
+#[test]
+fn test_assembled_equation_notebook_evaluation() {
+    use urae_notebook::notebook::NotebookState;
+
+    let text = r#"
+lambda: Parameter = 1.55 [um]
+d_core: Parameter = 0.22 [um]
+n_si = 3.48
+n_sio2 = 1.44
+a = d_core / 2.0
+k0 = 2.0 * 3.14159265 / lambda
+V = k0 * a * sqrt(n_si^2 - n_sio2^2)
+u: Variable
+solve u * tan(u) - sqrt(V^2 - u^2) = 0, u
+u0 = 1.346
+w0 = sqrt(V^2 - u0^2)
+n_eff = sqrt(n_si^2 - (u0 / (k0 * a))^2)
+y: Variable
+E_core(y) = cos(u0 * (y / a))
+I_surf = cos(u0)^2
+Gamma_graphene = I_surf / (a * (1.0 + sin(2.0 * u0) / (2.0 * u0)) + (I_surf * a) / w0)
+alpha_attenuation = Gamma_graphene * 0.023 / n_eff
+"#;
+
+    let mut state = NotebookState::default();
+    state.session.raw_document_text = text.trim().to_string();
+    state.evaluate_all();
+
+    for (idx, pl) in state.parsed_lines.iter().enumerate() {
+        println!("Line {}: raw={:?}, out={:?}, err={:?}", idx + 1, pl.raw_text, pl.output_unicode, pl.error_msg);
+    }
+    println!("Symbols: {:?}", state.session.symbol_metadata.keys().collect::<Vec<_>>());
+
+    assert!(state.parsed_lines.iter().any(|p| p.raw_text.contains("n_eff")));
+
+    // 2. Test assembled ODE & PDE notebook text
+    let ode_text = r#"
+zeta: Parameter = 0.20
+omega: Parameter = 3.00 [rad/s]
+t: Variable
+char_eq = r^2 + 2 * zeta * omega * r + omega^2
+solve r^2 + 2 * zeta * omega * r + omega^2 = 0, r
+omega_d = omega * sqrt(1.0 - zeta^2)
+y_resp(t) = exp(-zeta * omega * t) * (cos(omega_d * t) + (zeta * omega / omega_d) * sin(omega_d * t))
+c_wave: Parameter = 2.0 [m/s]
+L_string: Parameter = 1.0 [m]
+x: Variable
+k_mode = 3.14159265 / L_string
+omega_wave = c_wave * k_mode
+u_standing(x) = sin(k_mode * x) * cos(omega_wave * 0.25)
+c_soliton: Parameter = 4.0 [m/s]
+soliton(x) = (c_soliton / 2.0) / (cosh(sqrt(c_soliton) / 2.0 * x))^2
+"#;
+
+    let mut ode_state = NotebookState::default();
+    ode_state.session.raw_document_text = ode_text.trim().to_string();
+    ode_state.evaluate_all();
+
+    for (idx, pl) in ode_state.parsed_lines.iter().enumerate() {
+        assert!(pl.error_msg.is_none(), "ODE Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+    }
+    assert!(ode_state.parsed_lines.iter().any(|p| p.raw_text.contains("y_resp(t)")));
+    assert!(ode_state.parsed_lines.iter().any(|p| p.raw_text.contains("soliton(x)")));
+
+    // 3. Test assembled Fluid Dynamics Navier-Stokes channel flow
+    let fluid_text = r#"
+mu: Parameter = 0.001 [Pa*s]
+rho: Parameter = 1000.0 [kg/m^3]
+h: Parameter = 0.01 [m]
+G: Parameter = 50.0 [Pa/m]
+y: Variable
+u_channel(y) = (G * h^2 / (2.0 * mu)) * (1.0 - (y / h)^2)
+u_max = (G * h^2) / (2.0 * mu)
+u_mean = (2.0 / 3.0) * u_max
+Q_flow = (2.0 * G * h^3) / (3.0 * mu)
+tau_wall = G * h
+Re_flow = (rho * u_mean * (2.0 * h)) / mu
+"#;
+    let mut fluid_state = NotebookState::default();
+    fluid_state.session.raw_document_text = fluid_text.trim().to_string();
+    fluid_state.evaluate_all();
+    for (idx, pl) in fluid_state.parsed_lines.iter().enumerate() {
+        assert!(pl.error_msg.is_none(), "Fluid Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+    }
+    assert!(fluid_state.parsed_lines.iter().any(|p| p.raw_text.contains("u_channel(y)")));
+
+    // 4. Test assembled Multiphysics Poisson Heat Conduction
+    let heat_text = r#"
+k_thermal: Parameter = 45.0 [W/(m*K)]
+Q_source: Parameter = 50000.0 [W/m^3]
+L_rod: Parameter = 0.20 [m]
+T_left: Parameter = 293.15 [K]
+T_right: Parameter = 350.0 [K]
+x: Variable
+solve C1 * L_rod - (Q_source / (2.0 * k_thermal)) * L_rod^2 + T_left = T_right, C1
+C1_val = (T_right - T_left) / L_rod + (Q_source * L_rod) / (2.0 * k_thermal)
+T_profile(x) = T_left + C1_val * x - (Q_source / (2.0 * k_thermal)) * x^2
+solve C1_val - (Q_source / k_thermal) * x = 0, x
+"#;
+    let mut heat_state = NotebookState::default();
+    heat_state.session.raw_document_text = heat_text.trim().to_string();
+    heat_state.evaluate_all();
+    for (idx, pl) in heat_state.parsed_lines.iter().enumerate() {
+        assert!(pl.error_msg.is_none(), "Heat Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+    }
+    assert!(heat_state.parsed_lines.iter().any(|p| p.raw_text.contains("T_profile(x)")));
+
+    // 5. Test assembled Control Theory State-Space & Pole Placement
+    let control_text = r#"
+wn: Parameter = 3.00 [rad/s]
+zeta: Parameter = 0.35
+s: Variable
+char_poly = s^2 + 2.0 * zeta * wn * s + wn^2
+solve s^2 + 2.0 * zeta * wn * s + wn^2 = 0, s
+H_siso(s) = wn^2 / (s^2 + 2.0 * zeta * wn * s + wn^2)
+solve 9.0 + 9.0 * k1 = 20.0, k1
+solve 2.1 + 9.0 * k2 = 9.0, k2
+k1_gain = 11.0 / 9.0
+k2_gain = 6.9 / 9.0
+"#;
+    let mut control_state = NotebookState::default();
+    control_state.session.raw_document_text = control_text.trim().to_string();
+    control_state.evaluate_all();
+    for (idx, pl) in control_state.parsed_lines.iter().enumerate() {
+        assert!(pl.error_msg.is_none(), "Control Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+    }
+    assert!(control_state.parsed_lines.iter().any(|p| p.raw_text.contains("H_siso(s)")));
+}
+
+
+

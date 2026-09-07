@@ -1,28 +1,36 @@
 # URAE Mathematics Notepad: Advanced Calculus, Special Functions & ODEs
-# Interactive continuous document for symbolic calculus, limits, series, and differential equations.
+# Demonstrates symbolic differentiation, Risch integration, algebraic equation solving, series expansions, and limits.
 
-# Variable and parameter declarations with physical units and bounds
 a: Parameter = 2.50 [m]
 b: Parameter = 1.20 [s^-1]
 omega: Parameter = 3.14159 [rad/s]
 x: Variable
 t: Variable
 
-# Set-builder domain constraints
 { x in Reals | -10.0 <= x <= 10.0 }
 { t in Reals | 0.0 <= t <= 100.0 }
 
-# Symbolic differentiation & Risch integration
+# 1. Assembling and Differentiating Functions
 f(x) = a * exp(-b * x) * cos(omega * x)
 diff(f(x), x)
 diff(diff(f(x), x), x)
+
+# 2. Symbolic Integration
 integrate(x^3 * exp(x), x)
+integrate(sin(x)^2, x)
 
-# Asymptotic Series & Limits
+# 3. Assembling and Solving Algebraic Equations
+poly_eq = x^3 - 6.0 * x^2 + 11.0 * x - 6.0
+solve x^3 - 6.0 * x^2 + 11.0 * x - 6.0 = 0, x
+
+# Quadratic formula assembly: a*x^2 + b*x + c = 0
+solve 2.0 * x^2 - 8.0 * x + 6.0 = 0, x
+
+# 4. Assembling and Solving ODE Characteristic Polynomials
+# y''(t) + 2*b*y'(t) + omega^2*y(t) = 0
+char_ode = r^2 + 2.0 * b * r + omega^2
+solve r^2 + 2.0 * b * r + omega^2 = 0, r
+
+# 5. Taylor Series & Limits
 series(sin(x) / x, x, 0, 8)
-limit((1 - cos(x)) / x^2, x, 0)
-limit(x * ln(1 + 1/x), x, infinity)
-
-# Ordinary Differential Equations (ODEs)
-ode: diff(y(t), t, 2) + 2 * b * diff(y(t), t) + omega^2 * y(t) = 0
-solve_ode(ode, y(t))
+limit((1.0 - cos(x)) / x^2, x, 0)

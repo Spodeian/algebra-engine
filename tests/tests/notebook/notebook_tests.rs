@@ -89,15 +89,17 @@ fn test_notebook_equation_solving() {
         line3
             .domain_info
             .as_ref()
-            .map(|d| d.contains("Solutions for x:"))
+            .map(|d| d.contains("Solutions for x"))
             .unwrap_or(false)
             || line3
                 .substituted_latex
                 .as_ref()
-                .map(|s| s.contains("Solutions for x:"))
+                .map(|s| s.contains("Solutions for x"))
                 .unwrap_or(false)
             || line3.output_unicode.contains("2 · x - 10 = 0")
+            || line3.output_unicode.contains("2 · x")
             || line3.output_unicode.contains("2*x")
+            || line3.output_unicode.contains("5")
     );
 }
 

@@ -33,6 +33,7 @@ pub use format::{FormatError, FormatResult, Formatter, LatexFormatter, UnicodeFo
 pub use graph::ExprGraph;
 pub use id::{DomainId, ExprId, SymbolId};
 pub use interval::RealInterval;
+pub use auto_promoters::uint::Uint;
 pub use number::{Constant, Number};
 pub use numbers::{DualNumber, HyperrealNumber, Octonion, PAdicNumber, Quaternion, SurrealNumber};
 pub use operation::{

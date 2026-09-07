@@ -99,7 +99,18 @@ impl NumericalEval for ExprGraph {
         match &node.kind {
             ExprKind::Number(num) => match num {
                 Number::Integer(i) => Ok(BigValue::Real(*i as f64)),
+                Number::BigInteger(b) => {
+                    use num_traits::ToPrimitive;
+                    Ok(BigValue::Real(b.to_f64().unwrap_or(f64::NAN)))
+                }
                 Number::Rational(n, d) => Ok(BigValue::Real(*n as f64 / *d as f64)),
+                Number::BigRational(r) => {
+                    use num_traits::ToPrimitive;
+                    Ok(BigValue::Real(r.to_f64().unwrap_or(f64::NAN)))
+                }
+                Number::Scientific { mantissa, exponent } => {
+                    Ok(BigValue::Real(*mantissa as f64 * 10.0f64.powi(*exponent)))
+                }
                 Number::Float(bits) => Ok(BigValue::Real(f64::from_bits(*bits))),
                 Number::Constant(c) => match c {
                     Constant::Pi => Ok(BigValue::Real(consts::PI)),
@@ -239,6 +250,12 @@ impl NumericalEval for ExprGraph {
                         ("sin", BigValue::Real(r)) => Ok(BigValue::Real(r.sin())),
                         ("cos", BigValue::Real(r)) => Ok(BigValue::Real(r.cos())),
                         ("tan", BigValue::Real(r)) => Ok(BigValue::Real(r.tan())),
+                        ("sinh", BigValue::Real(r)) => Ok(BigValue::Real(r.sinh())),
+                        ("cosh", BigValue::Real(r)) => Ok(BigValue::Real(r.cosh())),
+                        ("tanh", BigValue::Real(r)) => Ok(BigValue::Real(r.tanh())),
+                        ("asin", BigValue::Real(r)) => Ok(BigValue::Real(r.asin())),
+                        ("acos", BigValue::Real(r)) => Ok(BigValue::Real(r.acos())),
+                        ("atan", BigValue::Real(r)) => Ok(BigValue::Real(r.atan())),
                         ("exp", BigValue::Real(r)) => Ok(BigValue::Real(r.exp())),
                         ("ln", BigValue::Real(r)) | ("log", BigValue::Real(r)) => {
                             if r < 0.0 {
@@ -254,8 +271,25 @@ impl NumericalEval for ExprGraph {
                                 Ok(BigValue::Real(r.sqrt()))
                             }
                         }
+                        ("BringRadical" | "BR", BigValue::Real(r)) => {
+                            Ok(BigValue::Real(crate::poly::roots::BringRadical::eval(r)))
+                        }
                         _ => Err(AlgebraError::EvaluationError(format!(
                             "Unsupported function '{}' in numerical evaluation",
+                            fn_name
+                        ))),
+                    }
+                } else if args.len() == 2 {
+                    let a1 = self.evalf(args[0], ctx)?.to_f64();
+                    let a2 = self.evalf(args[1], ctx)?.to_f64();
+                    match fn_name.as_str() {
+                        "atan2" => Ok(BigValue::Real(a1.atan2(a2))),
+                        "besselj" => {
+                            let n = a1.round() as i64;
+                            Ok(BigValue::Real(eval_bessel_j(n, a2)))
+                        }
+                        _ => Err(AlgebraError::EvaluationError(format!(
+                            "Unsupported binary function '{}' in numerical evaluation",
                             fn_name
                         ))),
                     }
@@ -273,4 +307,34 @@ impl NumericalEval for ExprGraph {
             )),
         }
     }
+}
+
+/// Numerical evaluation of Bessel function of the first kind $J_n(x)$ via power series.
+pub fn eval_bessel_j(n: i64, x: f64) -> f64 {
+    let sign = if n < 0 {
+        if n % 2 != 0 {
+            -1.0
+        } else {
+            1.0
+        }
+    } else {
+        1.0
+    };
+    let n_abs = n.unsigned_abs() as usize;
+    let half_x = x / 2.0;
+    let mut term = half_x.powi(n_abs as i32);
+    let mut fact_n = 1.0;
+    for k in 1..=n_abs {
+        fact_n *= k as f64;
+    }
+    term /= fact_n;
+    let mut sum = term;
+    for m in 1..40 {
+        term *= -1.0 * (half_x * half_x) / (m as f64 * (m + n_abs) as f64);
+        sum += term;
+        if term.abs() < 1e-15 * sum.abs().max(1e-15) {
+            break;
+        }
+    }
+    sign * sum
 }

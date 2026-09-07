@@ -244,6 +244,41 @@ pub enum ControlOpKind {
         b1: f64,
         b2: f64,
     },
+    DiscretizeZoh {
+        a: Vec<Vec<f64>>,
+        b: Vec<Vec<f64>>,
+        c: Vec<Vec<f64>>,
+        d: Vec<Vec<f64>>,
+        sample_time: f64,
+    },
+    RankTests {
+        a: Vec<Vec<f64>>,
+        b: Vec<Vec<f64>>,
+        c: Vec<Vec<f64>>,
+    },
+    PolePlacement {
+        a: Vec<Vec<f64>>,
+        b: Vec<Vec<f64>>,
+        desired_poles: Vec<f64>,
+    },
+    FrequencyResponse {
+        a: Vec<Vec<f64>>,
+        b: Vec<Vec<f64>>,
+        c: Vec<Vec<f64>>,
+        d: Vec<Vec<f64>>,
+        omega: f64,
+    },
+}
+
+/// Differential equation solving (Automatic ODE/PDE detection, classification, and solving).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiffEqOpKind {
+    ClassifyAndSolve {
+        equation: String,
+        dependent_var: Option<String>,
+        independent_vars: Option<Vec<String>>,
+        override_kind: Option<String>,
+    },
 }
 
 /// Simplicial topology operations.
@@ -370,6 +405,46 @@ pub enum BlockDiagramOpKind {
     Feedback { g_expr: String, h_expr: String },
     Series { g1_expr: String, g2_expr: String },
     Parallel { g1_expr: String, g2_expr: String },
+}
+
+/// Symbolic Partial Differential Equation operations.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PdeOpKind {
+    /// 1D Wave equation: $u_{tt} = c^2 u_{xx}$
+    Wave1D {
+        speed: String,
+        x_var: String,
+        t_var: String,
+        initial_pos: Option<String>,
+        initial_vel: Option<String>,
+    },
+    /// 1D Heat equation: $u_t = \alpha^2 u_{xx}$
+    Heat1D {
+        alpha: String,
+        x_var: String,
+        t_var: String,
+        length: Option<String>,
+    },
+    /// 2D Laplace equation: $u_{xx} + u_{yy} = 0$
+    Laplace2D {
+        x_var: String,
+        y_var: String,
+        a_bound: Option<String>,
+        b_bound: Option<String>,
+    },
+    /// 1D Transport / Advection equation: $u_t + c u_x = 0$
+    Transport1D {
+        speed: String,
+        x_var: String,
+        t_var: String,
+        initial_state: Option<String>,
+    },
+    /// 2D Radial Laplacian Bessel eigenmode: $\nabla^2 u = k^2 u \implies J_n(k r)$
+    RadialBessel {
+        wave_num: String,
+        r_var: String,
+        order: usize,
+    },
 }
 
 /// Target language for formal theorem proving export.
@@ -534,6 +609,12 @@ pub enum MathOperation {
 
     /// Laplace Domain LTI Block Diagram Algebra
     BlockDiagram(BlockDiagramOpKind),
+
+    /// Symbolic Partial Differential Equations (Wave, Heat, Laplace, Transport, Bessel)
+    Pde(PdeOpKind),
+
+    /// Automatic Differential Equation solving (ODE/PDE detection, classification, and analytical reduction)
+    DiffEq(DiffEqOpKind),
 
     /// Formal proof trace export to Lean 4 / Coq: e.g. `proof (x + 0) * 1`
     Proof {

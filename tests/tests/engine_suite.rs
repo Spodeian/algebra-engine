@@ -167,3 +167,19 @@ mod phase31_iga_nurbs_cad_tests;
 
 #[path = "engine/interconnect_tests.rs"]
 mod interconnect_tests;
+
+#[path = "engine/lossless_solver_tests.rs"]
+mod lossless_solver_tests;
+
+#[path = "engine/radical_polynomial_tests.rs"]
+mod radical_polynomial_tests;
+
+#[path = "engine/analytical_pde_tests.rs"]
+mod analytical_pde_tests;
+
+#[path = "engine/diffeq_classification_tests.rs"]
+mod diffeq_classification_tests;
+
+#[path = "engine/control_systems_tests.rs"]
+mod control_systems_tests;
+

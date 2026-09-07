@@ -22,6 +22,7 @@ use crate::combinatorics::{
     permutations, stirling_second_kind,
 };
 use crate::control::StateSpaceSystem;
+use crate::diffeq::{DiffEqClassifier, DiffEqKind};
 use crate::hyperop::{ackermann, hyperoperation, knuth_up_arrow, pentation, super_log, tetration};
 use crate::numbertheory::{decompose_universal, extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
 use crate::numeric::{EvalContext, NumericalEval};
@@ -653,8 +654,37 @@ impl OperationExecutor {
 
             MathOperation::Polynomial(kind) => match kind {
                 PolynomialOpKind::Roots { poly_str } => {
-                    let out = format!("Roots for polynomial {}: [Evaluated]", poly_str);
-                    OperationResult::success(out.clone(), out.clone(), out)
+                    let target_var = if poly_str.contains('t') && !poly_str.contains('x') {
+                        "t"
+                    } else {
+                        "x"
+                    };
+                    let target_sym = graph.symbols.get_or_intern(target_var);
+                    match parser.parse(poly_str) {
+                        Ok(poly_id) => match graph.solveset(poly_id, target_sym) {
+                            Ok(roots) => {
+                                let mut root_strs = Vec::new();
+                                let mut latex_strs = Vec::new();
+                                for &r in &roots {
+                                    root_strs.push(
+                                        unicode_fmt.format(graph, r).unwrap_or_default(),
+                                    );
+                                    latex_strs.push(
+                                        latex_fmt.format(graph, r).unwrap_or_default(),
+                                    );
+                                }
+                                let out = format!(
+                                    "Roots for polynomial {}: [{}]",
+                                    poly_str,
+                                    root_strs.join(", ")
+                                );
+                                let latex = format!("\\left\\{{ {} \\right\\}}", latex_strs.join(", "));
+                                OperationResult::success(out.clone(), latex, out)
+                            }
+                            Err(e) => OperationResult::error(e.to_string()),
+                        },
+                        Err(e) => OperationResult::error(e.to_string()),
+                    }
                 }
                 PolynomialOpKind::Discriminant { poly_str, var } => {
                     let out = format!("Discriminant of {} w.r.t {}: [Evaluated]", poly_str, var);
@@ -980,6 +1010,79 @@ impl OperationExecutor {
                     let ctrl = sys.controllability_matrix_2x2();
                     let out = format!("Controllability Matrix: {:?}", ctrl);
                     OperationResult::success(out.clone(), out.clone(), out)
+                }
+                ControlOpKind::DiscretizeZoh {
+                    a,
+                    b,
+                    c,
+                    d,
+                    sample_time,
+                } => {
+                    let sys = StateSpaceSystem::new(a.clone(), b.clone(), c.clone(), d.clone());
+                    let dsys = sys.discretize_zoh(*sample_time);
+                    let out = format!(
+                        "ZOH Discretized LTI System (Ts = {} s):\n  • State Transition Matrix Ad:\n    {:?}\n  • Input Coupling Matrix Bd:\n    {:?}",
+                        sample_time, dsys.a, dsys.b
+                    );
+                    OperationResult::success(out.clone(), out.clone(), out)
+                }
+                ControlOpKind::RankTests { a, b, c } => {
+                    let dummy_d = vec![vec![0.0; b[0].len()]; c.len()];
+                    let sys = StateSpaceSystem::new(a.clone(), b.clone(), c.clone(), dummy_d);
+                    let n = sys.num_states();
+                    let ctrl_rank = sys.controllability_rank();
+                    let obs_rank = sys.observability_rank();
+                    let is_ctrl = sys.is_controllable();
+                    let is_obs = sys.is_observable();
+                    let out = format!(
+                        "Kalman Rank Analysis (n = {}):\n  • Controllability Matrix Rank: {}/{} (Controllable: {})\n  • Observability Matrix Rank: {}/{} (Observable: {})",
+                        n, ctrl_rank, n, is_ctrl, obs_rank, n, is_obs
+                    );
+                    OperationResult::success(out.clone(), out.clone(), out)
+                }
+                ControlOpKind::PolePlacement {
+                    a,
+                    b,
+                    desired_poles,
+                } => {
+                    let dummy_c = vec![vec![1.0; a.len()]];
+                    let dummy_d = vec![vec![0.0; b[0].len()]];
+                    let sys = StateSpaceSystem::new(a.clone(), b.clone(), dummy_c, dummy_d);
+                    match sys.pole_placement_ackermann(desired_poles) {
+                        Ok(gain_k) => {
+                            let out = format!(
+                                "Ackermann State-Feedback Gain Vector K:\n  {:?}",
+                                gain_k
+                            );
+                            OperationResult::success(out.clone(), out.clone(), out)
+                        }
+                        Err(e) => OperationResult::error(e),
+                    }
+                }
+                ControlOpKind::FrequencyResponse {
+                    a,
+                    b,
+                    c,
+                    d,
+                    omega,
+                } => {
+                    let sys = StateSpaceSystem::new(a.clone(), b.clone(), c.clone(), d.clone());
+                    match sys.frequency_response(*omega) {
+                        Ok(resp) => {
+                            let mut out = format!("Bode Frequency Response at ω = {:.4} rad/s:\n", omega);
+                            for (out_idx, row) in resp.iter().enumerate() {
+                                for (in_idx, (mag_db, phase_deg)) in row.iter().enumerate() {
+                                    out.push_str(&format!(
+                                        "  Channel (u{} -> y{}): {:.2} dB, {:.2}°\n",
+                                        in_idx + 1, out_idx + 1, mag_db, phase_deg
+                                    ));
+                                }
+                            }
+                            let text = out.trim_end().to_string();
+                            OperationResult::success(text.clone(), text.clone(), text)
+                        }
+                        Err(e) => OperationResult::error(e),
+                    }
                 }
             },
 
@@ -1407,6 +1510,240 @@ impl OperationExecutor {
                             OperationResult::success(out, format!("T(s) = {}", latex), unicode)
                         }
                         (Err(e), _) | (_, Err(e)) => OperationResult::error(e.to_string()),
+                    }
+                }
+            },
+
+            MathOperation::Pde(kind) => match kind {
+                PdeOpKind::Wave1D {
+                    speed,
+                    x_var,
+                    t_var,
+                    initial_pos,
+                    initial_vel,
+                } => {
+                    let x_sym = graph.symbols.get_or_intern(x_var);
+                    let t_sym = graph.symbols.get_or_intern(t_var);
+                    let c_node = match parser.parse(speed) {
+                        Ok(id) => id,
+                        Err(_) => graph.symbol(speed),
+                    };
+
+                    if let Some(pos_str) = initial_pos {
+                        match parser.parse(pos_str) {
+                            Ok(f_id) => {
+                                let g_id = initial_vel
+                                    .as_ref()
+                                    .and_then(|v_str| parser.parse(v_str).ok());
+                                match graph.solve_pde_wave_dalembert(f_id, g_id, c_node, x_sym, t_sym) {
+                                    Ok(sol_id) => {
+                                        let unicode =
+                                            unicode_fmt.format(graph, sol_id).unwrap_or_default();
+                                        let latex =
+                                            latex_fmt.format(graph, sol_id).unwrap_or_default();
+                                        let out = format!(
+                                            "Wave Equation d'Alembert Solution u({}, {}): {}",
+                                            x_var, t_var, unicode
+                                        );
+                                        OperationResult::success(
+                                            out,
+                                            format!("u({}, {}) = {}", x_var, t_var, latex),
+                                            unicode,
+                                        )
+                                    }
+                                    Err(e) => OperationResult::error(e.to_string()),
+                                }
+                            }
+                            Err(e) => OperationResult::error(e.to_string()),
+                        }
+                    } else {
+                        match graph.solve_pde_wave_1d(c_node, x_sym, t_sym) {
+                            Ok((x_sol, t_sol)) => {
+                                let total = graph.mul([x_sol, t_sol]);
+                                let simp = graph.simplify(total);
+                                let unicode = unicode_fmt.format(graph, simp).unwrap_or_default();
+                                let latex = latex_fmt.format(graph, simp).unwrap_or_default();
+                                let out = format!(
+                                    "Wave Equation Separated Mode u({}, {}): {}",
+                                    x_var, t_var, unicode
+                                );
+                                OperationResult::success(
+                                    out,
+                                    format!("u({}, {}) = {}", x_var, t_var, latex),
+                                    unicode,
+                                )
+                            }
+                            Err(e) => OperationResult::error(e.to_string()),
+                        }
+                    }
+                }
+                PdeOpKind::Heat1D {
+                    alpha,
+                    x_var,
+                    t_var,
+                    length: _,
+                } => {
+                    let x_sym = graph.symbols.get_or_intern(x_var);
+                    let t_sym = graph.symbols.get_or_intern(t_var);
+                    let alpha_node = match parser.parse(alpha) {
+                        Ok(id) => id,
+                        Err(_) => graph.symbol(alpha),
+                    };
+                    match graph.solve_pde_heat_1d(alpha_node, x_sym, t_sym) {
+                        Ok((x_sol, t_sol)) => {
+                            let total = graph.mul([x_sol, t_sol]);
+                            let simp = graph.simplify(total);
+                            let unicode = unicode_fmt.format(graph, simp).unwrap_or_default();
+                            let latex = latex_fmt.format(graph, simp).unwrap_or_default();
+                            let out = format!(
+                                "Heat Equation Eigenmode u({}, {}): {}",
+                                x_var, t_var, unicode
+                            );
+                            OperationResult::success(
+                                out,
+                                format!("u({}, {}) = {}", x_var, t_var, latex),
+                                unicode,
+                            )
+                        }
+                        Err(e) => OperationResult::error(e.to_string()),
+                    }
+                }
+                PdeOpKind::Laplace2D {
+                    x_var,
+                    y_var,
+                    a_bound,
+                    b_bound: _,
+                } => {
+                    let x_sym = graph.symbols.get_or_intern(x_var);
+                    let y_sym = graph.symbols.get_or_intern(y_var);
+                    let a_node = match a_bound {
+                        Some(a_str) => {
+                            parser.parse(a_str).unwrap_or_else(|_| graph.symbol(a_str))
+                        }
+                        None => graph.symbol("a"),
+                    };
+                    match graph.solve_pde_laplace_2d(a_node, x_sym, y_sym) {
+                        Ok((x_sol, y_sol)) => {
+                            let total = graph.mul([x_sol, y_sol]);
+                            let simp = graph.simplify(total);
+                            let unicode = unicode_fmt.format(graph, simp).unwrap_or_default();
+                            let latex = latex_fmt.format(graph, simp).unwrap_or_default();
+                            let out = format!(
+                                "Laplace Equation Harmonic Mode u({}, {}): {}",
+                                x_var, y_var, unicode
+                            );
+                            OperationResult::success(
+                                out,
+                                format!("u({}, {}) = {}", x_var, y_var, latex),
+                                unicode,
+                            )
+                        }
+                        Err(e) => OperationResult::error(e.to_string()),
+                    }
+                }
+                PdeOpKind::Transport1D {
+                    speed,
+                    x_var,
+                    t_var,
+                    initial_state,
+                } => {
+                    let x_sym = graph.symbols.get_or_intern(x_var);
+                    let t_sym = graph.symbols.get_or_intern(t_var);
+                    let c_node = match parser.parse(speed) {
+                        Ok(id) => id,
+                        Err(_) => graph.symbol(speed),
+                    };
+                    let f_id = match initial_state {
+                        Some(s) => parser.parse(s).unwrap_or_else(|_| graph.symbol(s)),
+                        None => graph.function("f", [graph.symbol(x_var)]),
+                    };
+                    match graph.solve_pde_transport_1d(f_id, c_node, x_sym, t_sym) {
+                        Ok(sol_id) => {
+                            let unicode = unicode_fmt.format(graph, sol_id).unwrap_or_default();
+                            let latex = latex_fmt.format(graph, sol_id).unwrap_or_default();
+                            let out = format!(
+                                "Transport Equation Characteristic u({}, {}): {}",
+                                x_var, t_var, unicode
+                            );
+                            OperationResult::success(
+                                out,
+                                format!("u({}, {}) = {}", x_var, t_var, latex),
+                                unicode,
+                            )
+                        }
+                        Err(e) => OperationResult::error(e.to_string()),
+                    }
+                }
+                PdeOpKind::RadialBessel {
+                    wave_num,
+                    r_var,
+                    order,
+                } => {
+                    let r_sym = graph.symbols.get_or_intern(r_var);
+                    let k_node = match parser.parse(wave_num) {
+                        Ok(id) => id,
+                        Err(_) => graph.symbol(wave_num),
+                    };
+                    match graph.solve_pde_radial_bessel(k_node, r_sym, *order) {
+                        Ok(sol_id) => {
+                            let unicode = unicode_fmt.format(graph, sol_id).unwrap_or_default();
+                            let latex = latex_fmt.format(graph, sol_id).unwrap_or_default();
+                            let out = format!(
+                                "Radial Laplacian Bessel Eigenmode R_{}({}): {}",
+                                order, r_var, unicode
+                            );
+                            OperationResult::success(
+                                out,
+                                format!("R_{{{}}}({}) = {}", order, r_var, latex),
+                                unicode,
+                            )
+                        }
+                        Err(e) => OperationResult::error(e.to_string()),
+                    }
+                }
+            },
+
+            MathOperation::DiffEq(kind) => match kind {
+                DiffEqOpKind::ClassifyAndSolve {
+                    equation,
+                    dependent_var: _,
+                    independent_vars: _,
+                    override_kind,
+                } => {
+                    let manual_kind = override_kind.as_deref().and_then(|s| match s.to_lowercase().as_str() {
+                        "ode" => Some(DiffEqKind::Ode),
+                        "pde" => Some(DiffEqKind::Pde),
+                        _ => None,
+                    });
+                    let parse_res = if let Some((lhs_str, rhs_str)) = equation.split_once('=') {
+                        match (parser.parse(lhs_str.trim()), parser.parse(rhs_str.trim())) {
+                            (Ok(l), Ok(r)) => Ok(graph.sub(l, r)),
+                            (Err(e), _) | (_, Err(e)) => Err(e),
+                        }
+                    } else {
+                        parser.parse(equation.trim())
+                    };
+
+                    match parse_res {
+                        Ok(eq_id) => {
+                            let desc = DiffEqClassifier::classify(graph, eq_id, manual_kind);
+                            let kind_str = match desc.kind {
+                                DiffEqKind::Ode => "ODE (Ordinary Differential Equation)",
+                                DiffEqKind::Pde => "PDE (Partial Differential Equation)",
+                            };
+                            let lin_str = match desc.linearity {
+                                crate::diffeq::DiffEqLinearity::Linear => "Linear",
+                                crate::diffeq::DiffEqLinearity::Semilinear => "Semilinear",
+                                crate::diffeq::DiffEqLinearity::Quasilinear => "Quasilinear",
+                                crate::diffeq::DiffEqLinearity::Nonlinear => "Nonlinear",
+                            };
+                            let out = format!(
+                                "Differential Equation Analysis:\n  • Classification: {}\n  • Order: {}\n  • Linearity: {}\n  • Dependent Variable: {}\n  • Independent Variable(s): {:?}\n  • Recommended Strategy: {}",
+                                kind_str, desc.order, lin_str, desc.dependent_var, desc.independent_vars, desc.recommended_method
+                            );
+                            OperationResult::success(out.clone(), out.clone(), out)
+                        }
+                        Err(e) => OperationResult::error(e.to_string()),
                     }
                 }
             },

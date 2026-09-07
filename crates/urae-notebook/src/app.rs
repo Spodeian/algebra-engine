@@ -59,6 +59,8 @@ pub enum ViewMode {
     #[default]
     SmartStream,
     FocusEditor,
+    DependencyGraph,
+    PresentationReport,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -68,6 +70,15 @@ pub enum WindowDockPosition {
     DockBottom,
     DockRight,
     DockLeft,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlotScaleMode {
+    #[default]
+    Linear,
+    SemiLogY,
+    SemiLogX,
+    LogLog,
 }
 
 /// Main App State struct implementing `eframe::App`.
@@ -81,7 +92,11 @@ pub struct UraeNotebookApp {
     pub export_notice: Option<String>,
     pub show_cli_terminal: bool,
     pub show_left_sidebar: bool,
+    pub show_editor: bool,
     pub show_right_sidebar: bool,
+    pub left_panel_floating: bool,
+    pub editor_floating: bool,
+    pub right_panel_floating: bool,
     pub show_help_modal: bool,
     pub cli_input: String,
     pub cli_history: Vec<(String, String)>,
@@ -93,6 +108,9 @@ pub struct UraeNotebookApp {
     pub fullscreen: bool,
     pub available_notebooks: Vec<String>,
     pub active_notebook: String,
+    pub plot_scale_modes: std::collections::HashMap<usize, PlotScaleMode>,
+    pub builder_snapshot: Option<String>,
+    pub builder_active_line: Option<usize>,
     pub new_notebook_name: String,
     pub show_save_modal: bool,
     pub selected_save_format: String,
@@ -177,6 +195,25 @@ pub struct UraeNotebookApp {
     pub units_palette_var: String,
     pub units_palette_val: f64,
     pub units_palette_unit: String,
+    pub units_system_index: usize, // 0 = SI, 1 = Imperial, 2 = CGS, 3 = Natural
+    pub dim_length: i32,
+    pub dim_mass: i32,
+    pub dim_time: i32,
+    pub dim_current: i32,
+    pub dim_temp: i32,
+    pub dim_substance: i32,
+    pub dim_luminosity: i32,
+
+    pub ode_pde_mode: usize, // 0 = ODE, 1 = PDE
+    pub pde_model_type: String,
+    pub pde_spatial_dim: usize,
+    pub pde_bc_type: String,
+    pub pde_has_time: bool,
+
+    pub tensor_builder_rank: usize,
+    pub tensor_builder_dims: Vec<usize>,
+    pub tensor_builder_preset: String,
+    pub param_builder_is_constant: bool,
 
     // Phase 17 UX Enhancements: 3D Viewport & Command Palette
     pub show_viewport_3d: bool,
@@ -235,11 +272,15 @@ impl Default for UraeNotebookApp {
             export_notice: None,
             show_cli_terminal: false,
             show_left_sidebar: true,
+            show_editor: true,
             show_right_sidebar: true,
+            left_panel_floating: false,
+            editor_floating: false,
+            right_panel_floating: false,
             show_help_modal: false,
             cli_input: String::new(),
             cli_history: Vec::new(),
-            terminal_dock: WindowDockPosition::Floating,
+            terminal_dock: WindowDockPosition::DockBottom,
             settings_dock: WindowDockPosition::Floating,
             native_viewport_graphs: HashSet::new(),
             show_role_details: HashSet::new(),
@@ -247,6 +288,9 @@ impl Default for UraeNotebookApp {
             fullscreen: false,
             available_notebooks: Vec::new(),
             active_notebook: "urae_notebook_session.json".to_string(),
+            plot_scale_modes: std::collections::HashMap::new(),
+            builder_snapshot: None,
+            builder_active_line: None,
             new_notebook_name: String::new(),
             show_save_modal: false,
             selected_save_format: ".json".to_string(),
@@ -346,6 +390,25 @@ impl Default for UraeNotebookApp {
             units_palette_var: "v".to_string(),
             units_palette_val: 10.0,
             units_palette_unit: "m/s".to_string(),
+            units_system_index: 0,
+            dim_length: 1,
+            dim_mass: 0,
+            dim_time: -1,
+            dim_current: 0,
+            dim_temp: 0,
+            dim_substance: 0,
+            dim_luminosity: 0,
+
+            ode_pde_mode: 0,
+            pde_model_type: "Wave Equation".to_string(),
+            pde_spatial_dim: 1,
+            pde_bc_type: "Dirichlet (u=0)".to_string(),
+            pde_has_time: true,
+
+            tensor_builder_rank: 2,
+            tensor_builder_dims: vec![2, 2],
+            tensor_builder_preset: "Identity".to_string(),
+            param_builder_is_constant: false,
 
             show_viewport_3d: false,
             viewport_3d_state: crate::ui::Viewport3DState::default(),
@@ -709,83 +772,91 @@ impl UraeNotebookApp {
     }
 
     /// Render Ephemeral Storage, Quota Exceeded, and Combined Warning Banners
-    pub fn render_warning_banners(&mut self, ui: &mut egui::Ui) {
-        let is_ephemeral = self.is_persisted == Some(false);
-        let is_quota = self.quota_exceeded;
+    pub fn render_warning_banners(&mut self, #[allow(unused_variables)] ui: &mut egui::Ui) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Desktop builds run on the local filesystem with full persistence; no browser quota/eviction banners needed.
+        }
 
-        // Combined Alert
-        if is_ephemeral && is_quota && !self.dismissed_combined_warning {
-            ui.scope(|ui| {
-                egui::Frame::NONE
-                    .fill(egui::Color32::from_rgba_premultiplied(180, 40, 40, 45))
-                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 60, 60)))
-                    .corner_radius(6)
-                    .inner_margin(8)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(
-                                egui::RichText::new(
-                                    "Storage Alert: Storage is Ephemeral AND Quota Limit Exceeded!",
-                                )
-                                .strong()
-                                .color(egui::Color32::from_rgb(255, 120, 120)),
-                            );
-                            if ui.button("Save .bson Backup").clicked() {
-                                self.download_bson_backup();
-                            }
-                            if ui.button("Request Permission").clicked() {
-                                self.request_persistence();
-                            }
-                            if ui.button("Dismiss").clicked() {
-                                self.dismissed_combined_warning = true;
-                            }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let is_ephemeral = self.is_persisted == Some(false);
+            let is_quota = self.quota_exceeded;
+
+            // Combined Alert
+            if is_ephemeral && is_quota && !self.dismissed_combined_warning {
+                ui.scope(|ui| {
+                    egui::Frame::NONE
+                        .fill(egui::Color32::from_rgba_premultiplied(160, 40, 40, 45))
+                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
+                        .corner_radius(6)
+                        .inner_margin(8)
+                        .show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Storage Warning: Running in ephemeral storage and quota is full.",
+                                    )
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(255, 120, 120)),
+                                );
+                                if ui.button("Backup .bson").clicked() {
+                                    self.download_bson_backup();
+                                }
+                                if ui.button("Request Persistence").clicked() {
+                                    self.request_persistence();
+                                }
+                                if ui.button("Dismiss").clicked() {
+                                    self.dismissed_combined_warning = true;
+                                }
+                            });
                         });
-                    });
-            });
-            ui.add_space(4.0);
-        } else if is_ephemeral && !self.dismissed_ephemeral_warning {
-            ui.scope(|ui| {
-                egui::Frame::NONE
-                    .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                    .corner_radius(6)
-                    .inner_margin(8)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                            if ui.button("Backup .bson").clicked() {
-                                self.download_bson_backup();
-                            }
-                            if ui.button("Request Persistence").clicked() {
-                                self.request_persistence();
-                            }
-                            if ui.button("Dismiss").clicked() {
-                                self.dismissed_ephemeral_warning = true;
-                            }
+                });
+                ui.add_space(4.0);
+            } else if is_ephemeral && !self.dismissed_ephemeral_warning {
+                ui.scope(|ui| {
+                    egui::Frame::NONE
+                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
+                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                        .corner_radius(6)
+                        .inner_margin(8)
+                        .show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
+                                if ui.button("Backup .bson").clicked() {
+                                    self.download_bson_backup();
+                                }
+                                if ui.button("Request Persistence").clicked() {
+                                    self.request_persistence();
+                                }
+                                if ui.button("Dismiss").clicked() {
+                                    self.dismissed_ephemeral_warning = true;
+                                }
+                            });
                         });
-                    });
-            });
-            ui.add_space(4.0);
-        } else if is_quota && !self.dismissed_quota_warning {
-            ui.scope(|ui| {
-                egui::Frame::NONE
-                    .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                    .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                    .corner_radius(6)
-                    .inner_margin(8)
-                    .show(ui, |ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            ui.label(egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                            if ui.button("Save .bson Backup").clicked() {
-                                self.download_bson_backup();
-                            }
-                            if ui.button("Dismiss").clicked() {
-                                self.dismissed_quota_warning = true;
-                            }
+                });
+                ui.add_space(4.0);
+            } else if is_quota && !self.dismissed_quota_warning {
+                ui.scope(|ui| {
+                    egui::Frame::NONE
+                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
+                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                        .corner_radius(6)
+                        .inner_margin(8)
+                        .show(ui, |ui| {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
+                                if ui.button("Save .bson Backup").clicked() {
+                                    self.download_bson_backup();
+                                }
+                                if ui.button("Dismiss").clicked() {
+                                    self.dismissed_quota_warning = true;
+                                }
+                            });
                         });
-                    });
-            });
-            ui.add_space(4.0);
+                });
+                ui.add_space(4.0);
+            }
         }
     }
 
@@ -801,69 +872,120 @@ impl UraeNotebookApp {
                 .resizable(true)
                 .collapsible(true)
                 .show(&ctx, |ui| {
-                    ui.subheading("Storage Health & Durability");
-                    ui.separator();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        ui.subheading("🖥️ Desktop Local Filesystem & Storage Health");
+                        ui.separator();
 
-                    let status_color = match self.is_persisted {
-                        Some(true) => egui::Color32::GREEN,
-                        Some(false) => egui::Color32::from_rgb(240, 160, 40),
-                        None => egui::Color32::GRAY,
-                    };
-                    let status_str = match self.is_persisted {
-                        Some(true) => "Persistent (Immune to browser storage eviction)",
-                        Some(false) => "Ephemeral (May be cleared under storage pressure)",
-                        None => "Unknown / Querying browser...",
-                    };
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Environment:").strong());
+                            ui.colored_label(egui::Color32::GREEN, "Native Desktop (Direct Filesystem Access - No browser storage quota/eviction)");
+                        });
 
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("• Durability Status:").strong());
-                        ui.colored_label(status_color, status_str);
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Working Directory:").strong());
+                            let cwd = std::env::current_dir()
+                                .map(|p| p.display().to_string())
+                                .unwrap_or_else(|_| ".".to_string());
+                            ui.monospace(cwd);
+                        });
 
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("• Active Storage Tier:").strong());
-                        ui.monospace(&self.storage_backend);
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Active Notebook:").strong());
+                            ui.monospace(&self.active_notebook);
+                        });
 
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("• PWA App State:").strong());
-                        if self.is_pwa_installed {
-                            ui.colored_label(
-                                egui::Color32::GREEN,
-                                "Installed (Permanent Standalone Application)",
-                            );
-                        } else if self.pwa_install_available {
-                            ui.colored_label(
-                                egui::Color32::from_rgb(100, 180, 255),
-                                "Ready to Install as App",
-                            );
-                        } else {
-                            ui.weak("Running in Web Tab");
-                        }
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Autosave Engine:").strong());
+                            ui.colored_label(egui::Color32::from_rgb(80, 220, 140), "⚡ Low-Latency Disk Persistence (<500ms debounce)");
+                        });
 
-                    ui.add_space(8.0);
-                    ui.subheading("Storage Actions");
-                    ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Document Memory:").strong());
+                            ui.weak(format!(
+                                "{} bytes ({} lines, {} declared symbols)",
+                                self.state.session.raw_document_text.len(),
+                                self.state.parsed_lines.len(),
+                                self.state.session.symbol_metadata.len()
+                            ));
+                        });
 
-                    ui.horizontal_wrapped(|ui| {
-                        if self.is_persisted != Some(true)
-                            && ui.button("Request Persistent Storage").clicked()
-                        {
-                            self.request_persistence();
-                        }
+                        ui.add_space(8.0);
+                        ui.subheading("Backup & Export Actions");
+                        ui.separator();
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.button("Export Compressed .bson Backup").clicked() {
+                                self.download_bson_backup();
+                            }
+                        });
+                    }
 
-                        if self.pwa_install_available
-                            && !self.is_pwa_installed
-                            && ui.button("Install Web App").clicked()
-                        {
-                            self.trigger_pwa_install();
-                        }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        ui.subheading("🌐 Web Browser Storage Health & Durability");
+                        ui.separator();
 
-                        if ui.button("Export Compressed .bson Backup").clicked() {
-                            self.download_bson_backup();
-                        }
-                    });
+                        let status_color = match self.is_persisted {
+                            Some(true) => egui::Color32::GREEN,
+                            Some(false) => egui::Color32::from_rgb(240, 160, 40),
+                            None => egui::Color32::GRAY,
+                        };
+                        let status_str = match self.is_persisted {
+                            Some(true) => "Persistent (Immune to browser storage eviction)",
+                            Some(false) => "Ephemeral (May be cleared under storage pressure)",
+                            None => "Unknown / Querying browser...",
+                        };
+
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Durability Status:").strong());
+                            ui.colored_label(status_color, status_str);
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• Active Storage Tier:").strong());
+                            ui.monospace(&self.storage_backend);
+                        });
+
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("• PWA App State:").strong());
+                            if self.is_pwa_installed {
+                                ui.colored_label(
+                                    egui::Color32::GREEN,
+                                    "Installed (Permanent Standalone Application)",
+                                );
+                            } else if self.pwa_install_available {
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(100, 180, 255),
+                                    "Ready to Install as App",
+                                );
+                            } else {
+                                ui.weak("Running in Web Tab");
+                            }
+                        });
+
+                        ui.add_space(8.0);
+                        ui.subheading("Storage Actions");
+                        ui.separator();
+
+                        ui.horizontal_wrapped(|ui| {
+                            if self.is_persisted != Some(true)
+                                && ui.button("Request Persistent Storage").clicked()
+                            {
+                                self.request_persistence();
+                            }
+
+                            if self.pwa_install_available
+                                && !self.is_pwa_installed
+                                && ui.button("Install Web App").clicked()
+                            {
+                                self.trigger_pwa_install();
+                            }
+
+                            if ui.button("Export Compressed .bson Backup").clicked() {
+                                self.download_bson_backup();
+                            }
+                        });
+                    }
 
                     ui.add_space(8.0);
                     ui.subheading("Import Base64 / BSON State");
@@ -1211,16 +1333,59 @@ impl eframe::App for UraeNotebookApp {
                     }
                 });
 
-                // 3. View Menu Dropdown (Sidebars & Layout Presets)
+                // 3. View Menu Dropdown (Panels Visibility & Floating Windows)
                 ui.menu_button("👁 View", |ui| {
-                    if ui.checkbox(&mut self.show_left_sidebar, "◀ Left Parameters Bar (Ctrl+B)").clicked() {
-                        ui.close();
-                    }
-                    if ui.checkbox(&mut self.show_right_sidebar, "Right Results Stream ▶ (Ctrl+J)").clicked() {
-                        ui.close();
-                    }
+                    ui.label(egui::RichText::new("Panels Visibility & Windows").strong());
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.show_left_sidebar, "◀ Left Parameters (Ctrl+B)");
+                        if self.show_left_sidebar {
+                            let float_lbl = if self.left_panel_floating { "⤓ Dock" } else { "⤢ Float" };
+                            if ui.small_button(float_lbl).clicked() {
+                                self.left_panel_floating = !self.left_panel_floating;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(&mut self.show_editor, "📝 Text Editor (Ctrl+E)").changed() {
+                            self.state.session.settings.show_editor = self.show_editor;
+                        }
+                        if self.show_editor {
+                            let float_lbl = if self.editor_floating { "⤓ Dock" } else { "⤢ Float" };
+                            if ui.small_button(float_lbl).clicked() {
+                                self.editor_floating = !self.editor_floating;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.show_right_sidebar, "Right Results ▶ (Ctrl+J)");
+                        if self.show_right_sidebar {
+                            let float_lbl = if self.right_panel_floating { "⤓ Dock" } else { "⤢ Float" };
+                            if ui.small_button(float_lbl).clicked() {
+                                self.right_panel_floating = !self.right_panel_floating;
+                            }
+                        }
+                    });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.show_cli_terminal, "💻 Terminal CLI (Ctrl+`)");
+                        if self.show_cli_terminal {
+                            let is_floating = self.terminal_dock == WindowDockPosition::Floating;
+                            let float_lbl = if is_floating { "⤓ Dock" } else { "⤢ Float" };
+                            if ui.small_button(float_lbl).clicked() {
+                                self.terminal_dock = if is_floating {
+                                    WindowDockPosition::DockBottom
+                                } else {
+                                    WindowDockPosition::Floating
+                                };
+                            }
+                        }
+                    });
+                    ui.separator();
                     if ui.checkbox(&mut self.state.session.settings.show_cell_line_numbers, "Show Line Numbers").clicked() {
                         self.state.save_session();
+                        ui.close();
+                    }
+                    if ui.button("⚙ Panel Feature Settings...").clicked() {
+                        self.state.show_settings_modal = true;
                         ui.close();
                     }
                 });
@@ -1472,320 +1637,92 @@ impl eframe::App for UraeNotebookApp {
         // Left Sidebar: Symbol Role Conversion & Multi-Component Parameter Controls
         if self.show_left_sidebar {
             let palette = self.theme.palette();
-            egui::Panel::left("sidebar_panel")
-                .resizable(true)
-                .default_size(260.0)
-                .show(ui, |ui| {
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.subheading("Parameters");
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .button(egui::RichText::new("◀ Hide").size(12.0).color(palette.text_muted))
-                                .on_hover_text("Hide parameters sidebar (Ctrl+B)")
-                                .clicked()
-                            {
-                                self.show_left_sidebar = false;
+            if self.left_panel_floating {
+                let mut open = true;
+                egui::Window::new("⚙ Parameters & Variables")
+                    .default_size([300.0, 500.0])
+                    .resizable(true)
+                    .open(&mut open)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("⚙ Parameters & Variables").strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui
+                                    .button(egui::RichText::new("✕ Hide").size(12.0).color(palette.text_muted))
+                                    .on_hover_text("Hide parameters sidebar (Ctrl+B)")
+                                    .clicked()
+                                {
+                                    self.show_left_sidebar = false;
+                                }
+                                if ui
+                                    .button(egui::RichText::new("⤓ Dock").size(12.0).color(palette.text_muted))
+                                    .on_hover_text("Dock parameters sidebar to left")
+                                    .clicked()
+                                {
+                                    self.left_panel_floating = false;
+                                }
+                            });
+                        });
+                        ui.separator();
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            if self.render_left_sidebar_contents(ui) {
+                                state_changed = true;
                             }
                         });
                     });
-                    ui.separator();
-
-                    if self.state.session.symbol_metadata.is_empty() {
-                        ui.weak("No active symbols.");
-                    } else {
-                        let mut updated_meta: Vec<(String, SymbolMetadata)> = Vec::new();
-
-                        for (sym, meta) in &self.state.session.symbol_metadata {
-                            ui.group(|ui| {
-                                let mut mut_meta = meta.clone();
-
-                                ui.horizontal(|ui| {
-                                    ui.label(egui::RichText::new(sym).strong());
-                                    ui.colored_label(
-                                        egui::Color32::from_rgb(180, 140, 255),
-                                        format!(": {}", mut_meta.domain_type),
-                                    );
-
-                                    let role_btn_label = match mut_meta.role {
-                                        SymbolRole::Parameter => "Param",
-                                        SymbolRole::Variable => "Var",
-                                        SymbolRole::Constant => "Const",
-                                    };
-                                    if ui
-                                        .button(role_btn_label)
-                                        .on_hover_text("Convert Role (retains metadata)")
-                                        .clicked()
-                                    {
-                                        mut_meta.role = match mut_meta.role {
-                                            SymbolRole::Parameter => SymbolRole::Variable,
-                                            SymbolRole::Variable => SymbolRole::Parameter,
-                                            SymbolRole::Constant => SymbolRole::Variable,
-                                        };
-                                    }
-                                });
-
-                                if mut_meta.role == SymbolRole::Parameter {
-                                    match mut_meta.domain_type.as_str() {
-                                        "Complex" => {
-                                            ui.weak("Complex Components (Re + Im i):");
-                                            let real_key = format!("{}_real", sym);
-                                            let imag_key = format!("{}_imag", sym);
-                                            let mut r_val = *self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(&real_key)
-                                                .unwrap_or(&mut_meta.cur_val);
-                                            let mut i_val = *self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(&imag_key)
-                                                .unwrap_or(&0.0);
-
-                                            ui.horizontal(|ui| {
-                                                ui.weak("Re:");
-                                                if ui
-                                                    .add(egui::Slider::new(
-                                                        &mut r_val,
-                                                        mut_meta.min_val..=mut_meta.max_val,
-                                                    ))
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(real_key, r_val);
-                                                    mut_meta.cur_val = r_val;
-                                                    state_changed = true;
-                                                }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.weak("Im:");
-                                                if ui
-                                                    .add(egui::Slider::new(
-                                                        &mut i_val,
-                                                        mut_meta.min_val..=mut_meta.max_val,
-                                                    ))
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(imag_key, i_val);
-                                                    state_changed = true;
-                                                }
-                                            });
-                                        }
-                                        "Quaternion" => {
-                                            ui.weak("Quaternion Components (w + i i + j j + k k):");
-                                            for component in ["w", "i", "j", "k"] {
-                                                let comp_key = format!("{}_{}", sym, component);
-                                                let mut comp_val = *self
-                                                    .state
-                                                    .session
-                                                    .slider_values
-                                                    .get(&comp_key)
-                                                    .unwrap_or(&0.0);
-                                                ui.horizontal(|ui| {
-                                                    ui.weak(format!("{}:", component));
-                                                    if ui
-                                                        .add(egui::Slider::new(
-                                                            &mut comp_val,
-                                                            mut_meta.min_val..=mut_meta.max_val,
-                                                        ))
-                                                        .changed()
-                                                    {
-                                                        self.state
-                                                            .session
-                                                            .slider_values
-                                                            .insert(comp_key, comp_val);
-                                                        state_changed = true;
-                                                    }
-                                                });
-                                            }
-                                        }
-                                        "Boolean" => {
-                                            let mut is_true = *self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(sym)
-                                                .unwrap_or(&mut_meta.cur_val)
-                                                > 0.5;
-                                            ui.horizontal(|ui| {
-                                                ui.weak("Bool:");
-                                                let lbl = if is_true { "1 (True)" } else { "0 (False)" };
-                                                if ui.checkbox(&mut is_true, lbl).changed() {
-                                                    let val = if is_true { 1.0 } else { 0.0 };
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(sym.clone(), val);
-                                                    mut_meta.cur_val = val;
-                                                    state_changed = true;
-                                                }
-                                            });
-                                        }
-                                        "GaussianIntegers" | "EisensteinIntegers" => {
-                                            let lattice_name = if mut_meta.domain_type == "GaussianIntegers" {
-                                                "ℤ[i]"
-                                            } else {
-                                                "ℤ[ω]"
-                                            };
-                                            ui.weak(format!("Lattice {} (Re + Im):", lattice_name));
-                                            let real_key = format!("{}_real", sym);
-                                            let imag_key = format!("{}_imag", sym);
-                                            let mut r_val = self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(&real_key)
-                                                .copied()
-                                                .unwrap_or(mut_meta.cur_val)
-                                                .round();
-                                            let mut i_val = self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(&imag_key)
-                                                .copied()
-                                                .unwrap_or(0.0)
-                                                .round();
-
-                                            ui.horizontal(|ui| {
-                                                ui.weak("Re:");
-                                                if ui
-                                                    .add(
-                                                        egui::Slider::new(
-                                                            &mut r_val,
-                                                            mut_meta.min_val.round()
-                                                                ..=mut_meta.max_val.round(),
-                                                        )
-                                                        .step_by(1.0)
-                                                        .integer(),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(real_key, r_val);
-                                                    mut_meta.cur_val = r_val;
-                                                    state_changed = true;
-                                                }
-                                            });
-                                            ui.horizontal(|ui| {
-                                                ui.weak("Im:");
-                                                if ui
-                                                    .add(
-                                                        egui::Slider::new(
-                                                            &mut i_val,
-                                                            mut_meta.min_val.round()
-                                                                ..=mut_meta.max_val.round(),
-                                                        )
-                                                        .step_by(1.0)
-                                                        .integer(),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(imag_key, i_val);
-                                                    state_changed = true;
-                                                }
-                                            });
-                                        }
-                                        "Integers" | "Integer" | "Naturals" | "Modulo" | "ModuloUnits"
-                                        | "BitVector" | "EvenIntegers" | "OddIntegers" | "GaloisField" => {
-                                            let mut val = self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(sym)
-                                                .copied()
-                                                .unwrap_or(mut_meta.cur_val)
-                                                .round();
-                                            let step = if mut_meta.domain_type == "EvenIntegers"
-                                                || mut_meta.domain_type == "OddIntegers"
-                                            {
-                                                2.0
-                                            } else {
-                                                1.0
-                                            };
-                                            ui.horizontal(|ui| {
-                                                if ui
-                                                    .add(
-                                                        egui::Slider::new(
-                                                            &mut val,
-                                                            mut_meta.min_val.round()
-                                                                ..=mut_meta.max_val.round(),
-                                                        )
-                                                        .step_by(step)
-                                                        .integer(),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(sym.clone(), val);
-                                                    mut_meta.cur_val = val;
-                                                    state_changed = true;
-                                                }
-                                                if let Some(unit) = &mut_meta.unit_str {
-                                                    ui.weak(format!("[{}]", unit));
-                                                }
-                                            });
-                                        }
-                                        _ => {
-                                            let mut val = *self
-                                                .state
-                                                .session
-                                                .slider_values
-                                                .get(sym)
-                                                .unwrap_or(&mut_meta.cur_val);
-                                            ui.horizontal(|ui| {
-                                                if ui
-                                                    .add(egui::Slider::new(
-                                                        &mut val,
-                                                        mut_meta.min_val..=mut_meta.max_val,
-                                                    ))
-                                                    .changed()
-                                                {
-                                                    self.state
-                                                        .session
-                                                        .slider_values
-                                                        .insert(sym.clone(), val);
-                                                    mut_meta.cur_val = val;
-                                                    state_changed = true;
-                                                }
-                                                if let Some(unit) = &mut_meta.unit_str {
-                                                    ui.weak(format!("[{}]", unit));
-                                                }
-                                            });
-                                        }
-                                    }
+                if !open {
+                    self.show_left_sidebar = false;
+                }
+            } else {
+                egui::Panel::left("sidebar_panel")
+                    .resizable(true)
+                    .default_size(260.0)
+                    .show(ui, |ui| {
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.subheading("⚙ Parameters & Variables");
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui
+                                    .button(egui::RichText::new("◀ Hide").size(12.0).color(palette.text_muted))
+                                    .on_hover_text("Hide parameters sidebar (Ctrl+B)")
+                                    .clicked()
+                                {
+                                    self.show_left_sidebar = false;
                                 }
-
-                                updated_meta.push((sym.clone(), mut_meta));
+                                if ui
+                                    .button(egui::RichText::new("⤢ Float").size(12.0).color(palette.text_muted))
+                                    .on_hover_text("Pop out parameters into a floating window")
+                                    .clicked()
+                                {
+                                    self.left_panel_floating = true;
+                                }
                             });
-                        }
-
-                        for (sym, meta) in updated_meta {
-                            self.state.session.symbol_metadata.insert(sym, meta);
-                        }
-                    }
-                });
+                        });
+                        ui.separator();
+                        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                            if self.render_left_sidebar_contents(ui) {
+                                state_changed = true;
+                            }
+                        });
+                    });
+            }
         }
 
         // Main Central View (Unified Continuous Mathematical Notepad)
         egui::CentralPanel::default().show(ui, |ui| {
             self.render_warning_banners(ui);
-            if self.render_smart_stream_view(ui, &ctx) {
-                state_changed = true;
+            match self.view_mode {
+                ViewMode::SmartStream | ViewMode::FocusEditor => {
+                    if self.render_smart_stream_view(ui, &ctx) {
+                        state_changed = true;
+                    }
+                }
+                ViewMode::DependencyGraph => {
+                    self.render_dependency_graph_view(ui, &ctx);
+                }
+                ViewMode::PresentationReport => {
+                    self.render_presentation_report_view(ui, &ctx);
+                }
             }
         });
 
@@ -2153,73 +2090,151 @@ impl UraeNotebookApp {
 
                 ui.add_space(8.0);
                 ui.separator();
-                ui.label(egui::RichText::new("🎛 Workspace & Layout Presets").strong());
-                ui.horizontal(|ui| {
-                    ui.label("Layout Arrangement:");
-                    let mut layout_changed = false;
-                    egui::ComboBox::from_id_salt("settings_layout_combo")
-                        .selected_text(self.workspace.layout_preset.name())
-                        .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_label(
-                                    self.workspace.layout_preset
-                                        == crate::ui::WorkspaceLayoutPreset::FluidNotepad,
-                                    "📝 Fluid Notepad",
-                                )
-                                .clicked()
-                            {
-                                self.workspace
-                                    .set_layout(crate::ui::WorkspaceLayoutPreset::FluidNotepad);
-                                self.view_mode = ViewMode::SmartStream;
-                                layout_changed = true;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.workspace.layout_preset
-                                        == crate::ui::WorkspaceLayoutPreset::SplitDual,
-                                    "📊 Split Dual",
-                                )
-                                .clicked()
-                            {
-                                self.workspace
-                                    .set_layout(crate::ui::WorkspaceLayoutPreset::SplitDual);
-                                self.view_mode = ViewMode::SmartStream;
-                                layout_changed = true;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.workspace.layout_preset
-                                        == crate::ui::WorkspaceLayoutPreset::TripleIDE,
-                                    "🎛 Triple IDE",
-                                )
-                                .clicked()
-                            {
-                                self.workspace
-                                    .set_layout(crate::ui::WorkspaceLayoutPreset::TripleIDE);
-                                self.view_mode = ViewMode::SmartStream;
-                                self.show_cli_terminal = true;
-                                self.show_viewport_3d = true;
-                                layout_changed = true;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.workspace.layout_preset
-                                        == crate::ui::WorkspaceLayoutPreset::ZenMode,
-                                    "🧘 Zen Mode",
-                                )
-                                .clicked()
-                            {
-                                self.workspace
-                                    .set_layout(crate::ui::WorkspaceLayoutPreset::ZenMode);
-                                self.view_mode = ViewMode::SmartStream;
-                                layout_changed = true;
+                ui.label(egui::RichText::new("🎛 Panel Visibility & Modular Display Features").strong());
+                ui.weak("Each panel can be independently hidden, docked, or popped out into a floating window, with customized display controls.");
+
+                // 1. Left Panel (Parameters & Variables)
+                egui::CollapsingHeader::new("◀ Left Panel: Parameters & Variables")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.show_left_sidebar, "Visible (Ctrl+B)");
+                            if self.show_left_sidebar {
+                                if self.left_panel_floating {
+                                    if ui.button("⤓ Dock to Left").clicked() {
+                                        self.left_panel_floating = false;
+                                    }
+                                } else if ui.button("⤢ Pop Out to Floating Window").clicked() {
+                                    self.left_panel_floating = true;
+                                }
                             }
                         });
-                    if layout_changed {
-                        self.state.session.settings.workspace_preset = self.workspace.layout_preset;
-                        self.state.save_session();
-                    }
-                });
+                        ui.separator();
+                        ui.checkbox(
+                            &mut self.state.session.settings.left_panel_show_sliders,
+                            "Show interactive parameter sliders",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.left_panel_show_domains,
+                            "Show domain restrictions (: Real, : Complex, : Positive...)",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.left_panel_show_values,
+                            "Show numerical evaluated values (= 5.000)",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.left_panel_show_badges,
+                            "Show compound classification badges ([Constant], [Scalar]...)",
+                        );
+                    });
+
+                // 2. Text Editor (Continuous Math Notepad)
+                egui::CollapsingHeader::new("📝 Text Editor: Continuous Math Notepad")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.checkbox(&mut self.show_editor, "Visible (Ctrl+E)").changed() {
+                                self.state.session.settings.show_editor = self.show_editor;
+                            }
+                            if self.show_editor {
+                                if self.editor_floating {
+                                    if ui.button("⤓ Dock to Center").clicked() {
+                                        self.editor_floating = false;
+                                    }
+                                } else if ui.button("⤢ Pop Out to Floating Window").clicked() {
+                                    self.editor_floating = true;
+                                }
+                            }
+                        });
+                        ui.separator();
+                        ui.checkbox(
+                            &mut self.state.session.settings.show_cell_line_numbers,
+                            "Show cell line number gutter badges (#1, #2...)",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.editor_syntax_highlighting,
+                            "Mathematical syntax highlighting & operator tinting",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.editor_word_wrap,
+                            "Word wrap editor lines at panel boundary",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.editor_alt_scrubbing,
+                            "Enable Alt+Drag number scrubbing on numeric literals",
+                        );
+                    });
+
+                // 3. Right Panel (Results & Visualizations)
+                egui::CollapsingHeader::new("▶ Right Panel: Results & Visualizations")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.show_right_sidebar, "Visible (Ctrl+J)");
+                            if self.show_right_sidebar {
+                                if self.right_panel_floating {
+                                    if ui.button("⤓ Dock to Right").clicked() {
+                                        self.right_panel_floating = false;
+                                    }
+                                } else if ui.button("⤢ Pop Out to Floating Window").clicked() {
+                                    self.right_panel_floating = true;
+                                }
+                            }
+                        });
+                        ui.separator();
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_show_plots,
+                            "Show 2D function graphs and plots",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_show_3d,
+                            "Show 3D surfaces and mesh viewports",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_show_cad,
+                            "Show 2D CAD canvas geometry projections",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_show_solutions,
+                            "Show algebraic solutions and root breakdowns",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_compact_mode,
+                            "Compact single-line output stream",
+                        );
+                        ui.checkbox(
+                            &mut self.state.session.settings.right_panel_show_inbound_refs,
+                            "Show inbound dependency indicators",
+                        );
+                    });
+
+                // 4. Terminal (Interactive CLI)
+                egui::CollapsingHeader::new("💻 Terminal: Interactive CLI")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut self.show_cli_terminal, "Visible (Ctrl+`)");
+                            if self.show_cli_terminal {
+                                egui::ComboBox::from_id_salt("settings_terminal_dock_combo")
+                                    .selected_text(match self.terminal_dock {
+                                        WindowDockPosition::Floating => "⤢ Floating Window",
+                                        WindowDockPosition::DockBottom => "⤓ Docked Bottom",
+                                        WindowDockPosition::DockRight => "▶ Docked Right",
+                                        WindowDockPosition::DockLeft => "◀ Docked Left",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.terminal_dock, WindowDockPosition::Floating, "⤢ Floating Window");
+                                        ui.selectable_value(&mut self.terminal_dock, WindowDockPosition::DockBottom, "⤓ Docked Bottom");
+                                        ui.selectable_value(&mut self.terminal_dock, WindowDockPosition::DockRight, "▶ Docked Right");
+                                    });
+                            }
+                        });
+                        ui.separator();
+                        ui.checkbox(
+                            &mut self.state.session.settings.terminal_show_timing,
+                            "Display execution latency / timing per command",
+                        );
+                    });
 
                 ui.add_space(8.0);
                 ui.separator();
@@ -2493,6 +2508,331 @@ impl UraeNotebookApp {
         close_settings
     }
 
+
+    /// Render the parameters and variables sidebar contents respecting user settings toggles.
+    pub fn render_left_sidebar_contents(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut state_changed = false;
+        if self.state.session.symbol_metadata.is_empty() {
+            ui.weak("No active symbols.");
+            return false;
+        }
+
+        let mut updated_meta: Vec<(String, SymbolMetadata)> = Vec::new();
+
+        // Sort symbols alphabetically for a stable, organized panel
+        let mut symbol_entries: Vec<(String, SymbolMetadata)> = self
+            .state
+            .session
+            .symbol_metadata
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        symbol_entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (sym, meta) in &symbol_entries {
+            ui.group(|ui| {
+                let mut mut_meta = meta.clone();
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(sym).strong());
+                    if self.state.session.settings.left_panel_show_domains {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(180, 140, 255),
+                            format!(": {}", mut_meta.domain_type),
+                        );
+                    }
+
+                    let role_btn_label = match mut_meta.role {
+                        SymbolRole::Parameter => "Param",
+                        SymbolRole::Variable => "Var",
+                        SymbolRole::Constant => "Const",
+                    };
+                    if ui
+                        .button(role_btn_label)
+                        .on_hover_text("Convert Role (retains metadata)")
+                        .clicked()
+                    {
+                        mut_meta.role = match mut_meta.role {
+                            SymbolRole::Parameter => SymbolRole::Variable,
+                            SymbolRole::Variable => SymbolRole::Parameter,
+                            SymbolRole::Constant => SymbolRole::Variable,
+                        };
+                    }
+                });
+
+                if self.state.session.settings.left_panel_show_values && mut_meta.role != SymbolRole::Parameter {
+                    ui.horizontal(|ui| {
+                        ui.monospace(format!("= {:.4}", mut_meta.cur_val));
+                        if let Some(u) = &mut_meta.unit_str {
+                            ui.weak(format!("[{}]", u));
+                        }
+                    });
+                }
+                let badges = mut_meta.distinct_badges();
+                if self.state.session.settings.left_panel_show_badges && !badges.is_empty() {
+                    ui.horizontal_wrapped(|ui| {
+                        for tag in badges {
+                            ui.weak(format!("[{}]", tag));
+                        }
+                    });
+                }
+
+                if self.state.session.settings.left_panel_show_sliders && mut_meta.role == SymbolRole::Parameter {
+                    match mut_meta.domain_type.as_str() {
+                        "Complex" => {
+                            ui.weak("Complex Components (Re + Im i):");
+                            let real_key = format!("{}_real", sym);
+                            let imag_key = format!("{}_imag", sym);
+                            let mut r_val = *self
+                                .state
+                                .session
+                                .slider_values
+                                .get(&real_key)
+                                .unwrap_or(&mut_meta.cur_val);
+                            let mut i_val = *self
+                                .state
+                                .session
+                                .slider_values
+                                .get(&imag_key)
+                                .unwrap_or(&0.0);
+
+                            ui.horizontal(|ui| {
+                                ui.weak("Re:");
+                                if ui
+                                    .add(egui::Slider::new(
+                                        &mut r_val,
+                                        mut_meta.min_val..=mut_meta.max_val,
+                                    ))
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(real_key, r_val);
+                                    mut_meta.cur_val = r_val;
+                                    state_changed = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.weak("Im:");
+                                if ui
+                                    .add(egui::Slider::new(
+                                        &mut i_val,
+                                        mut_meta.min_val..=mut_meta.max_val,
+                                    ))
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(imag_key, i_val);
+                                    state_changed = true;
+                                }
+                            });
+                        }
+                        "Quaternion" => {
+                            ui.weak("Quaternion Components (w + i i + j j + k k):");
+                            for component in ["w", "i", "j", "k"] {
+                                let comp_key = format!("{}_{}", sym, component);
+                                let mut comp_val = *self
+                                    .state
+                                    .session
+                                    .slider_values
+                                    .get(&comp_key)
+                                    .unwrap_or(&0.0);
+                                ui.horizontal(|ui| {
+                                    ui.weak(format!("{}:", component));
+                                    if ui
+                                        .add(egui::Slider::new(
+                                            &mut comp_val,
+                                            mut_meta.min_val..=mut_meta.max_val,
+                                        ))
+                                        .changed()
+                                    {
+                                        self.state
+                                            .session
+                                            .slider_values
+                                            .insert(comp_key, comp_val);
+                                        state_changed = true;
+                                    }
+                                });
+                            }
+                        }
+                        "Boolean" => {
+                            let mut is_true = *self
+                                .state
+                                .session
+                                .slider_values
+                                .get(sym)
+                                .unwrap_or(&mut_meta.cur_val)
+                                > 0.5;
+                            ui.horizontal(|ui| {
+                                ui.weak("Bool:");
+                                let lbl = if is_true { "1 (True)" } else { "0 (False)" };
+                                if ui.checkbox(&mut is_true, lbl).changed() {
+                                    let val = if is_true { 1.0 } else { 0.0 };
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(sym.clone(), val);
+                                    mut_meta.cur_val = val;
+                                    state_changed = true;
+                                }
+                            });
+                        }
+                        "GaussianIntegers" | "EisensteinIntegers" => {
+                            let lattice_name = if mut_meta.domain_type == "GaussianIntegers" {
+                                "ℤ[i]"
+                            } else {
+                                "ℤ[ω]"
+                            };
+                            ui.weak(format!("Lattice {} (Re + Im):", lattice_name));
+                            let real_key = format!("{}_real", sym);
+                            let imag_key = format!("{}_imag", sym);
+                            let mut r_val = self
+                                .state
+                                .session
+                                .slider_values
+                                .get(&real_key)
+                                .copied()
+                                .unwrap_or(mut_meta.cur_val)
+                                .round();
+                            let mut i_val = self
+                                .state
+                                .session
+                                .slider_values
+                                .get(&imag_key)
+                                .copied()
+                                .unwrap_or(0.0)
+                                .round();
+
+                            ui.horizontal(|ui| {
+                                ui.weak("Re:");
+                                if ui
+                                    .add(
+                                        egui::Slider::new(
+                                            &mut r_val,
+                                            mut_meta.min_val.round()
+                                                ..=mut_meta.max_val.round(),
+                                        )
+                                        .step_by(1.0)
+                                        .integer(),
+                                    )
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(real_key, r_val);
+                                    mut_meta.cur_val = r_val;
+                                    state_changed = true;
+                                }
+                            });
+                            ui.horizontal(|ui| {
+                                ui.weak("Im:");
+                                if ui
+                                    .add(
+                                        egui::Slider::new(
+                                            &mut i_val,
+                                            mut_meta.min_val.round()
+                                                ..=mut_meta.max_val.round(),
+                                        )
+                                        .step_by(1.0)
+                                        .integer(),
+                                    )
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(imag_key, i_val);
+                                    state_changed = true;
+                                }
+                            });
+                        }
+                        "Integers" | "Integer" | "Naturals" | "Modulo" | "ModuloUnits"
+                        | "BitVector" | "EvenIntegers" | "OddIntegers" | "GaloisField" => {
+                            let mut val = self
+                                .state
+                                .session
+                                .slider_values
+                                .get(sym)
+                                .copied()
+                                .unwrap_or(mut_meta.cur_val)
+                                .round();
+                            let step = if mut_meta.domain_type == "EvenIntegers"
+                                || mut_meta.domain_type == "OddIntegers"
+                            {
+                                2.0
+                            } else {
+                                1.0
+                            };
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(
+                                        egui::Slider::new(
+                                            &mut val,
+                                            mut_meta.min_val.round()
+                                                ..=mut_meta.max_val.round(),
+                                        )
+                                        .step_by(step)
+                                        .integer(),
+                                    )
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(sym.clone(), val);
+                                    mut_meta.cur_val = val;
+                                    state_changed = true;
+                                }
+                                if let Some(unit) = &mut_meta.unit_str {
+                                    ui.weak(format!("[{}]", unit));
+                                }
+                            });
+                        }
+                        _ => {
+                            let mut val = *self
+                                .state
+                                .session
+                                .slider_values
+                                .get(sym)
+                                .unwrap_or(&mut_meta.cur_val);
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .add(egui::Slider::new(
+                                        &mut val,
+                                        mut_meta.min_val..=mut_meta.max_val,
+                                    ))
+                                    .changed()
+                                {
+                                    self.state
+                                        .session
+                                        .slider_values
+                                        .insert(sym.clone(), val);
+                                    mut_meta.cur_val = val;
+                                    state_changed = true;
+                                }
+                                if let Some(unit) = &mut_meta.unit_str {
+                                    ui.weak(format!("[{}]", unit));
+                                }
+                            });
+                        }
+                    }
+                }
+
+                updated_meta.push((sym.clone(), mut_meta));
+            });
+        }
+
+        for (sym, meta) in updated_meta {
+            self.state.session.symbol_metadata.insert(sym, meta);
+        }
+
+        state_changed
+    }
+
     fn render_cli_terminal_contents(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         ui.weak("Notebook Context: Direct access to active variables, parameters, and DAG state.");
         ui.separator();
@@ -2558,14 +2898,75 @@ impl UraeNotebookApp {
                         ));
                     }
 
-                    let result = urae::cli::process_input_with_context(
-                        &self.state.graph,
-                        &self.state.formatter,
-                        &input_cmd,
-                        &mut self.state.session.settings.ai_config,
-                        Some(&bindings),
-                        Some(&summary),
-                    );
+                    // 1. Collect evaluated numeric line results from active document
+                    let mut line_results = std::collections::HashMap::new();
+                    for (idx, pl) in self.state.parsed_lines.iter().enumerate() {
+                        if let Some(val) = pl.linearized_estimate {
+                            line_results.insert(idx, val);
+                        }
+                    }
+                    let last_val = self.state.parsed_lines.iter().rev().find_map(|pl| pl.linearized_estimate);
+
+                    // 2. Resolve $N, ans, range mathematical aggregations: sum($1..$4), mean($1..$4), $1..$3
+                    let mut resolved_cmd = crate::notebook::NotebookState::resolve_line_references(&input_cmd, last_val, &line_results);
+
+                    // 3. Fallback for non-numeric references or formula tokens (e.g. diff $1, x where $1 is an expression)
+                    for (idx, pl) in self.state.parsed_lines.iter().enumerate() {
+                        let pat_dollar = format!("${}", idx + 1);
+                        let pat_line = format!("line({})", idx + 1);
+                        let pat_line_alt = format!("Line {}", idx + 1);
+                        if resolved_cmd.contains(&pat_dollar) || resolved_cmd.contains(&pat_line) || resolved_cmd.contains(&pat_line_alt) {
+                            let formula = if let Some((_, rhs)) = pl.raw_text.split_once('=') {
+                                rhs.trim()
+                            } else {
+                                pl.raw_text.trim()
+                            };
+                            if !formula.is_empty() {
+                                let wrapped = format!("({})", formula);
+                                resolved_cmd = resolved_cmd.replace(&pat_dollar, &wrapped);
+                                resolved_cmd = resolved_cmd.replace(&pat_line, &wrapped);
+                                resolved_cmd = resolved_cmd.replace(&pat_line_alt, &wrapped);
+                            }
+                        }
+                    }
+
+                    // 4. Special commands: "lines" or "doc" to inspect active document lines
+                    let result = if input_cmd.eq_ignore_ascii_case("lines") || input_cmd.eq_ignore_ascii_case("doc") {
+                        let mut doc_summary = String::new();
+                        doc_summary.push_str("Active Document Lines:\n");
+                        for (idx, pl) in self.state.parsed_lines.iter().enumerate() {
+                            let val_str = if let Some(v) = pl.linearized_estimate {
+                                format!(" => {}", v)
+                            } else if !pl.output_unicode.is_empty() {
+                                format!(" => {}", pl.output_unicode)
+                            } else {
+                                String::new()
+                            };
+                            doc_summary.push_str(&format!("  Line #{}: {}{}\n", idx + 1, pl.raw_text, val_str));
+                        }
+                        Ok(doc_summary)
+                    } else {
+                        let start_t = web_time::Instant::now();
+                        let exec_res = urae::cli::process_input_with_context(
+                            &self.state.graph,
+                            &self.state.formatter,
+                            &resolved_cmd,
+                            &mut self.state.session.settings.ai_config,
+                            Some(&bindings),
+                            Some(&summary),
+                        );
+                        let elapsed_ms = start_t.elapsed().as_secs_f64() * 1000.0;
+                        match exec_res {
+                            Ok(out) => {
+                                if self.state.session.settings.terminal_show_timing {
+                                    Ok(format!("{} (in {:.2}ms)", out, elapsed_ms))
+                                } else {
+                                    Ok(out)
+                                }
+                            }
+                            Err(err) => Err(err),
+                        }
+                    };
 
                     let output_text = match result {
                         Ok(out) => out,
@@ -2961,6 +3362,51 @@ impl UraeNotebookApp {
                         }
                     });
                 }
+                LineKind::CadMesh {
+                    ref model_kind,
+                    ref summary,
+                } => {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!("⚙ CAD Model: {}", model_kind))
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(56, 189, 248)),
+                            );
+                            ui.weak(summary);
+                        });
+                        ui.separator();
+                        crate::ui::Viewport3D::show_with_height(
+                            ui,
+                            &mut self.viewport_3d_state,
+                            None,
+                            220.0,
+                        );
+                    });
+                }
+                LineKind::Plot3D {
+                    ref expr_str,
+                    ref x_var,
+                    ref y_var,
+                } => {
+                    ui.group(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new(format!("📊 3D Surface: z = f({}, {})", x_var, y_var))
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(52, 211, 153)),
+                            );
+                            ui.monospace(expr_str);
+                        });
+                        ui.separator();
+                        crate::ui::Viewport3D::show_with_height(
+                            ui,
+                            &mut self.viewport_3d_state,
+                            None,
+                            220.0,
+                        );
+                    });
+                }
             }
 
             ui.add_space(4.0);
@@ -3214,31 +3660,175 @@ impl UraeNotebookApp {
         let mut state_changed = false;
         let palette = self.theme.palette();
 
-        // Keyboard shortcuts: Ctrl+B (Left sidebar), Ctrl+J (Right stream)
+        // Keyboard shortcuts: Ctrl+B (Left sidebar), Ctrl+J (Right stream), Ctrl+E (Text editor), Ctrl+` (Terminal)
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::B)) {
             self.show_left_sidebar = !self.show_left_sidebar;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::J)) {
             self.show_right_sidebar = !self.show_right_sidebar;
         }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::E)) {
+            self.show_editor = !self.show_editor;
+            self.state.session.settings.show_editor = self.show_editor;
+        }
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Backtick)) {
+            self.show_cli_terminal = !self.show_cli_terminal;
+        }
 
         let total_width = ui.available_width();
-        let gutter_width = if self.show_right_sidebar {
-            self.right_sidebar_width.clamp(180.0, (total_width - 180.0).max(200.0))
-        } else {
-            0.0
-        };
         let line_num_width = if self.state.session.settings.show_cell_line_numbers {
             36.0
         } else {
             0.0
         };
         let unhide_width = if !self.show_left_sidebar { 68.0 } else { 0.0 };
-        let editor_width = if self.show_right_sidebar {
+        let is_dual_halves = self.workspace.layout_preset == crate::ui::WorkspaceLayoutPreset::DualHalves;
+        let available_space = (total_width - line_num_width - unhide_width - 32.0).max(300.0);
+        let has_docked_right = (self.show_right_sidebar || is_dual_halves) && !self.right_panel_floating;
+        let gutter_width = if has_docked_right {
+            if is_dual_halves && (self.right_sidebar_width - 280.0).abs() < 1.0 {
+                self.right_sidebar_width = (available_space * (1.0 - self.workspace.split_ratio)).clamp(200.0, (available_space - 150.0).max(200.0));
+            }
+            if !self.show_editor || self.editor_floating {
+                available_space
+            } else {
+                self.right_sidebar_width.clamp(180.0, (available_space - 120.0).max(200.0))
+            }
+        } else {
+            0.0
+        };
+        let editor_width = if has_docked_right {
             (total_width - gutter_width - line_num_width - unhide_width - 32.0).max(120.0)
         } else {
             (total_width - line_num_width - unhide_width - 80.0).max(200.0)
         };
+
+        let line_count = self.state.session.raw_document_text.split('\n').count().max(1);
+        let parsed_lines = self.state.parsed_lines.clone();
+
+        // Floating Popped-Out Text Editor Window
+        if self.editor_floating && self.show_editor {
+            let mut open = true;
+            egui::Window::new("📝 Continuous Math Editor")
+                .default_size([550.0, 600.0])
+                .resizable(true)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Continuous Text Editor").strong());
+                        if ui.button("⤓ Dock to Center").clicked() {
+                            self.editor_floating = false;
+                        }
+                        if ui.button("✕ Hide").clicked() {
+                            self.show_editor = false;
+                            self.state.session.settings.show_editor = false;
+                        }
+                    });
+                    ui.separator();
+                    let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
+                        let string = string.as_str();
+                        let eff_wrap = if self.state.session.settings.editor_word_wrap {
+                            wrap_width
+                        } else {
+                            f32::INFINITY
+                        };
+                        if self.state.session.settings.editor_syntax_highlighting {
+                            palette.math_syntax_layouter(ui, string, eff_wrap)
+                        } else {
+                            palette.plain_monospace_layouter(ui, string, eff_wrap)
+                        }
+                    };
+                    let text_edit = egui::TextEdit::multiline(&mut self.state.session.raw_document_text)
+                        .layouter(&mut math_layouter)
+                        .desired_width(ui.available_width())
+                        .desired_rows(line_count.max(20))
+                        .lock_focus(true);
+                    let edit_resp = ui.add(text_edit);
+                    if edit_resp.changed() {
+                        self.is_edit_dirty = true;
+                        self.last_keystroke_time = web_time::Instant::now();
+                        state_changed = true;
+                    }
+                });
+            if !open {
+                self.show_editor = false;
+                self.state.session.settings.show_editor = false;
+            }
+        }
+
+        // Floating Popped-Out Right Results & Viewport Window
+        if self.right_panel_floating && self.show_right_sidebar {
+            let mut open = true;
+            egui::Window::new("⚡ Live Results, Graphs & 3D Surfaces")
+                .default_size([550.0, 600.0])
+                .resizable(true)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Live Results & Visualizations").strong());
+                        if ui.button("⤓ Dock to Right Half").clicked() {
+                            self.right_panel_floating = false;
+                        }
+                        if ui.button("✕ Hide").clicked() {
+                            self.show_right_sidebar = false;
+                        }
+                    });
+                    ui.separator();
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                        for pl in &parsed_lines {
+                            let is_left_entity = match &pl.kind {
+                                LineKind::SliderDef { .. }
+                                | LineKind::RoleDeclaration { .. }
+                                | LineKind::DomainRestriction { .. }
+                                | LineKind::SetBuilder { .. } => true,
+                                LineKind::Formula => {
+                                    !pl.is_function
+                                        && !pl.is_surface_3d
+                                        && pl.error_msg.is_none()
+                                        && is_variable_or_param_assignment(&pl.raw_text)
+                                }
+                                _ => false,
+                            };
+                            if is_left_entity {
+                                continue;
+                            }
+                            match &pl.kind {
+                                LineKind::Formula => {
+                                    if pl.is_surface_3d && self.state.session.settings.right_panel_show_3d {
+                                        crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 240.0);
+                                    } else if !pl.output_unicode.is_empty() {
+                                        ui.horizontal_wrapped(|ui| {
+                                            ui.monospace(&pl.output_unicode);
+                                        });
+                                    }
+                                }
+                                LineKind::CadMesh { model_kind, summary } => {
+                                    if self.state.session.settings.right_panel_show_cad {
+                                        ui.label(format!("CAD: {}", model_kind));
+                                        ui.weak(summary);
+                                        crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 240.0);
+                                    } else {
+                                        ui.label(format!("CAD: {}", model_kind));
+                                    }
+                                }
+                                LineKind::Plot3D { expr_str, x_var, y_var } => {
+                                    if self.state.session.settings.right_panel_show_3d {
+                                        ui.label(format!("z = f({}, {}) = {}", x_var, y_var, expr_str));
+                                        crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 240.0);
+                                    } else {
+                                        ui.label(format!("z = f({}, {}) = {}", x_var, y_var, expr_str));
+                                    }
+                                }
+                                _ => {}
+                            }
+                            ui.add_space(4.0);
+                        }
+                    });
+                });
+            if !open {
+                self.show_right_sidebar = false;
+            }
+        }
 
         let mut slider_updates = Vec::new();
         let mut plot_to_open = None;
@@ -3246,8 +3836,6 @@ impl UraeNotebookApp {
         let mut inspector_to_open: Option<String> = None;
         let mut new_hovered_line: Option<usize> = None;
 
-        let line_count = self.state.session.raw_document_text.split('\n').count().max(1);
-        let parsed_lines = self.state.parsed_lines.clone();
 
         let dep_highlighted_lines: HashSet<usize> = if let Some(h_idx) = self.hovered_line_idx {
             compute_line_upstream_dependencies(h_idx, &parsed_lines)
@@ -3262,11 +3850,22 @@ impl UraeNotebookApp {
                     // Left parameters unhide button (if hidden)
                     if !self.show_left_sidebar
                         && ui
-                            .button(egui::RichText::new("▶ Params").size(12.0).color(palette.text_muted))
+                            .button(egui::RichText::new("▶ Params (Ctrl+B)").size(12.0).color(palette.text_muted))
                             .on_hover_text("Show parameters sidebar (Ctrl+B)")
                             .clicked()
                     {
                         self.show_left_sidebar = true;
+                    }
+
+                    // Editor unhide button (if hidden)
+                    if !self.show_editor
+                        && ui
+                            .button(egui::RichText::new("📝 Editor (Ctrl+E)").size(12.0).color(palette.text_muted))
+                            .on_hover_text("Show text editor (Ctrl+E)")
+                            .clicked()
+                    {
+                        self.show_editor = true;
+                        self.state.session.settings.show_editor = true;
                     }
 
                     // 1. Line Numbers Column (Interactive Click & Drag explicitly aligned with editor rows, wrapped lines unnumbered)
@@ -3389,118 +3988,144 @@ impl UraeNotebookApp {
                         );
                     }
 
-                    // 2. Main Continuous Text Editor
-                    let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
-                                let string = string.as_str();
-                        palette.math_syntax_layouter(ui, string, wrap_width)
-                    };
+                    // 2. Main Continuous Text Editor (if visible and docked)
+                    if self.show_editor && !self.editor_floating {
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(editor_width, ui.available_height()),
+                            egui::Layout::top_down(egui::Align::LEFT),
+                            |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.weak("📝 Editor");
+                                    if ui.small_button("⤢ Float").on_hover_text("Pop out text editor into floating window").clicked() {
+                                        self.editor_floating = true;
+                                    }
+                                    if ui.small_button("✕").on_hover_text("Hide text editor (Ctrl+E)").clicked() {
+                                        self.show_editor = false;
+                                        self.state.session.settings.show_editor = false;
+                                    }
+                                });
 
-                    let text_edit = egui::TextEdit::multiline(&mut self.state.session.raw_document_text)
-                        .layouter(&mut math_layouter)
-                        .desired_width(editor_width)
-                        .desired_rows(line_count.max(20))
-                        .lock_focus(true);
+                                let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
+                                    let string = string.as_str();
+                                    let eff_wrap = if self.state.session.settings.editor_word_wrap {
+                                        wrap_width
+                                    } else {
+                                        f32::INFINITY
+                                    };
+                                    if self.state.session.settings.editor_syntax_highlighting {
+                                        palette.math_syntax_layouter(ui, string, eff_wrap)
+                                    } else {
+                                        palette.plain_monospace_layouter(ui, string, eff_wrap)
+                                    }
+                                };
 
-                    let edit_resp = ui.add(text_edit);
-                    if let Some(text_state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id) {
-                        if let Some(char_range) = text_state.cursor.char_range() {
-                            let char_idx = char_range.primary.index;
-                            let text = &self.state.session.raw_document_text;
-                            let clamped = usize::from(char_idx).min(text.len());
-                            let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
-                            self.state.focused_line = Some(current_line_idx);
-                            self.state.cursor_char_idx = Some(clamped);
-                        }
-                    }
-                    if edit_resp.changed() {
-                        self.is_edit_dirty = true;
-                        self.last_keystroke_time = web_time::Instant::now();
-                        state_changed = true;
-                    }
+                                let text_edit = egui::TextEdit::multiline(&mut self.state.session.raw_document_text)
+                                    .layouter(&mut math_layouter)
+                                    .desired_width(editor_width)
+                                    .desired_rows(line_count.max(20))
+                                    .lock_focus(true);
 
-                    // Inline Number Scrubbing via Alt + Drag
-                    let is_alt_down = ui.input(|i| i.modifiers.alt);
-                    if is_alt_down && (edit_resp.hovered() || self.active_scrubbing.is_some()) {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                    }
-
-                    if is_alt_down && ui.input(|i| i.pointer.primary_down()) {
-                        if self.active_scrubbing.is_none() {
-                            let pointer_pos = ui.input(|i| i.pointer.interact_pos());
-                            let char_idx = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id)
-                                .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
-                            if let Some(c_idx) = char_idx {
-                                if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
-                                    find_numeric_literal_at(&self.state.session.raw_document_text, usize::from(c_idx))
-                                {
-                                    let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
-                                    self.active_scrubbing = Some(ActiveScrubbing {
-                                        byte_range: (byte_start, byte_end),
-                                        original_val: val,
-                                        has_decimal: has_dec,
-                                        decimal_places: dec_places,
-                                        start_pointer_x: start_x,
-                                    });
+                                let edit_resp = ui.add(text_edit);
+                                if let Some(text_state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id) {
+                                    if let Some(char_range) = text_state.cursor.char_range() {
+                                        let char_idx = char_range.primary.index;
+                                        let text = &self.state.session.raw_document_text;
+                                        let clamped = usize::from(char_idx).min(text.len());
+                                        let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
+                                        self.state.focused_line = Some(current_line_idx);
+                                        self.state.cursor_char_idx = Some(clamped);
+                                    }
                                 }
-                            }
-                        }
-
-                        if let Some(ref mut scrub) = self.active_scrubbing {
-                            let curr_x = ui.input(|i| {
-                                i.pointer
-                                    .interact_pos()
-                                    .map(|p| p.x)
-                                    .unwrap_or(scrub.start_pointer_x)
-                            });
-                            let delta_x = curr_x - scrub.start_pointer_x;
-                            let is_shift = ui.input(|i| i.modifiers.shift);
-                            let step = if is_shift {
-                                if scrub.has_decimal {
-                                    10.0_f64.powi(-(scrub.decimal_places as i32)) * 0.1
-                                } else {
-                                    0.1
-                                }
-                            } else if scrub.has_decimal {
-                                10.0_f64.powi(-(scrub.decimal_places as i32))
-                            } else {
-                                1.0
-                            };
-                            let new_val = scrub.original_val + (delta_x as f64 * step * 0.2);
-
-                            let new_str = if scrub.has_decimal {
-                                format!("{:.*}", scrub.decimal_places, new_val)
-                            } else {
-                                format!("{:.0}", new_val)
-                            };
-
-                            let (start, end) = scrub.byte_range;
-                            if start <= end && end <= self.state.session.raw_document_text.len() {
-                                if &self.state.session.raw_document_text[start..end] != new_str {
-                                    self.state
-                                        .session
-                                        .raw_document_text
-                                        .replace_range(start..end, &new_str);
-                                    scrub.byte_range.1 = start + new_str.len();
+                                if edit_resp.changed() {
                                     self.is_edit_dirty = true;
                                     self.last_keystroke_time = web_time::Instant::now();
                                     state_changed = true;
-                                    ui.ctx().request_repaint();
                                 }
-                            }
-                        }
-                    } else if !ui.input(|i| i.pointer.primary_down()) {
-                        self.active_scrubbing = None;
+
+                                // Inline Number Scrubbing via Alt + Drag
+                                let is_alt_down = self.state.session.settings.editor_alt_scrubbing && ui.input(|i| i.modifiers.alt);
+                                if is_alt_down && (edit_resp.hovered() || self.active_scrubbing.is_some()) {
+                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                                }
+
+                                if is_alt_down && ui.input(|i| i.pointer.primary_down()) {
+                                    if self.active_scrubbing.is_none() {
+                                        let pointer_pos = ui.input(|i| i.pointer.interact_pos());
+                                        let char_idx = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id)
+                                            .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
+                                        if let Some(c_idx) = char_idx {
+                                            if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
+                                                find_numeric_literal_at(&self.state.session.raw_document_text, usize::from(c_idx))
+                                            {
+                                                let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
+                                                self.active_scrubbing = Some(ActiveScrubbing {
+                                                    byte_range: (byte_start, byte_end),
+                                                    original_val: val,
+                                                    has_decimal: has_dec,
+                                                    decimal_places: dec_places,
+                                                    start_pointer_x: start_x,
+                                                });
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(ref mut scrub) = self.active_scrubbing {
+                                        let curr_x = ui.input(|i| {
+                                            i.pointer
+                                                .interact_pos()
+                                                .map(|p| p.x)
+                                                .unwrap_or(scrub.start_pointer_x)
+                                        });
+                                        let delta_x = curr_x - scrub.start_pointer_x;
+                                        let is_shift = ui.input(|i| i.modifiers.shift);
+                                        let step = if is_shift {
+                                            if scrub.has_decimal {
+                                                10.0_f64.powi(-(scrub.decimal_places as i32)) * 0.1
+                                            } else {
+                                                0.1
+                                            }
+                                        } else if scrub.has_decimal {
+                                            10.0_f64.powi(-(scrub.decimal_places as i32))
+                                        } else {
+                                            1.0
+                                        };
+                                        let new_val = scrub.original_val + (delta_x as f64 * step * 0.2);
+
+                                        let new_str = if scrub.has_decimal {
+                                            format!("{:.precision$}", new_val, precision = scrub.decimal_places)
+                                        } else {
+                                            format!("{}", new_val.round() as i64)
+                                        };
+
+                                        let doc = &mut self.state.session.raw_document_text;
+                                        let (start_b, end_b) = scrub.byte_range;
+                                        if start_b <= end_b && end_b <= doc.len() {
+                                            doc.replace_range(start_b..end_b, &new_str);
+                                            scrub.byte_range = (start_b, start_b + new_str.len());
+                                            self.is_edit_dirty = true;
+                                            self.last_keystroke_time = web_time::Instant::now();
+                                            state_changed = true;
+                                        }
+                                    }
+                                } else if !ui.input(|i| i.pointer.primary_down()) {
+                                    self.active_scrubbing = None;
+                                }
+                            },
+                        );
                     }
 
-                    // 3. Reactive Gutter Column (if show_right_sidebar is true)
-                    if self.show_right_sidebar {
+                    // 3. Reactive Gutter Column (if show_right_sidebar is true and not floating, or in DualHalves mode)
+                    if has_docked_right {
                         let (res_rect, res_resp) = ui.allocate_exact_size(
-                            egui::vec2(6.0, ui.available_height().max(400.0)),
+                            egui::vec2(8.0, ui.available_height().max(400.0)),
                             egui::Sense::click_and_drag(),
                         );
                         if res_resp.dragged() {
-                            self.right_sidebar_width = (self.right_sidebar_width - res_resp.drag_delta().x)
-                                .clamp(180.0, (total_width - line_num_width - 160.0).max(200.0));
+                            let delta_x = res_resp.drag_delta().x;
+                            self.right_sidebar_width = (self.right_sidebar_width - delta_x)
+                                .clamp(180.0, (available_space - 120.0).max(200.0));
+                            self.workspace.split_ratio = (1.0 - (self.right_sidebar_width / available_space)).clamp(0.15, 0.85);
+                            ui.ctx().request_repaint();
                         }
                         if res_resp.hovered() || res_resp.dragged() {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
@@ -3508,7 +4133,7 @@ impl UraeNotebookApp {
                         } else {
                             ui.painter().rect_filled(res_rect, 0.0, palette.border);
                         }
-                        let _ = res_resp.on_hover_text("Drag to adjust results bar width");
+                        let _ = res_resp.on_hover_text("Drag to resize results column");
 
                         ui.allocate_ui_with_layout(
                             egui::vec2(gutter_width, ui.available_height()),
@@ -3517,7 +4142,10 @@ impl UraeNotebookApp {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
 
                                 ui.horizontal(|ui| {
-                                    ui.colored_label(palette.accent_secondary, "⚡ Results");
+                                    ui.colored_label(palette.accent_secondary, "⚡ Results & 3D Surfaces");
+                                    if ui.small_button("⤢ Float").on_hover_text("Pop out results and graphs into floating window").clicked() {
+                                        self.right_panel_floating = !self.right_panel_floating;
+                                    }
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         if ui
                                             .button(egui::RichText::new("Hide ▶").size(12.0).color(palette.text_muted))
@@ -3537,6 +4165,25 @@ impl UraeNotebookApp {
 
                                 for pl in &parsed_lines {
                                     if pl.raw_text.trim().is_empty() {
+                                        continue;
+                                    }
+
+                                    // Variables, parameters, and constants default exclusively to the LEFT half.
+                                    // They are never rendered in the right column results stream.
+                                    let is_left_entity = match &pl.kind {
+                                        LineKind::SliderDef { .. }
+                                        | LineKind::RoleDeclaration { .. }
+                                        | LineKind::DomainRestriction { .. }
+                                        | LineKind::SetBuilder { .. } => true,
+                                        LineKind::Formula => {
+                                            !pl.is_function
+                                                && !pl.is_surface_3d
+                                                && pl.error_msg.is_none()
+                                                && is_variable_or_param_assignment(&pl.raw_text)
+                                        }
+                                        _ => false,
+                                    };
+                                    if is_left_entity {
                                         continue;
                                     }
 
@@ -3566,11 +4213,16 @@ impl UraeNotebookApp {
                                         egui::Stroke::NONE
                                     };
 
+                                    let margin = if self.state.session.settings.right_panel_compact_mode {
+                                        egui::Margin::symmetric(2, 0)
+                                    } else {
+                                        egui::Margin::symmetric(4, 2)
+                                    };
                                     let line_resp = egui::Frame::NONE
                                         .fill(frame_color)
                                         .stroke(frame_stroke)
                                         .corner_radius(4)
-                                        .inner_margin(egui::Margin::symmetric(4, 2))
+                                        .inner_margin(margin)
                                         .show(ui, |ui| {
                                         ui.vertical(|ui| {
                                             match &pl.kind {
@@ -3691,23 +4343,34 @@ impl UraeNotebookApp {
                                                         let line_idx = pl.line_idx;
                                                         let is_collapsed = self.collapsed_plot_lines.contains(&line_idx);
                                                         let line_token = format!("${}", line_idx + 1);
+                                                        let cur_scale = self.plot_scale_modes.get(&line_idx).copied().unwrap_or(PlotScaleMode::Linear);
+                                                        let mut scale_to_set = None;
+                                                        let mut do_pop_out = false;
+                                                        let mut toggle_collapse = false;
 
                                                         // Fold-out header bar
                                                         ui.horizontal_wrapped(|ui| {
                                                             let toggle_lbl = if is_collapsed { "📈 ▶" } else { "📈 ▼" };
                                                             if ui.small_button(toggle_lbl).on_hover_text("Toggle inline plot fold-out").clicked() {
-                                                                if is_collapsed {
-                                                                    self.collapsed_plot_lines.remove(&line_idx);
-                                                                } else {
-                                                                    self.collapsed_plot_lines.insert(line_idx);
-                                                                }
+                                                                toggle_collapse = true;
                                                             }
                                                             let display_txt = if !pl.output_unicode.is_empty() {
                                                                 &pl.output_unicode
                                                             } else {
                                                                 &pl.raw_text
                                                             };
-                                                            let mut fn_lbl = ui.colored_label(palette.math_result, display_txt);
+                                                            let scale_suffix = match cur_scale {
+                                                                PlotScaleMode::Linear => "",
+                                                                PlotScaleMode::SemiLogY => " (Log-Y)",
+                                                                PlotScaleMode::SemiLogX => " (Log-X)",
+                                                                PlotScaleMode::LogLog => " (Log-Log)",
+                                                            };
+                                                            let full_lbl = if scale_suffix.is_empty() {
+                                                                display_txt.to_string()
+                                                            } else {
+                                                                format!("{}{}", display_txt, scale_suffix)
+                                                            };
+                                                            let mut fn_lbl = ui.colored_label(palette.math_result, full_lbl);
                                                             if let Some(card) = self.state.get_symbol_info_card(&line_token) {
                                                                 fn_lbl = fn_lbl.on_hover_ui(|ui| render_symbol_info_card_content(ui, &card, &palette, &mut inspector_to_open));
                                                             }
@@ -3715,97 +4378,193 @@ impl UraeNotebookApp {
                                                                 new_hovered_line = Some(line_idx);
                                                                 self.inspected_symbol = Some(line_token.clone());
                                                             }
-                                                            if ui.small_button("⤢ Pop Out").on_hover_text("Open in floating window").clicked() {
-                                                                plot_to_open = Some(pl.raw_text.trim().to_string());
-                                                            }
+                                                            fn_lbl.context_menu(|ui| {
+                                                                ui.label(egui::RichText::new("📊 Graph Options").strong());
+                                                                ui.separator();
+                                                                ui.label(egui::RichText::new("Axis Scaling:").weak());
+                                                                if ui.selectable_label(cur_scale == PlotScaleMode::Linear, "Linear (Standard)").clicked() {
+                                                                    scale_to_set = Some(PlotScaleMode::Linear);
+                                                                }
+                                                                if ui.selectable_label(cur_scale == PlotScaleMode::SemiLogY, "Semi-log Y (log₁₀ y)").clicked() {
+                                                                    scale_to_set = Some(PlotScaleMode::SemiLogY);
+                                                                }
+                                                                if ui.selectable_label(cur_scale == PlotScaleMode::SemiLogX, "Semi-log X (log₁₀ x)").clicked() {
+                                                                    scale_to_set = Some(PlotScaleMode::SemiLogX);
+                                                                }
+                                                                if ui.selectable_label(cur_scale == PlotScaleMode::LogLog, "Log-Log (log₁₀ x, log₁₀ y)").clicked() {
+                                                                    scale_to_set = Some(PlotScaleMode::LogLog);
+                                                                }
+                                                                ui.separator();
+                                                                if ui.button("⤢ Pop Out to Window").clicked() {
+                                                                    do_pop_out = true;
+                                                                }
+                                                                if ui.button(if is_collapsed { "📈 Expand Plot" } else { "📈 Collapse Plot" }).clicked() {
+                                                                    toggle_collapse = true;
+                                                                }
+                                                            });
                                                         });
 
                                                         // Plot renders directly BELOW the fold-out header in the right panel
                                                         if !is_collapsed {
-                                                            ui.add_space(4.0);
-                                                            let (smart_min, smart_max) = self.state.compute_smart_plot_bounds(&pl.raw_text, "x");
-                                                            let mut min_r = smart_min;
-                                                            let mut max_r = smart_max;
-
-                                                            let plot_resp = Plot::new(format!("stream_plot_{}", pl.line_idx))
-                                                                .height(130.0)
-                                                                .width((gutter_width - 24.0).max(140.0))
-                                                                .allow_drag(true)
-                                                                .allow_zoom(true)
-                                                                .allow_scroll(false)
-                                                                .include_x(smart_min)
-                                                                .include_x(smart_max)
-                                                                .auto_bounds(egui::Vec2b::new(false, true))
-                                                                .show(ui, |plot_ui| {
-                                                                    let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
-                                                                    let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
-                                                                    let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
-                                                                    if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
-                                                                        let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
-                                                                        plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
-                                                                    }
-
-                                                                    let bounds = plot_ui.plot_bounds();
-                                                                    min_r = bounds.min()[0];
-                                                                    max_r = bounds.max()[0];
-                                                                    if !min_r.is_finite() || !max_r.is_finite() || (max_r - min_r).abs() < 1e-12 {
-                                                                        min_r = smart_min;
-                                                                        max_r = smart_max;
-                                                                    }
-
-                                                                    let pts_data = self.state.cached_evaluate_plot_points(
-                                                                        &pl.raw_text, "x", min_r, max_r, 200,
+                                                            ui.add_space(2.0);
+                                                            if pl.is_surface_3d {
+                                                                if self.state.session.settings.right_panel_show_3d {
+                                                                    let lbl_resp = ui.label(egui::RichText::new("🌐 3D Surface Viewport").strong().color(palette.accent_secondary));
+                                                                    lbl_resp.context_menu(|ui| {
+                                                                        ui.label(egui::RichText::new("🌐 3D Surface Options").strong());
+                                                                        ui.separator();
+                                                                        if ui.button("⤢ Pop Out to Window").clicked() {
+                                                                            do_pop_out = true;
+                                                                        }
+                                                                        if ui.button("📈 Collapse 3D Viewport").clicked() {
+                                                                            toggle_collapse = true;
+                                                                        }
+                                                                    });
+                                                                    crate::ui::Viewport3D::show_with_height(
+                                                                        ui,
+                                                                        &mut self.viewport_3d_state,
+                                                                        None,
+                                                                        200.0,
                                                                     );
-                                                                    if !pts_data.is_empty() {
-                                                                        let y_clamp = (max_r - min_r).abs() * 25.0;
-                                                                        let mut segments: Vec<Vec<[f64; 2]>> = Vec::new();
-                                                                        let mut cur_seg: Vec<[f64; 2]> = Vec::new();
+                                                                }
+                                                            } else if self.state.session.settings.right_panel_show_plots {
+                                                                let (smart_min, smart_max) = self.state.compute_smart_plot_bounds(&pl.raw_text, "x");
+                                                                let mut min_r = smart_min;
+                                                                let mut max_r = smart_max;
 
-                                                                        for p in pts_data {
-                                                                            if !p[0].is_finite() || !p[1].is_finite() || p[1].abs() > y_clamp {
-                                                                                if !cur_seg.is_empty() {
-                                                                                    segments.push(std::mem::take(&mut cur_seg));
-                                                                                }
-                                                                                continue;
-                                                                            }
-                                                                            if let Some(prev) = cur_seg.last() {
-                                                                                let dx = (p[0] - prev[0]).abs();
-                                                                                let dy = (p[1] - prev[1]).abs();
-                                                                                if dx > 1e-9 && (dy / dx) > 1e5 && (p[1] * prev[1] < 0.0) {
-                                                                                    segments.push(std::mem::take(&mut cur_seg));
-                                                                                }
-                                                                            }
-                                                                            cur_seg.push(p);
-                                                                        }
-                                                                        if !cur_seg.is_empty() {
-                                                                            segments.push(cur_seg);
+                                                                let plot_resp = Plot::new(format!("stream_plot_{}", pl.line_idx))
+                                                                    .height(130.0)
+                                                                    .width((gutter_width - 24.0).max(140.0))
+                                                                    .allow_drag(true)
+                                                                    .allow_zoom(true)
+                                                                    .allow_scroll(false)
+                                                                    .include_x(smart_min)
+                                                                    .include_x(smart_max)
+                                                                    .auto_bounds(egui::Vec2b::new(false, true))
+                                                                    .show(ui, |plot_ui| {
+                                                                        let scroll_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                                                        let smooth_y = plot_ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                                                        let scroll_delta = if scroll_y.abs() > 0.0 { scroll_y } else { smooth_y };
+                                                                        if plot_ui.response().hovered() && scroll_delta.abs() > 0.0 {
+                                                                            let zoom_factor = (scroll_delta * 0.0025).clamp(-0.5, 0.5).exp();
+                                                                            plot_ui.zoom_bounds_around_hovered(egui::Vec2::splat(zoom_factor));
                                                                         }
 
-                                                                        for seg in segments {
-                                                                            if !seg.is_empty() {
-                                                                                let plot_points: PlotPoints = seg.into_iter().collect();
-                                                                                let line = Line::new("", plot_points)
-                                                                                    .color(palette.accent_primary)
-                                                                                    .width(2.0_f32);
-                                                                                plot_ui.line(line);
+                                                                        let bounds = plot_ui.plot_bounds();
+                                                                        min_r = bounds.min()[0];
+                                                                        max_r = bounds.max()[0];
+                                                                        if !min_r.is_finite() || !max_r.is_finite() || (max_r - min_r).abs() < 1e-12 {
+                                                                            min_r = smart_min;
+                                                                            max_r = smart_max;
+                                                                        }
+
+                                                                        let pts_data = self.state.cached_evaluate_plot_points(
+                                                                            &pl.raw_text, "x", min_r, max_r, 200,
+                                                                        );
+                                                                        if !pts_data.is_empty() {
+                                                                            let y_clamp = (max_r - min_r).abs() * 25.0;
+                                                                            let mut segments: Vec<Vec<[f64; 2]>> = Vec::new();
+                                                                            let mut cur_seg: Vec<[f64; 2]> = Vec::new();
+
+                                                                            for p in pts_data {
+                                                                                let mut px = p[0];
+                                                                                let mut py = p[1];
+                                                                                match cur_scale {
+                                                                                    PlotScaleMode::Linear => {}
+                                                                                    PlotScaleMode::SemiLogY => {
+                                                                                        if py > 0.0 { py = py.log10(); } else { continue; }
+                                                                                    }
+                                                                                    PlotScaleMode::SemiLogX => {
+                                                                                        if px > 0.0 { px = px.log10(); } else { continue; }
+                                                                                    }
+                                                                                    PlotScaleMode::LogLog => {
+                                                                                        if px > 0.0 && py > 0.0 { px = px.log10(); py = py.log10(); } else { continue; }
+                                                                                    }
+                                                                                }
+                                                                                if !px.is_finite() || !py.is_finite() || py.abs() > y_clamp {
+                                                                                    if !cur_seg.is_empty() {
+                                                                                        segments.push(std::mem::take(&mut cur_seg));
+                                                                                    }
+                                                                                    continue;
+                                                                                }
+                                                                                if let Some(prev) = cur_seg.last() {
+                                                                                    let dx = (px - prev[0]).abs();
+                                                                                    let dy = (py - prev[1]).abs();
+                                                                                    if dx > 1e-9 && (dy / dx) > 1e5 && (py * prev[1] < 0.0) {
+                                                                                        segments.push(std::mem::take(&mut cur_seg));
+                                                                                    }
+                                                                                }
+                                                                                cur_seg.push([px, py]);
+                                                                            }
+                                                                            if !cur_seg.is_empty() {
+                                                                                segments.push(cur_seg);
+                                                                            }
+
+                                                                            for seg in segments {
+                                                                                if !seg.is_empty() {
+                                                                                    let plot_points: PlotPoints = seg.into_iter().collect();
+                                                                                    let line = Line::new("", plot_points)
+                                                                                        .color(palette.accent_primary)
+                                                                                        .width(2.0_f32);
+                                                                                    plot_ui.line(line);
+                                                                                }
                                                                             }
                                                                         }
+                                                                    });
+
+                                                                let mut resp = plot_resp.response;
+                                                                if resp.hovered() {
+                                                                    new_hovered_line = Some(line_idx);
+                                                                }
+                                                                if let Some(card) = self.state.get_symbol_info_card(&line_token) {
+                                                                    resp = resp.on_hover_ui(|ui| render_symbol_info_card_content(ui, &card, &palette, &mut inspector_to_open));
+                                                                }
+                                                                resp.context_menu(|ui| {
+                                                                    ui.label(egui::RichText::new("📊 Graph Options").strong());
+                                                                    ui.separator();
+                                                                    ui.label(egui::RichText::new("Axis Scaling:").weak());
+                                                                    if ui.selectable_label(cur_scale == PlotScaleMode::Linear, "Linear (Standard)").clicked() {
+                                                                        scale_to_set = Some(PlotScaleMode::Linear);
+                                                                    }
+                                                                    if ui.selectable_label(cur_scale == PlotScaleMode::SemiLogY, "Semi-log Y (log₁₀ y)").clicked() {
+                                                                        scale_to_set = Some(PlotScaleMode::SemiLogY);
+                                                                    }
+                                                                    if ui.selectable_label(cur_scale == PlotScaleMode::SemiLogX, "Semi-log X (log₁₀ x)").clicked() {
+                                                                        scale_to_set = Some(PlotScaleMode::SemiLogX);
+                                                                    }
+                                                                    if ui.selectable_label(cur_scale == PlotScaleMode::LogLog, "Log-Log (log₁₀ x, log₁₀ y)").clicked() {
+                                                                        scale_to_set = Some(PlotScaleMode::LogLog);
+                                                                    }
+                                                                    ui.separator();
+                                                                    if ui.button("⤢ Pop Out to Window").clicked() {
+                                                                        do_pop_out = true;
+                                                                    }
+                                                                    if ui.button(if is_collapsed { "📈 Expand Plot" } else { "📈 Collapse Plot" }).clicked() {
+                                                                        toggle_collapse = true;
                                                                     }
                                                                 });
+                                                                if resp.dragged() || resp.hovered() {
+                                                                    ui.ctx().request_repaint();
+                                                                }
+                                                            }
+                                                        }
 
-                                                            let mut resp = plot_resp.response;
-                                                            if resp.hovered() {
-                                                                new_hovered_line = Some(line_idx);
-                                                            }
-                                                            if let Some(card) = self.state.get_symbol_info_card(&line_token) {
-                                                                resp = resp.on_hover_ui(|ui| render_symbol_info_card_content(ui, &card, &palette, &mut inspector_to_open));
-                                                            }
-                                                            if resp.dragged() || resp.hovered() {
-                                                                ui.ctx().request_repaint();
+                                                        if let Some(s) = scale_to_set {
+                                                            self.plot_scale_modes.insert(line_idx, s);
+                                                        }
+                                                        if do_pop_out {
+                                                            plot_to_open = Some(pl.raw_text.trim().to_string());
+                                                        }
+                                                        if toggle_collapse {
+                                                            if is_collapsed {
+                                                                self.collapsed_plot_lines.remove(&line_idx);
+                                                            } else {
+                                                                self.collapsed_plot_lines.insert(line_idx);
                                                             }
                                                         }
                                                     } else if !pl.output_unicode.is_empty() {
-                                                        ui.horizontal_wrapped(|ui| {
+                                                        if self.state.session.settings.right_panel_show_solutions {
+                                                            ui.horizontal_wrapped(|ui| {
                                                             let mut text = egui::RichText::new(&pl.output_unicode).monospace();
                                                             text = text.color(palette.math_result);
                                                             let mut res_btn = ui.add(egui::Button::new(text).frame(false));
@@ -3825,11 +4584,13 @@ impl UraeNotebookApp {
                                                             }
 
                                                             if let Some(unit) = &pl.physical_unit {
-                                                                ui.weak(format!("[{}]", unit));
+                                                                if !pl.output_unicode.contains(&format!("[{}]", unit)) {
+                                                                    ui.weak(format!("[{}]", unit));
+                                                                }
                                                             }
 
                                                             // Inbound reference indicators & quick auto-naming
-                                                            if !referencing_lines.is_empty() {
+                                                            if self.state.session.settings.right_panel_show_inbound_refs && !referencing_lines.is_empty() {
                                                                 let ref_str = referencing_lines.iter().map(|n| format!("L{}", n)).collect::<Vec<_>>().join(",");
                                                                 ui.colored_label(palette.accent_secondary, format!("↖{}", ref_str))
                                                                     .on_hover_text(format!("Referenced by line(s) {}", ref_str));
@@ -3840,8 +4601,45 @@ impl UraeNotebookApp {
                                                                 }
                                                             }
                                                         });
+                                                        }
                                                     } else {
                                                         ui.weak("…");
+                                                    }
+                                                }
+                                                LineKind::CadMesh { model_kind, summary } => {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(format!("⚙ {}", model_kind))
+                                                                .strong()
+                                                                .color(palette.accent_primary),
+                                                        );
+                                                        ui.weak(summary);
+                                                    });
+                                                    if self.state.session.settings.right_panel_show_cad {
+                                                        crate::ui::Viewport3D::show_with_height(
+                                                            ui,
+                                                            &mut self.viewport_3d_state,
+                                                            None,
+                                                            200.0,
+                                                        );
+                                                    }
+                                                }
+                                                LineKind::Plot3D { expr_str, x_var, y_var } => {
+                                                    ui.horizontal(|ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(format!("📊 3D: z = f({}, {})", x_var, y_var))
+                                                                .strong()
+                                                                .color(palette.accent_secondary),
+                                                        );
+                                                        ui.monospace(expr_str);
+                                                    });
+                                                    if self.state.session.settings.right_panel_show_3d {
+                                                        crate::ui::Viewport3D::show_with_height(
+                                                            ui,
+                                                            &mut self.viewport_3d_state,
+                                                            None,
+                                                            220.0,
+                                                        );
                                                     }
                                                 }
                                             }
@@ -3965,6 +4763,9 @@ impl UraeNotebookApp {
     /// Render Interactive Matrix & Tensor Grid Builder Modal
     fn render_matrix_builder_modal(&mut self, ctx: &egui::Context) {
         if self.show_matrix_builder {
+            if self.builder_snapshot.is_none() {
+                self.builder_snapshot = Some(self.state.session.raw_document_text.clone());
+            }
             let mut is_open = self.show_matrix_builder;
             egui::Window::new("Matrix & Tensor Grid Builder")
                 .open(&mut is_open)
@@ -4080,9 +4881,14 @@ impl UraeNotebookApp {
                     ui.horizontal(|ui| {
                         if ui.button("Insert at Active Line").clicked() {
                             self.state.insert_text_at_active_line(&syntax);
+                            self.builder_snapshot = None;
                             self.show_matrix_builder = false;
                         }
                         if ui.button("Cancel").clicked() {
+                            if let Some(orig) = self.builder_snapshot.take() {
+                                self.state.session.raw_document_text = orig;
+                                self.state.evaluate_all();
+                            }
                             self.show_matrix_builder = false;
                         }
                     });
@@ -4094,6 +4900,9 @@ impl UraeNotebookApp {
     /// Render Interactive Parameter & Variable Builder Modal
     fn render_domain_picker_modal(&mut self, ctx: &egui::Context) {
         if self.show_domain_picker {
+            if self.builder_snapshot.is_none() {
+                self.builder_snapshot = Some(self.state.session.raw_document_text.clone());
+            }
             let mut is_open = self.show_domain_picker;
             egui::Window::new("🎛 Parameter & Variable Builder")
                 .open(&mut is_open)
@@ -4587,9 +5396,14 @@ impl UraeNotebookApp {
                     ui.horizontal(|ui| {
                         if ui.button("➕ Insert at Active Line").clicked() {
                             self.state.insert_text_at_active_line(&syntax);
+                            self.builder_snapshot = None;
                             self.show_domain_picker = false;
                         }
                         if ui.button("Cancel").clicked() {
+                            if let Some(orig) = self.builder_snapshot.take() {
+                                self.state.session.raw_document_text = orig;
+                                self.state.evaluate_all();
+                            }
                             self.show_domain_picker = false;
                         }
                     });
@@ -4706,6 +5520,9 @@ impl UraeNotebookApp {
     /// Render ODE/PDE Boundary Condition Wizard Modal
     fn render_ode_wizard_modal(&mut self, ctx: &egui::Context) {
         if self.show_ode_wizard {
+            if self.builder_snapshot.is_none() {
+                self.builder_snapshot = Some(self.state.session.raw_document_text.clone());
+            }
             let mut is_open = self.show_ode_wizard;
             egui::Window::new("ODE/PDE Boundary Wizard")
                 .open(&mut is_open)
@@ -4761,9 +5578,14 @@ impl UraeNotebookApp {
                     ui.horizontal(|ui| {
                         if ui.button("Insert at Active Line").clicked() {
                             self.state.insert_text_at_active_line(&syntax);
+                            self.builder_snapshot = None;
                             self.show_ode_wizard = false;
                         }
                         if ui.button("Cancel").clicked() {
+                            if let Some(orig) = self.builder_snapshot.take() {
+                                self.state.session.raw_document_text = orig;
+                                self.state.evaluate_all();
+                            }
                             self.show_ode_wizard = false;
                         }
                     });
@@ -4775,6 +5597,9 @@ impl UraeNotebookApp {
     /// Render Physical Units & Dimensional Palette Modal
     fn render_units_palette_modal(&mut self, ctx: &egui::Context) {
         if self.show_units_palette {
+            if self.builder_snapshot.is_none() {
+                self.builder_snapshot = Some(self.state.session.raw_document_text.clone());
+            }
             let mut is_open = self.show_units_palette;
             egui::Window::new("Physical Units & Dimensions")
                 .open(&mut is_open)
@@ -4838,9 +5663,14 @@ impl UraeNotebookApp {
                     ui.horizontal(|ui| {
                         if ui.button("Insert at Active Line").clicked() {
                             self.state.insert_text_at_active_line(&syntax);
+                            self.builder_snapshot = None;
                             self.show_units_palette = false;
                         }
                         if ui.button("Cancel").clicked() {
+                            if let Some(orig) = self.builder_snapshot.take() {
+                                self.state.session.raw_document_text = orig;
+                                self.state.evaluate_all();
+                            }
                             self.show_units_palette = false;
                         }
                     });
@@ -5062,6 +5892,219 @@ impl UraeNotebookApp {
             self.open_or_focus_inspector(&next_sym);
         }
     }
+
+/// Render Interactive Dependency Graph View (DAG of symbols, equations, and expressions)
+    pub fn render_dependency_graph_view(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
+        let palette = self.theme.palette();
+        ui.horizontal(|ui| {
+            ui.heading(egui::RichText::new("🕸 Symbol & Equation Dependency Graph").color(palette.accent_primary));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Back to Editor (Smart Stream)").clicked() {
+                    self.view_mode = ViewMode::SmartStream;
+                }
+            });
+        });
+        ui.separator();
+
+        ui.label("Interactive visualization of upstream and downstream mathematical dependencies across your document:");
+        ui.add_space(4.0);
+
+        egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| {
+            let parsed = &self.state.parsed_lines;
+            if parsed.is_empty() {
+                ui.weak("Document is currently empty. Add math formulas or variables to visualize the dependency graph.");
+                return;
+            }
+
+            ui.horizontal(|ui| {
+                // Left column: Symbol nodes
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Declared Symbols & Constants").strong().size(15.0));
+                    for (sym_name, meta) in &self.state.session.symbol_metadata {
+                        let is_sel = self.inspected_symbol.as_deref() == Some(sym_name);
+                        let role_color = match meta.role {
+                            crate::notebook::SymbolRole::Constant => palette.accent_secondary,
+                            crate::notebook::SymbolRole::Parameter => egui::Color32::from_rgb(250, 204, 21),
+                            crate::notebook::SymbolRole::Variable => palette.accent_primary,
+                        };
+
+                        egui::Frame::NONE
+                            .fill(if is_sel { palette.accent_primary.gamma_multiply(0.2) } else { palette.bg_card })
+                            .stroke(egui::Stroke::new(1.0, role_color))
+                            .corner_radius(6)
+                            .inner_margin(8)
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.colored_label(role_color, format!("{:?}", meta.role));
+                                    ui.label(egui::RichText::new(sym_name).strong().size(15.0));
+                                    ui.weak(format!("= {:.4}", meta.cur_val));
+                                    if let Some(u) = &meta.unit_str {
+                                        ui.weak(format!("[{}]", u));
+                                    }
+                                });
+                                if !meta.compound_tags().is_empty() {
+                                    ui.horizontal_wrapped(|ui| {
+                                        for tag in meta.compound_tags() {
+                                            ui.weak(format!("[{}]", tag));
+                                        }
+                                    });
+                                }
+                            });
+                        ui.add_space(4.0);
+                    }
+                });
+
+                ui.separator();
+
+                // Right column: Formula dependency lines
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Formula Execution Nodes & Dataflow").strong().size(15.0));
+                    for pl in parsed {
+                        if pl.kind == LineKind::Markdown {
+                            continue;
+                        }
+                        let upstream = compute_line_upstream_dependencies(pl.line_idx, parsed);
+                        egui::Frame::NONE
+                            .fill(palette.bg_card)
+                            .stroke(egui::Stroke::new(1.0, palette.border))
+                            .corner_radius(6)
+                            .inner_margin(8)
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new(format!("L{}", pl.line_idx + 1)).strong().color(palette.text_muted));
+                                    ui.monospace(&pl.raw_text);
+                                    if !pl.output_unicode.is_empty() {
+                                        ui.weak("➔");
+                                        ui.colored_label(palette.math_result, &pl.output_unicode);
+                                    }
+                                });
+                                if !upstream.is_empty() {
+                                    let up_str = upstream.iter().map(|idx| format!("L{}", idx + 1)).collect::<Vec<_>>().join(", ");
+                                    ui.weak(format!("Upstream dependencies: {}", up_str));
+                                }
+                            });
+                        ui.add_space(4.0);
+                    }
+                });
+            });
+        });
+    }
+
+    /// Render clean, publishable presentation / report view
+    pub fn render_presentation_report_view(&mut self, ui: &mut egui::Ui, _ctx: &egui::Context) {
+        let palette = self.theme.palette();
+        ui.horizontal(|ui| {
+            ui.heading(egui::RichText::new("📰 Presentation & Publication Report").color(palette.accent_primary));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Back to Editor").clicked() {
+                    self.view_mode = ViewMode::SmartStream;
+                }
+                if ui.button("🖨 Print / Export").clicked() {
+                    self.export_notice = Some("Exporting presentation document...".to_string());
+                }
+            });
+        });
+        ui.separator();
+
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.add_space(8.0);
+            for pl in &self.state.parsed_lines {
+                match &pl.kind {
+                    LineKind::Markdown => {
+                        let trimmed = pl.raw_text.trim();
+                        if trimmed.starts_with('#') {
+                            let level = trimmed.chars().take_while(|c| *c == '#').count();
+                            let txt = trimmed.trim_start_matches('#').trim();
+                            if level == 1 {
+                                ui.heading(egui::RichText::new(txt).size(22.0).color(palette.accent_primary).strong());
+                            } else {
+                                ui.heading(egui::RichText::new(txt).size(16.0).color(palette.accent_secondary).strong());
+                            }
+                        } else {
+                            ui.label(egui::RichText::new(trimmed.trim_start_matches("//").trim()).size(14.0));
+                        }
+                    }
+                    LineKind::Formula => {
+                        egui::Frame::NONE
+                            .fill(palette.bg_card)
+                            .stroke(egui::Stroke::new(1.0, palette.border))
+                            .corner_radius(6)
+                            .inner_margin(12)
+                            .show(ui, |ui| {
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.label(egui::RichText::new(&pl.output_unicode).size(15.0).strong().color(palette.math_result));
+                                    if let Some(u) = &pl.physical_unit {
+                                        if !pl.output_unicode.contains(&format!("[{}]", u)) {
+                                            ui.weak(format!("[{}]", u));
+                                        }
+                                    }
+                                });
+                                if pl.is_surface_3d {
+                                    ui.add_space(4.0);
+                                    crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 240.0);
+                                }
+                            });
+                    }
+                    LineKind::CadMesh { model_kind, summary } => {
+                        egui::Frame::NONE
+                            .fill(palette.bg_card)
+                            .stroke(egui::Stroke::new(1.0, palette.border))
+                            .corner_radius(6)
+                            .inner_margin(12)
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(format!("Engineering Model: {}", model_kind)).heading().color(palette.accent_primary));
+                                ui.label(summary);
+                                ui.add_space(6.0);
+                                crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 280.0);
+                            });
+                    }
+                    LineKind::Plot3D { expr_str, x_var, y_var } => {
+                        egui::Frame::NONE
+                            .fill(palette.bg_card)
+                            .stroke(egui::Stroke::new(1.0, palette.border))
+                            .corner_radius(6)
+                            .inner_margin(12)
+                            .show(ui, |ui| {
+                                ui.label(egui::RichText::new(format!("3D Surface: z = f({}, {}) = {}", x_var, y_var, expr_str)).heading().color(palette.accent_secondary));
+                                ui.add_space(6.0);
+                                crate::ui::Viewport3D::show_with_height(ui, &mut self.viewport_3d_state, None, 280.0);
+                            });
+                    }
+                    _ => {}
+                }
+                ui.add_space(8.0);
+            }
+        });
+    }
+}
+
+/// Returns true if `raw_text` is a variable, parameter, or constant assignment / definition.
+pub fn is_variable_or_param_assignment(raw_text: &str) -> bool {
+    let text = raw_text.trim();
+    if text.contains("=?") || text.contains("==") || text.starts_with("solve") {
+        return false;
+    }
+    if let Some((lhs, _rhs)) = text.split_once('=') {
+        let mut lhs = lhs.trim();
+        for prefix in &["var ", "let ", "const ", "param ", "slider "] {
+            if let Some(rest) = lhs.strip_prefix(prefix) {
+                lhs = rest.trim();
+                break;
+            }
+        }
+        !lhs.is_empty()
+            && !lhs.contains('(')
+            && !lhs.contains(')')
+            && !lhs.contains('[')
+            && !lhs.contains(']')
+            && !lhs.contains('{')
+            && !lhs.contains('}')
+            && !lhs.contains(' ')
+            && lhs.chars().all(|c| c.is_alphanumeric() || c == '_')
+            && !lhs.chars().next().unwrap().is_ascii_digit()
+    } else {
+        false
+    }
 }
 
 /// Finds numeric literal around `char_idx` in `text`.
@@ -5153,13 +6196,15 @@ pub fn find_numeric_literal_at(
 }
 
 /// Compute all upstream and direct dependency line indices for `target_line_idx`.
+/// Lines are never marked as their own dependencies.
 pub fn compute_line_upstream_dependencies(
     target_line_idx: usize,
     parsed_lines: &[crate::notebook::ParsedLine],
 ) -> HashSet<usize> {
     let mut deps = HashSet::new();
+    let mut visited = HashSet::new();
     let mut queue = vec![target_line_idx];
-    deps.insert(target_line_idx);
+    visited.insert(target_line_idx);
 
     while let Some(curr_idx) = queue.pop() {
         if curr_idx >= parsed_lines.len() {
@@ -5172,9 +6217,12 @@ pub fn compute_line_upstream_dependencies(
         for tok in text.split(|c: char| !c.is_alphanumeric() && c != '$' && c != '_') {
             if let Some(num_str) = tok.strip_prefix('$') {
                 if let Ok(num) = num_str.parse::<usize>() {
-                    if num > 0 && num - 1 < curr_idx && num - 1 < parsed_lines.len() {
+                    if num > 0 && num - 1 < parsed_lines.len() && num - 1 != curr_idx {
                         let dep_line = num - 1;
-                        if deps.insert(dep_line) {
+                        if dep_line != target_line_idx {
+                            deps.insert(dep_line);
+                        }
+                        if visited.insert(dep_line) {
                             queue.push(dep_line);
                         }
                     }
@@ -5185,7 +6233,10 @@ pub fn compute_line_upstream_dependencies(
         // 2. Check for 'ans' reference (depends on immediately preceding line)
         if text.contains("ans") && curr_idx > 0 {
             let dep_line = curr_idx - 1;
-            if deps.insert(dep_line) {
+            if dep_line != target_line_idx {
+                deps.insert(dep_line);
+            }
+            if visited.insert(dep_line) {
                 queue.push(dep_line);
             }
         }
@@ -5214,8 +6265,13 @@ pub fn compute_line_upstream_dependencies(
                     }
                     _ => false,
                 };
-                if defines_tok && deps.insert(j) {
-                    queue.push(j);
+                if defines_tok {
+                    if j != target_line_idx {
+                        deps.insert(j);
+                    }
+                    if visited.insert(j) {
+                        queue.push(j);
+                    }
                 }
             }
         }
@@ -5224,6 +6280,7 @@ pub fn compute_line_upstream_dependencies(
     deps
 }
 
+
 /// Render header-less rich object / symbol inspector preview UI (used inside hover tooltips and floating cards).
 pub fn render_symbol_info_card_content(
     ui: &mut egui::Ui,
@@ -5231,6 +6288,20 @@ pub fn render_symbol_info_card_content(
     palette: &crate::ui::ThemePalette,
     on_select_symbol: &mut Option<String>,
 ) {
+    if !info.compound_tags.is_empty() {
+        ui.horizontal_wrapped(|ui| {
+            for tag in &info.compound_tags {
+                ui.label(
+                    egui::RichText::new(format!("[{}]", tag))
+                        .size(11.0)
+                        .color(palette.accent_secondary)
+                        .strong(),
+                );
+            }
+        });
+        ui.separator();
+    }
+
     if let Some(kind) = &info.object_kind {
         match kind {
             crate::notebook::ObjectKind::Constant {
@@ -5388,12 +6459,128 @@ pub fn render_symbol_info_card_content(
                     });
                 }
             }
+            crate::notebook::ObjectKind::TransferFunction {
+                numerator_degree,
+                denominator_degree,
+                poles,
+                zeros,
+                is_stable,
+            } => {
+                let status = if *is_stable { "✓ Asymptotically Stable" } else { "⚠ Unstable / Marginally Stable" };
+                let color = if *is_stable { palette.text_success } else { palette.accent_secondary };
+                ui.colored_label(color, format!("📡 Transfer Function H(s) [{}]", status));
+                ui.weak(format!("• Order: Denom s^{}, Num s^{} (Proper: {})", denominator_degree, numerator_degree, denominator_degree >= numerator_degree));
+                if !poles.is_empty() {
+                    ui.weak(format!("• Poles: {}", poles.join(", ")));
+                }
+                if !zeros.is_empty() {
+                    ui.weak(format!("• Zeros: {}", zeros.join(", ")));
+                }
+            }
+            crate::notebook::ObjectKind::StochasticProcess {
+                drift_term,
+                diffusion_term,
+                is_martingale,
+            } => {
+                ui.colored_label(palette.accent_primary, "🎲 Itô Stochastic Differential dX_t");
+                ui.monospace(format!("  dX_t = ({}) dt + ({}) dW_t", drift_term, diffusion_term));
+                ui.weak(format!("• Martingale Property: {}", if *is_martingale { "True (Drift μ = 0)" } else { "False (Drift present)" }));
+            }
+            crate::notebook::ObjectKind::FEAResult {
+                nodes,
+                elements,
+                max_stress,
+                deformation_scale,
+                solution_type,
+            } => {
+                ui.colored_label(palette.accent_secondary, format!("🏗 FEA / IGA Geometry: {}", solution_type));
+                ui.weak(format!("• Mesh / Control Net: {} nodes, {} elements", nodes, elements));
+                ui.weak(format!("• Peak Stress / Measure: {:.2} | Scale: {:.1}x", max_stress, deformation_scale));
+            }
+            crate::notebook::ObjectKind::ThermodynamicState {
+                system_type,
+                equation_of_state,
+                properties,
+            } => {
+                ui.colored_label(palette.text_success, format!("🔥 Thermodynamics: {}", system_type));
+                ui.monospace(format!("  EoS: {}", equation_of_state));
+                for (k, v) in properties {
+                    ui.weak(format!("• {}: {:.2}", k, v));
+                }
+            }
+            crate::notebook::ObjectKind::AlgebraicForm {
+                form_type,
+                complexity_score,
+            } => {
+                ui.colored_label(palette.accent_primary, format!("📐 Algebraic Form: {}", form_type));
+                ui.weak(format!("• Structural Complexity / Depth: {}", complexity_score));
+            }
+            crate::notebook::ObjectKind::LogicSystem {
+                system_name,
+                truth_values_count,
+                is_paraconsistent,
+                is_intuitionistic,
+                tautologies_summary,
+            } => {
+                ui.colored_label(palette.accent_secondary, format!("⚖ Logic System: {}", system_name));
+                ui.weak(format!("• Values: {}-Valued | Intuitionistic: {}", truth_values_count, if *is_intuitionistic { "Yes" } else { "No" }));
+                ui.weak(format!("• Paraconsistent: {}", if *is_paraconsistent { "Yes" } else { "No" }));
+                ui.weak(format!("• Properties: {}", tautologies_summary));
+            }
+            crate::notebook::ObjectKind::CryptographicCurve {
+                curve_name,
+                field_order,
+                equation,
+            } => {
+                ui.colored_label(palette.accent_primary, format!("🔐 Elliptic Curve: {}", curve_name));
+                ui.monospace(format!("  E: {}", equation));
+                ui.weak(format!("• Finite Field: GF({})", field_order));
+            }
+            crate::notebook::ObjectKind::GraphStructure {
+                vertices,
+                edges,
+                is_directed,
+                spectral_gap,
+            } => {
+                ui.colored_label(palette.accent_secondary, format!("🕸 Graph: {} Nodes, {} Edges", vertices, edges));
+                ui.weak(format!("• Topology: {}", if *is_directed { "Directed" } else { "Undirected" }));
+                if let Some(gap) = spectral_gap {
+                    ui.weak(format!("• Algebraic Connectivity λ₂: {:.4}", gap));
+                }
+            }
+            crate::notebook::ObjectKind::DifferentialManifold {
+                dimension,
+                metric_name,
+                curvature_scalar,
+            } => {
+                ui.colored_label(palette.accent_primary, format!("🌌 Manifold: {}-Dimensional", dimension));
+                ui.weak(format!("• Metric: {}", metric_name));
+                if let Some(r) = curvature_scalar {
+                    ui.weak(format!("• Ricci Curvature Scalar R: {:.4}", r));
+                }
+            }
+            crate::notebook::ObjectKind::ProbabilityDistribution {
+                dist_type,
+                mean,
+                variance,
+                is_discrete,
+            } => {
+                ui.colored_label(palette.text_success, format!("📊 Distribution: {}", dist_type));
+                ui.weak(format!("• Type: {}", if *is_discrete { "Discrete PMF" } else { "Continuous PDF" }));
+                ui.weak(format!("• Expectation E[X]: {:.4}", mean));
+                ui.weak(format!("• Variance Var(X): {:.4} (σ = {:.4})", variance, variance.sqrt()));
+            }
         }
     } else {
         ui.weak(format!("• Value: {:.4} | Domain: {}", info.cur_val, info.domain_type));
         if let Some(u) = &info.unit_str {
             ui.weak(format!("• Unit: [{}]", u));
         }
+    }
+
+    if let Some(t_ms) = info.computation_time_ms {
+        let tag = if t_ms < 50.0 { "⚡" } else { "⏳" };
+        ui.colored_label(palette.accent_primary, format!("{} Solved in {:.2} ms", tag, t_ms));
     }
 
     if !info.dependent_lines.is_empty() {

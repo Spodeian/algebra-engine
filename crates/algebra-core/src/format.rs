@@ -26,7 +26,16 @@ impl Formatter for LatexFormatter {
         match &node.kind {
             ExprKind::Number(num) => Ok(match num {
                 Number::Integer(i) => i.to_string(),
+                Number::BigInteger(b) => b.to_string(),
                 Number::Rational(n, d) => format!("\\frac{{{}}}{{{}}}", n, d),
+                Number::BigRational(r) => format!("\\frac{{{}}}{{{}}}", r.numer(), r.denom()),
+                Number::Scientific { mantissa, exponent } => {
+                    if *exponent == 0 {
+                        mantissa.to_string()
+                    } else {
+                        format!("{} \\times 10^{{{}}}", mantissa, exponent)
+                    }
+                }
                 Number::Float(bits) => f64::from_bits(*bits).to_string(),
                 Number::Constant(c) => match c {
                     Constant::Pi => "\\pi".to_string(),
@@ -85,11 +94,18 @@ impl Formatter for LatexFormatter {
                 let fn_name = graph.symbols.resolve(*name).unwrap_or_default();
                 let arg_strs: Result<Vec<_>, _> =
                     args.iter().map(|&a| self.format(graph, a)).collect();
-                Ok(format!(
-                    "\\operatorname{{{}}}\\left({}\\right)",
-                    fn_name,
-                    arg_strs?.join(", ")
-                ))
+                let args_vec = arg_strs?;
+                if (fn_name == "BringRadical" || fn_name == "BR") && args_vec.len() == 1 {
+                    Ok(format!("\\operatorname{{BR}}\\left({}\\right)", args_vec[0]))
+                } else if fn_name == "besselj" && args_vec.len() == 2 {
+                    Ok(format!("J_{{{}}}\\left({}\\right)", args_vec[0], args_vec[1]))
+                } else {
+                    Ok(format!(
+                        "\\operatorname{{{}}}\\left({}\\right)",
+                        fn_name,
+                        args_vec.join(", ")
+                    ))
+                }
             }
             ExprKind::Derivative { expr, wrt, order } => {
                 let e_str = self.format(graph, *expr)?;
@@ -265,7 +281,16 @@ impl Formatter for UnicodeFormatter {
         match &node.kind {
             ExprKind::Number(num) => Ok(match num {
                 Number::Integer(i) => i.to_string(),
+                Number::BigInteger(b) => b.to_string(),
                 Number::Rational(n, d) => format!("{}/{}", n, d),
+                Number::BigRational(r) => format!("{}/{}", r.numer(), r.denom()),
+                Number::Scientific { mantissa, exponent } => {
+                    if *exponent == 0 {
+                        mantissa.to_string()
+                    } else {
+                        format!("{} × 10^{}", mantissa, exponent)
+                    }
+                }
                 Number::Float(bits) => f64::from_bits(*bits).to_string(),
                 Number::Constant(c) => match c {
                     Constant::Pi => "π".to_string(),
@@ -324,10 +349,15 @@ impl Formatter for UnicodeFormatter {
                 let fn_name = graph.symbols.resolve(*name).unwrap_or_default();
                 let arg_strs: Result<Vec<_>, _> =
                     args.iter().map(|&a| self.format(graph, a)).collect();
-                if fn_name == "sqrt" && arg_strs.as_ref().map(|v| v.len()).unwrap_or(0) == 1 {
-                    Ok(format!("√({})", arg_strs?[0]))
+                let args_vec = arg_strs?;
+                if fn_name == "sqrt" && args_vec.len() == 1 {
+                    Ok(format!("√({})", args_vec[0]))
+                } else if (fn_name == "BringRadical" || fn_name == "BR") && args_vec.len() == 1 {
+                    Ok(format!("BR({})", args_vec[0]))
+                } else if fn_name == "besselj" && args_vec.len() == 2 {
+                    Ok(format!("J_{}({})", args_vec[0], args_vec[1]))
                 } else {
-                    Ok(format!("{}({})", fn_name, arg_strs?.join(", ")))
+                    Ok(format!("{}({})", fn_name, args_vec.join(", ")))
                 }
             }
             ExprKind::Derivative { expr, wrt, order } => {
@@ -469,7 +499,16 @@ impl Formatter for MathMLFormatter {
         match &node.kind {
             ExprKind::Number(num) => Ok(match num {
                 Number::Integer(i) => format!("<mn>{}</mn>", i),
+                Number::BigInteger(b) => format!("<mn>{}</mn>", b),
                 Number::Rational(n, d) => format!("<mfrac><mn>{}</mn><mn>{}</mn></mfrac>", n, d),
+                Number::BigRational(r) => format!("<mfrac><mn>{}</mn><mn>{}</mn></mfrac>", r.numer(), r.denom()),
+                Number::Scientific { mantissa, exponent } => {
+                    if *exponent == 0 {
+                        format!("<mn>{}</mn>", mantissa)
+                    } else {
+                        format!("<mn>{}</mn><mo>&times;</mo><msup><mn>10</mn><mn>{}</mn></msup>", mantissa, exponent)
+                    }
+                }
                 Number::Float(bits) => format!("<mn>{}</mn>", f64::from_bits(*bits)),
                 Number::Constant(c) => match c {
                     Constant::Pi => "<mi>&pi;</mi>".to_string(),
