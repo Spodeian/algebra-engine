@@ -71,7 +71,7 @@ jobs:
 
       - name: Build Web Application
         run: |
-          cargo build -p urae-wasm --target wasm32-unknown-unknown --release -vv
+          cargo build -p urae-wasm --target wasm32-unknown-unknown --release
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then

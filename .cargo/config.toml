@@ -4,7 +4,7 @@ rustflags = [
     # 0. Getrandom 0.3 WebAssembly Backend
     "--cfg", "getrandom_backend=\"wasm_js\"",
 
-    # 1. Standardized hardware-accelerated instructions (LLVM-level emission)
-    "-C", "target-feature=+simd128,+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext",
+    # 1. Hardware SIMD128 instruction emission
+    "-C", "target-feature=+simd128",
 ]
 
