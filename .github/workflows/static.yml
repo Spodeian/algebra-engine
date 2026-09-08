@@ -71,7 +71,13 @@ jobs:
 
       - name: Build Web Application
         run: |
-          cargo rustc -p urae-wasm --target wasm32-unknown-unknown --release
+          if ! cargo build -p urae-wasm --target wasm32-unknown-unknown --release; then
+            echo "=== CARGO BUILD FAILED, PRINTING DIRECT RUSTC LINKER STDERR ==="
+            RUSTC_CMD=$(cargo build -p urae-wasm --target wasm32-unknown-unknown --release -vv 2>&1 | grep -F "bin/rustc --crate-name urae_wasm" | head -n 1 | sed 's/.*`\(.*\)`.*/\1/' | sed 's/--error-format=json//' | sed -E 's/--json=[^ ]+//')
+            echo "Running: $RUSTC_CMD"
+            eval "$RUSTC_CMD"
+            exit 1
+          fi
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
