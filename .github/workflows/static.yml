@@ -71,16 +71,7 @@ jobs:
 
       - name: Build Web Application
         run: |
-          set +e
           cargo build -p urae-wasm --target wasm32-unknown-unknown --release
-          STATUS=$?
-          if [ $STATUS -ne 0 ]; then
-            echo "=== FIRST BUILD FAILED (exit code $STATUS) ==="
-            echo "=== RUNNING VERBOSE BUILD TO REVEAL LINKER ERROR ==="
-            cargo build -p urae-wasm --target wasm32-unknown-unknown --release -v
-            exit 1
-          fi
-          set -e
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
