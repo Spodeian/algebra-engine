@@ -103,9 +103,9 @@ web-time = "1.1"
 criterion = "0.5"
 
 [profile.release]
-opt-level = 3
+opt-level = "s"
 lto = false
-codegen-units = 1
+codegen-units = 16
 panic = "abort"
 strip = false
 overflow-checks = false

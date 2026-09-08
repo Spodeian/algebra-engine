@@ -30,6 +30,14 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Allocate 8GB Swap Space (Prevent OOM)
+        run: |
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          free -h
+
       - name: Install Rust Stable Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
