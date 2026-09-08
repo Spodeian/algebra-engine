@@ -71,13 +71,24 @@ jobs:
 
       - name: Build Web Application
         run: |
-          if ! cargo build -p urae-wasm --target wasm32-unknown-unknown --release; then
-            echo "=== CARGO BUILD FAILED, PRINTING DIRECT RUSTC LINKER STDERR ==="
-            RUSTC_CMD=$(cargo build -p urae-wasm --target wasm32-unknown-unknown --release -vv 2>&1 | grep -F "bin/rustc --crate-name urae_wasm" | head -n 1 | sed 's/.*`\(.*\)`.*/\1/' | sed 's/--error-format=json//' | sed -E 's/--json=[^ ]+//')
-            echo "Running: $RUSTC_CMD"
-            eval "$RUSTC_CMD"
-            exit 1
-          fi
+          cargo build -p urae-wasm --target wasm32-unknown-unknown --release --message-format=json | python3 -c "
+          import sys, json
+          failed = False
+          for line in sys.stdin:
+              try:
+                  data = json.loads(line)
+                  if data.get('reason') == 'compiler-message':
+                      msg = data.get('message', {})
+                      if 'rust-lld' in msg.get('message', ''):
+                          failed = True
+                          print('=== RUST-LLD ERROR ===', msg.get('message'))
+                          for child in msg.get('children', []):
+                              print('CHILD NOTE:\n', child.get('message'))
+              except Exception:
+                  pass
+          if failed:
+              sys.exit(1)
+          "
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
