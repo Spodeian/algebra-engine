@@ -79,12 +79,11 @@ jobs:
                   data = json.loads(line)
                   if data.get('reason') == 'compiler-message':
                       msg = data.get('message', {})
-                      if 'rust-lld' in msg.get('message', ''):
+                      if msg.get('level') == 'error':
                           failed = True
-                          print('=== RUST-LLD ERROR ===', msg.get('message'))
-                          for child in msg.get('children', []):
-                              print('CHILD NOTE:\n', child.get('message'))
-              except Exception:
+                          print('=== FULL COMPILER ERROR JSON ===')
+                          print(json.dumps(msg, indent=2))
+              except Exception as e:
                   pass
           if failed:
               sys.exit(1)
