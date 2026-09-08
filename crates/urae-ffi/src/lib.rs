@@ -7,9 +7,9 @@
 
 #![allow(unsafe_code, unsafe_op_in_unsafe_fn)]
 
+use algebra_core::ExprGraph;
 use algebra_core::format::{Formatter, LatexFormatter};
 use algebra_core::parser::ExprParser;
-use algebra_core::ExprGraph;
 use algebra_engine::calculus::SymbolicCalculus;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;

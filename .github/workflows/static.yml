@@ -72,7 +72,7 @@ jobs:
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
               echo "Optimizing $wasm_file with wasm-opt"
-              wasm-opt -Oz "$wasm_file" -o "$wasm_file" || true
+              wasm-opt -Oz --enable-simd "$wasm_file" -o "$wasm_file" || true
             fi
           done
 

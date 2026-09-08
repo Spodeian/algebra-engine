@@ -24,13 +24,15 @@ use crate::combinatorics::{
 use crate::control::StateSpaceSystem;
 use crate::diffeq::{DiffEqClassifier, DiffEqKind};
 use crate::hyperop::{ackermann, hyperoperation, knuth_up_arrow, pentation, super_log, tetration};
-use crate::numbertheory::{decompose_universal, extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
+use crate::numbertheory::{
+    ContinuedFraction, decompose_universal, extended_gcd, is_prime, legendre_symbol,
+};
 use crate::numeric::{EvalContext, NumericalEval};
 use crate::simplify::{AlgebraicTransformations, Simplifier, SymbolicSimplifier};
 use crate::solver::SymbolicSolver;
 use crate::topology::SimplicialComplex;
 use crate::transforms::SymbolicTransforms;
-use crate::tropical::{log_sum_exp, MaxPlus, MinPlus, TropicalMatrix};
+use crate::tropical::{MaxPlus, MinPlus, TropicalMatrix, log_sum_exp};
 use algebra_core::probabilistic::ProbabilisticVerifier;
 
 /// Execution environment context (variable bindings, parameters, precision).
@@ -666,19 +668,17 @@ impl OperationExecutor {
                                 let mut root_strs = Vec::new();
                                 let mut latex_strs = Vec::new();
                                 for &r in &roots {
-                                    root_strs.push(
-                                        unicode_fmt.format(graph, r).unwrap_or_default(),
-                                    );
-                                    latex_strs.push(
-                                        latex_fmt.format(graph, r).unwrap_or_default(),
-                                    );
+                                    root_strs
+                                        .push(unicode_fmt.format(graph, r).unwrap_or_default());
+                                    latex_strs.push(latex_fmt.format(graph, r).unwrap_or_default());
                                 }
                                 let out = format!(
                                     "Roots for polynomial {}: [{}]",
                                     poly_str,
                                     root_strs.join(", ")
                                 );
-                                let latex = format!("\\left\\{{ {} \\right\\}}", latex_strs.join(", "));
+                                let latex =
+                                    format!("\\left\\{{ {} \\right\\}}", latex_strs.join(", "));
                                 OperationResult::success(out.clone(), latex, out)
                             }
                             Err(e) => OperationResult::error(e.to_string()),
@@ -966,15 +966,23 @@ impl OperationExecutor {
                         out,
                     )
                 }
-                NumberTheoryOpKind::PrimeDecomposition { expr_str, domain_hint } => {
-                    match decompose_universal(expr_str, domain_hint.as_deref()) {
-                        Ok(res) => {
-                            let out = format!("{} [{}]\n  {}", res.formatted_equation, res.number_system, res.classification_summary.join("\n  "));
-                            OperationResult::success(out, res.latex_equation, res.formatted_equation)
-                        }
-                        Err(err) => OperationResult::error(format!("Prime decomposition failed: {}", err)),
+                NumberTheoryOpKind::PrimeDecomposition {
+                    expr_str,
+                    domain_hint,
+                } => match decompose_universal(expr_str, domain_hint.as_deref()) {
+                    Ok(res) => {
+                        let out = format!(
+                            "{} [{}]\n  {}",
+                            res.formatted_equation,
+                            res.number_system,
+                            res.classification_summary.join("\n  ")
+                        );
+                        OperationResult::success(out, res.latex_equation, res.formatted_equation)
                     }
-                }
+                    Err(err) => {
+                        OperationResult::error(format!("Prime decomposition failed: {}", err))
+                    }
+                },
             },
 
             MathOperation::Control(kind) => match kind {
@@ -1050,31 +1058,27 @@ impl OperationExecutor {
                     let sys = StateSpaceSystem::new(a.clone(), b.clone(), dummy_c, dummy_d);
                     match sys.pole_placement_ackermann(desired_poles) {
                         Ok(gain_k) => {
-                            let out = format!(
-                                "Ackermann State-Feedback Gain Vector K:\n  {:?}",
-                                gain_k
-                            );
+                            let out =
+                                format!("Ackermann State-Feedback Gain Vector K:\n  {:?}", gain_k);
                             OperationResult::success(out.clone(), out.clone(), out)
                         }
                         Err(e) => OperationResult::error(e),
                     }
                 }
-                ControlOpKind::FrequencyResponse {
-                    a,
-                    b,
-                    c,
-                    d,
-                    omega,
-                } => {
+                ControlOpKind::FrequencyResponse { a, b, c, d, omega } => {
                     let sys = StateSpaceSystem::new(a.clone(), b.clone(), c.clone(), d.clone());
                     match sys.frequency_response(*omega) {
                         Ok(resp) => {
-                            let mut out = format!("Bode Frequency Response at ω = {:.4} rad/s:\n", omega);
+                            let mut out =
+                                format!("Bode Frequency Response at ω = {:.4} rad/s:\n", omega);
                             for (out_idx, row) in resp.iter().enumerate() {
                                 for (in_idx, (mag_db, phase_deg)) in row.iter().enumerate() {
                                     out.push_str(&format!(
                                         "  Channel (u{} -> y{}): {:.2} dB, {:.2}°\n",
-                                        in_idx + 1, out_idx + 1, mag_db, phase_deg
+                                        in_idx + 1,
+                                        out_idx + 1,
+                                        mag_db,
+                                        phase_deg
                                     ));
                                 }
                             }
@@ -1173,27 +1177,28 @@ impl OperationExecutor {
                 }
             },
 
-            MathOperation::Galois(kind) => {
-                match kind {
-                    GaloisOpKind::QuadraticExtension { d } => {
-                        let out = format!("Field Extension Q(sqrt({})) / Q (Degree: 2, Galois: true, Solvable: true)", d);
-                        OperationResult::success(
-                            out.clone(),
-                            format!("\\mathbb{{Q}}(\\sqrt{{{}}})/\\mathbb{{Q}}", d),
-                            out,
-                        )
-                    }
-                    GaloisOpKind::CheckSolvability { group_name } => {
-                        let solvable = !group_name.to_lowercase().contains("s5")
-                            && !group_name.to_lowercase().contains("a5");
-                        let out = format!(
-                            "Galois Group {} Solvable by Radicals: {}",
-                            group_name, solvable
-                        );
-                        OperationResult::success(out.clone(), out.clone(), out)
-                    }
+            MathOperation::Galois(kind) => match kind {
+                GaloisOpKind::QuadraticExtension { d } => {
+                    let out = format!(
+                        "Field Extension Q(sqrt({})) / Q (Degree: 2, Galois: true, Solvable: true)",
+                        d
+                    );
+                    OperationResult::success(
+                        out.clone(),
+                        format!("\\mathbb{{Q}}(\\sqrt{{{}}})/\\mathbb{{Q}}", d),
+                        out,
+                    )
                 }
-            }
+                GaloisOpKind::CheckSolvability { group_name } => {
+                    let solvable = !group_name.to_lowercase().contains("s5")
+                        && !group_name.to_lowercase().contains("a5");
+                    let out = format!(
+                        "Galois Group {} Solvable by Radicals: {}",
+                        group_name, solvable
+                    );
+                    OperationResult::success(out.clone(), out.clone(), out)
+                }
+            },
 
             MathOperation::Cartan(kind) => {
                 let coords: [String; 4] = ["x".into(), "y".into(), "z".into(), "t".into()];
@@ -1344,48 +1349,49 @@ impl OperationExecutor {
                 }
             }
 
-            MathOperation::Clifford(kind) => {
-                match kind {
-                    CliffordOpKind::GeometricProduct {
-                        sig_p,
-                        sig_q,
-                        sig_r,
-                        a_coords: _,
-                        b_coords: _,
-                    } => {
-                        let out = format!(
-                            "Clifford Geometric Product Cl({},{},{}): a · b + a ∧ b",
+            MathOperation::Clifford(kind) => match kind {
+                CliffordOpKind::GeometricProduct {
+                    sig_p,
+                    sig_q,
+                    sig_r,
+                    a_coords: _,
+                    b_coords: _,
+                } => {
+                    let out = format!(
+                        "Clifford Geometric Product Cl({},{},{}): a · b + a ∧ b",
+                        sig_p, sig_q, sig_r
+                    );
+                    OperationResult::success(
+                        out.clone(),
+                        format!(
+                            "a b \\in \\operatorname{{Cl}}({},{},{})",
                             sig_p, sig_q, sig_r
-                        );
-                        OperationResult::success(
-                            out.clone(),
-                            format!(
-                                "a b \\in \\operatorname{{Cl}}({},{},{})",
-                                sig_p, sig_q, sig_r
-                            ),
-                            out,
-                        )
-                    }
-                    CliffordOpKind::RotorSandwich {
-                        sig_p,
-                        sig_q,
-                        sig_r,
-                        vector: _,
-                        angle_rad,
-                        bivector_plane,
-                    } => {
-                        let out = format!("Clifford Rotor Rotation Cl({},{},{}): angle = {:.4} rad in plane ({}, {})", sig_p, sig_q, sig_r, angle_rad, bivector_plane.0, bivector_plane.1);
-                        OperationResult::success(
-                            out.clone(),
-                            format!(
-                                "v' = R v R^\\dagger \\in \\operatorname{{Cl}}({},{},{})",
-                                sig_p, sig_q, sig_r
-                            ),
-                            out,
-                        )
-                    }
+                        ),
+                        out,
+                    )
                 }
-            }
+                CliffordOpKind::RotorSandwich {
+                    sig_p,
+                    sig_q,
+                    sig_r,
+                    vector: _,
+                    angle_rad,
+                    bivector_plane,
+                } => {
+                    let out = format!(
+                        "Clifford Rotor Rotation Cl({},{},{}): angle = {:.4} rad in plane ({}, {})",
+                        sig_p, sig_q, sig_r, angle_rad, bivector_plane.0, bivector_plane.1
+                    );
+                    OperationResult::success(
+                        out.clone(),
+                        format!(
+                            "v' = R v R^\\dagger \\in \\operatorname{{Cl}}({},{},{})",
+                            sig_p, sig_q, sig_r
+                        ),
+                        out,
+                    )
+                }
+            },
 
             MathOperation::Certified(kind) => match kind {
                 CertifiedOpKind::Simplify { expression, eps } => match parser.parse(expression) {
@@ -1535,7 +1541,9 @@ impl OperationExecutor {
                                 let g_id = initial_vel
                                     .as_ref()
                                     .and_then(|v_str| parser.parse(v_str).ok());
-                                match graph.solve_pde_wave_dalembert(f_id, g_id, c_node, x_sym, t_sym) {
+                                match graph
+                                    .solve_pde_wave_dalembert(f_id, g_id, c_node, x_sym, t_sym)
+                                {
                                     Ok(sol_id) => {
                                         let unicode =
                                             unicode_fmt.format(graph, sol_id).unwrap_or_default();
@@ -1617,9 +1625,7 @@ impl OperationExecutor {
                     let x_sym = graph.symbols.get_or_intern(x_var);
                     let y_sym = graph.symbols.get_or_intern(y_var);
                     let a_node = match a_bound {
-                        Some(a_str) => {
-                            parser.parse(a_str).unwrap_or_else(|_| graph.symbol(a_str))
-                        }
+                        Some(a_str) => parser.parse(a_str).unwrap_or_else(|_| graph.symbol(a_str)),
                         None => graph.symbol("a"),
                     };
                     match graph.solve_pde_laplace_2d(a_node, x_sym, y_sym) {
@@ -1710,11 +1716,14 @@ impl OperationExecutor {
                     independent_vars: _,
                     override_kind,
                 } => {
-                    let manual_kind = override_kind.as_deref().and_then(|s| match s.to_lowercase().as_str() {
-                        "ode" => Some(DiffEqKind::Ode),
-                        "pde" => Some(DiffEqKind::Pde),
-                        _ => None,
-                    });
+                    let manual_kind =
+                        override_kind
+                            .as_deref()
+                            .and_then(|s| match s.to_lowercase().as_str() {
+                                "ode" => Some(DiffEqKind::Ode),
+                                "pde" => Some(DiffEqKind::Pde),
+                                _ => None,
+                            });
                     let parse_res = if let Some((lhs_str, rhs_str)) = equation.split_once('=') {
                         match (parser.parse(lhs_str.trim()), parser.parse(rhs_str.trim())) {
                             (Ok(l), Ok(r)) => Ok(graph.sub(l, r)),
@@ -1739,7 +1748,12 @@ impl OperationExecutor {
                             };
                             let out = format!(
                                 "Differential Equation Analysis:\n  • Classification: {}\n  • Order: {}\n  • Linearity: {}\n  • Dependent Variable: {}\n  • Independent Variable(s): {:?}\n  • Recommended Strategy: {}",
-                                kind_str, desc.order, lin_str, desc.dependent_var, desc.independent_vars, desc.recommended_method
+                                kind_str,
+                                desc.order,
+                                lin_str,
+                                desc.dependent_var,
+                                desc.independent_vars,
+                                desc.recommended_method
                             );
                             OperationResult::success(out.clone(), out.clone(), out)
                         }

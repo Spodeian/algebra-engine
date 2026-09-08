@@ -64,7 +64,6 @@ impl CommandPalette {
                 syntax_template: "solve_ode(y'' + y = 0, y(0)=1, y'(0)=0)",
                 shortcut: Some("ode"),
             },
-
             // 2. CAD & Machinery Generators
             CommandItem {
                 category: "CAD Machinery",
@@ -94,7 +93,6 @@ impl CommandPalette {
                 syntax_template: "spring!(mean_dia = 8.0, wire_dia = 1.2, pitch = 3.0, coils = 6)",
                 shortcut: Some("spring"),
             },
-
             // 3. FEA Multiphysics & Simulation
             CommandItem {
                 category: "Simulation",
@@ -117,7 +115,6 @@ impl CommandPalette {
                 syntax_template: "simulate_cad!(gear_mesh, physics, bcs)",
                 shortcut: Some("sim"),
             },
-
             // 4. Mathematical & Greek Symbols
             CommandItem {
                 category: "Symbols",
@@ -168,7 +165,6 @@ impl CommandPalette {
                 syntax_template: "{ x in Reals | x >= 0 }",
                 shortcut: Some("reals"),
             },
-
             // 5. Example Notebooks & Tutorials
             CommandItem {
                 category: "Examples",
@@ -205,7 +201,6 @@ impl CommandPalette {
                 syntax_template: "# Weyl D-Modules Example\nx = weyl_x!(1, 0, 1)\nd = weyl_d!(1, 0, 1)\nweyl_commute!(d, x)\nzeilberger_binomial_proof!()\n",
                 shortcut: Some("ex:weyl"),
             },
-
             // 6. Document Actions & History
             CommandItem {
                 category: "Edit",
@@ -221,7 +216,6 @@ impl CommandPalette {
                 syntax_template: "__URAE_CMD_REDO__",
                 shortcut: Some("redo"),
             },
-
             // 7. Themes & Appearance
             CommandItem {
                 category: "Themes",
@@ -279,7 +273,6 @@ impl CommandPalette {
                 syntax_template: "__URAE_CMD_THEME_CYBERPUNK__",
                 shortcut: Some("theme:cyberpunk"),
             },
-
             // 8. Workspace Layouts
             CommandItem {
                 category: "Layout",

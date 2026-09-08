@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BatchSize};
 use algebra_engine::uint::Uint;
+use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use num::{BigUint, One};
 
 fn bench_addition_matrix(c: &mut Criterion) {
@@ -42,7 +42,7 @@ fn bench_transitions(c: &mut Criterion) {
         b.iter_batched(
             || Uint::Machine(usize::MAX),
             |u| black_box(u) + black_box(1usize),
-            BatchSize::SmallInput
+            BatchSize::SmallInput,
         )
     });
 
@@ -52,7 +52,7 @@ fn bench_transitions(c: &mut Criterion) {
         b.iter_batched(
             || Uint::Promoted(BigUint::from(usize::MAX) + 1u32),
             |u| black_box(u) - black_box(1usize),
-            BatchSize::SmallInput
+            BatchSize::SmallInput,
         )
     });
 

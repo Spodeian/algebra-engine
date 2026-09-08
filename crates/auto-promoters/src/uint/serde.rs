@@ -1,6 +1,6 @@
 use super::Uint;
 
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use num::BigUint;
 

@@ -1,5 +1,5 @@
-use algebra_core::format::{Formatter, LatexFormatter};
 use algebra_core::ExprGraph;
+use algebra_core::format::{Formatter, LatexFormatter};
 
 #[test]
 fn test_latex_formatting() {

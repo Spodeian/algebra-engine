@@ -4,7 +4,7 @@
 //! including associative-commutative rings, matrix identities, and hypercomplex (quaternion) identities.
 
 use algebra_core::{ExprGraph, ExprId, ExprKind, Number, StepByStepResult};
-use egg::{define_language, CostFunction, Id, RecExpr, Rewrite, Runner};
+use egg::{CostFunction, Id, RecExpr, Rewrite, Runner, define_language};
 use thiserror::Error;
 
 /// Errors produced during E-Graph simplification.
@@ -30,7 +30,7 @@ pub use bridges::{
 };
 pub use detector::{DetectedFeatures, DomainFeatureDetector};
 pub use dynamic::{AxiomaticRuleGenerator, DynamicRuleSelector};
-pub use probabilistic::{SchwartzZippel, SCHWARTZ_ZIPPEL_PRIME};
+pub use probabilistic::{SCHWARTZ_ZIPPEL_PRIME, SchwartzZippel};
 pub use transformations::AlgebraicTransformations;
 
 define_language! {

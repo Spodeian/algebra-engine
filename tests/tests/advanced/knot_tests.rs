@@ -76,4 +76,3 @@ fn test_braid_simplicial_complex_and_hyperbolic_volume() {
     let vol = fig8.hyperbolic_volume();
     assert!((vol - 2.0298832).abs() < 1e-5);
 }
-

@@ -25,6 +25,7 @@ pub mod symbol;
 pub mod traits;
 pub mod vm;
 
+pub use auto_promoters::uint::Uint;
 pub use config::{BudgetStatus, EngineConfig, ResourceBudget};
 pub use domain::{Domain, DomainBound, DomainCategory, GoalDomain, MathContext};
 pub use error::{AlgebraError, AlgebraResult};
@@ -33,7 +34,6 @@ pub use format::{FormatError, FormatResult, Formatter, LatexFormatter, UnicodeFo
 pub use graph::ExprGraph;
 pub use id::{DomainId, ExprId, SymbolId};
 pub use interval::RealInterval;
-pub use auto_promoters::uint::Uint;
 pub use number::{Constant, Number};
 pub use numbers::{DualNumber, HyperrealNumber, Octonion, PAdicNumber, Quaternion, SurrealNumber};
 pub use operation::{
@@ -42,7 +42,7 @@ pub use operation::{
     ProofTarget, SimplifyStrategy, StatMechOpKind, SymbolRoleKind, SystemCommandKind,
     TopologyOpKind, TransformOpKind, TropicalOpKind,
 };
-pub use parser::{parse_domain_declaration, parse_operation, ExprParser};
+pub use parser::{ExprParser, parse_domain_declaration, parse_operation};
 pub use probabilistic::{ProbabilisticVerifier, Solution};
 pub use step::{MathStep, StepByStepResult};
 pub use symbol::SymbolTable;

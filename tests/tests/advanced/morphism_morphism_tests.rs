@@ -1,6 +1,6 @@
 use algebra_advanced::morphism::QuaternionToMatrix2x2;
-use algebra_core::numbers::Quaternion;
 use algebra_core::ExprGraph;
+use algebra_core::numbers::Quaternion;
 use num_rational::BigRational;
 use num_traits::One;
 
@@ -69,4 +69,3 @@ fn test_simplification_functor() {
     let simplified = functor.map_object(&x_plus_0);
     assert_eq!(simplified, x);
 }
-

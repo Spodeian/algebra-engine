@@ -30,11 +30,7 @@ impl CanonicalPartitionFunction {
     /// Helmholtz Free Energy $F = - \frac{1}{\beta} \ln Z$.
     pub fn free_energy(&self, beta: f64) -> f64 {
         let z = self.evaluate_z(beta);
-        if z <= 0.0 {
-            0.0
-        } else {
-            -z.ln() / beta
-        }
+        if z <= 0.0 { 0.0 } else { -z.ln() / beta }
     }
 
     /// Mean Internal Energy $U = \langle E \rangle = \frac{1}{Z} \sum g_i E_i e^{-\beta E_i}$.

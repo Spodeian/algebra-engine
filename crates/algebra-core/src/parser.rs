@@ -2,13 +2,13 @@
 
 use crate::{ExprGraph, ExprId, RelOp};
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{tag, take_while1},
     character::complete::{char, multispace0},
     combinator::opt,
     multi::separated_list0,
     sequence::{delimited, tuple},
-    IResult,
 };
 use thiserror::Error;
 
@@ -599,9 +599,7 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
             || trimmed.contains(" is in the set of ")
             || trimmed.contains(" is in ")
             || trimmed.contains(" ∈ ")
-            || (trimmed.contains(" in ")
-                && !trimmed.contains('{')
-                && !trimmed.contains('|')))
+            || (trimmed.contains(" in ") && !trimmed.contains('{') && !trimmed.contains('|')))
     {
         if let Some((var_part, dom_part)) = trimmed
             .split_once(" is in the set of ")
@@ -1162,21 +1160,32 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
         domain_type = "Bicomplex".to_string();
     } else if rest_trimmed.starts_with("Clifford") {
         domain_type = "Clifford".to_string();
-    } else if rest_trimmed.starts_with("PAdics") || rest_trimmed.starts_with("Padics") || rest_trimmed.starts_with("ℚ_p") || rest_trimmed.starts_with("Q_p") {
+    } else if rest_trimmed.starts_with("PAdics")
+        || rest_trimmed.starts_with("Padics")
+        || rest_trimmed.starts_with("ℚ_p")
+        || rest_trimmed.starts_with("Q_p")
+    {
         domain_type = "PAdics".to_string();
     } else if rest_trimmed.starts_with("Adeles") || rest_trimmed.starts_with("𝔸") {
         domain_type = "Adeles".to_string();
-    } else if rest_trimmed.starts_with("Surreals") || rest_trimmed.starts_with("Surreal") || rest_trimmed.starts_with("𝐍𝐨") {
+    } else if rest_trimmed.starts_with("Surreals")
+        || rest_trimmed.starts_with("Surreal")
+        || rest_trimmed.starts_with("𝐍𝐨")
+    {
         domain_type = "Surreals".to_string();
     } else if rest_trimmed.starts_with("ModuloUnits") || rest_trimmed.starts_with("(ℤ/") {
         domain_type = "ModuloUnits".to_string();
     } else if rest_trimmed.starts_with("Modulo") || rest_trimmed.starts_with("ℤ/") {
         domain_type = "Modulo".to_string();
-    } else if rest_trimmed.starts_with("GaloisField") || rest_trimmed.starts_with("GF") || rest_trimmed.starts_with("𝔽") {
+    } else if rest_trimmed.starts_with("GaloisField")
+        || rest_trimmed.starts_with("GF")
+        || rest_trimmed.starts_with("𝔽")
+    {
         domain_type = "GaloisField".to_string();
     } else if rest_trimmed.starts_with("GaussianIntegers") || rest_trimmed.starts_with("ℤ[i]") {
         domain_type = "GaussianIntegers".to_string();
-    } else if rest_trimmed.starts_with("EisensteinIntegers") || rest_trimmed.starts_with("ℤ[ω]") {
+    } else if rest_trimmed.starts_with("EisensteinIntegers") || rest_trimmed.starts_with("ℤ[ω]")
+    {
         domain_type = "EisensteinIntegers".to_string();
     } else if rest_trimmed.starts_with("Boolean") || rest_trimmed.starts_with("𝔹") {
         domain_type = "Boolean".to_string();
@@ -1729,7 +1738,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
             };
             let wave_num = parts.get(0).copied().unwrap_or("k").to_string();
             let r_var = parts.get(1).copied().unwrap_or("r").to_string();
-            let order = parts.get(2).and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
+            let order = parts
+                .get(2)
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
             return MathOperation::Pde(PdeOpKind::RadialBessel {
                 wave_num,
                 r_var,

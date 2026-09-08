@@ -40,11 +40,11 @@
 use algebra_advanced::agent::{AiConfig, AiProvider, AlgebraAgentInterface};
 pub mod json_api;
 
+use algebra_core::ExprGraph;
 use algebra_core::format::LatexFormatter;
 use algebra_core::parser::parse_operation;
-use algebra_core::ExprGraph;
 use algebra_engine::executor::{ExecutionContext, OperationExecutor};
-pub use json_api::{process_json_request, process_request, UraeJsonRequest, UraeJsonResponse};
+pub use json_api::{UraeJsonRequest, UraeJsonResponse, process_json_request, process_request};
 use std::collections::HashMap;
 
 /// Run the interactive CLI REPL session directly in the terminal.
@@ -261,7 +261,7 @@ pub fn process_input_with_context(
                     _ => {
                         return Err(
                             "Usage: agent config <provider|key|url|model> <value>".to_string()
-                        )
+                        );
                     }
                 }
             }

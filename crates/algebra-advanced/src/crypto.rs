@@ -76,7 +76,8 @@ impl RationalEllipticCurve {
         if disc == 0 {
             return Err(AlgebraError::DomainViolation {
                 domain: "RationalEllipticCurve".to_string(),
-                reason: "Discriminant Delta = -16(4a^3 + 27b^2) is zero (curve is singular over Q)".to_string(),
+                reason: "Discriminant Delta = -16(4a^3 + 27b^2) is zero (curve is singular over Q)"
+                    .to_string(),
             });
         }
         Ok(Self { a, b })
@@ -120,7 +121,8 @@ impl RationalEllipticCurve {
                 // Multiplicative reduction: check if split (tangents in F_p)
                 // For y^2 = x^3 + ax + b, at nodal singularity (x0, 0),
                 // root of 3x0^2 + a in F_p is quadratic residue
-                let split = p > 2 && algebra_engine::numbertheory::legendre_symbol(-2 * self.a, p) == 1;
+                let split =
+                    p > 2 && algebra_engine::numbertheory::legendre_symbol(-2 * self.a, p) == 1;
                 ReductionType::Multiplicative { split }
             } else {
                 ReductionType::Additive

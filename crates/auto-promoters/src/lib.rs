@@ -1,5 +1,5 @@
-pub mod uint;
 pub mod int;
+pub mod uint;
 
-pub use uint::Uint;
 pub use int::Int;
+pub use uint::Uint;

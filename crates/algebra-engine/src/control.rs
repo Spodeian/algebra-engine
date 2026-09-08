@@ -355,7 +355,11 @@ impl StateSpaceSystem {
         let h_im = (num_im * den_re - num_re * den_im) / den_mag_sq;
 
         let mag = (h_re * h_re + h_im * h_im).sqrt();
-        let mag_db = if mag > 1e-12 { 20.0 * mag.log10() } else { -240.0 };
+        let mag_db = if mag > 1e-12 {
+            20.0 * mag.log10()
+        } else {
+            -240.0
+        };
         let phase_deg = h_im.atan2(h_re).to_degrees();
 
         (mag_db, phase_deg)
@@ -365,7 +369,9 @@ impl StateSpaceSystem {
     pub fn pole_placement_ackermann(&self, desired_poles: &[f64]) -> Result<Vec<f64>, String> {
         let n = self.num_states();
         if self.num_inputs() != 1 {
-            return Err("Ackermann pole placement requires a Single-Input (m = 1) system.".to_string());
+            return Err(
+                "Ackermann pole placement requires a Single-Input (m = 1) system.".to_string(),
+            );
         }
         if desired_poles.len() != n {
             return Err(format!(
@@ -381,7 +387,10 @@ impl StateSpaceSystem {
             if !self.is_controllable() {
                 return Err("System is not completely controllable.".to_string());
             }
-            Err("Ackermann pole placement currently implemented for 2x2 state-space systems.".to_string())
+            Err(
+                "Ackermann pole placement currently implemented for 2x2 state-space systems."
+                    .to_string(),
+            )
         }
     }
 

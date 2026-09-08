@@ -35,10 +35,12 @@ fn test_notebook_state_line_edit_undo_redo() {
     state.commit_focused_line();
 
     assert_ne!(state.session.raw_document_text, initial_text);
-    assert!(state
-        .session
-        .raw_document_text
-        .starts_with("# Modified Title by User"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .starts_with("# Modified Title by User")
+    );
     assert!(state.can_undo());
 
     // 2. Undo
@@ -50,10 +52,12 @@ fn test_notebook_state_line_edit_undo_redo() {
     // 3. Redo
     let redone = state.redo();
     assert!(redone);
-    assert!(state
-        .session
-        .raw_document_text
-        .starts_with("# Modified Title by User"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .starts_with("# Modified Title by User")
+    );
 }
 
 #[test]
@@ -63,10 +67,12 @@ fn test_notebook_state_insert_text_undo_redo() {
 
     // 1. Insert new syntax
     state.insert_text_at_active_line("velocity_test = 42.0 [m/s]");
-    assert!(state
-        .session
-        .raw_document_text
-        .contains("velocity_test = 42.0 [m/s]"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .contains("velocity_test = 42.0 [m/s]")
+    );
     assert_eq!(
         state.session.raw_document_text.lines().count(),
         initial_lines_count + 1
@@ -75,10 +81,12 @@ fn test_notebook_state_insert_text_undo_redo() {
     // 2. Undo insertion
     assert!(state.can_undo());
     assert!(state.undo());
-    assert!(!state
-        .session
-        .raw_document_text
-        .contains("velocity_test = 42.0 [m/s]"));
+    assert!(
+        !state
+            .session
+            .raw_document_text
+            .contains("velocity_test = 42.0 [m/s]")
+    );
     assert_eq!(
         state.session.raw_document_text.lines().count(),
         initial_lines_count
@@ -87,10 +95,12 @@ fn test_notebook_state_insert_text_undo_redo() {
     // 3. Redo insertion
     assert!(state.can_redo());
     assert!(state.redo());
-    assert!(state
-        .session
-        .raw_document_text
-        .contains("velocity_test = 42.0 [m/s]"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .contains("velocity_test = 42.0 [m/s]")
+    );
 }
 
 #[test]
@@ -100,10 +110,12 @@ fn test_notebook_state_preset_undo_redo() {
 
     // 1. Load preset
     state.load_preset("oscillator");
-    assert!(state
-        .session
-        .raw_document_text
-        .contains("Harmonic Wave Motion"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .contains("Harmonic Wave Motion")
+    );
 
     // 2. Undo
     assert!(state.undo());
@@ -111,10 +123,12 @@ fn test_notebook_state_preset_undo_redo() {
 
     // 3. Redo
     assert!(state.redo());
-    assert!(state
-        .session
-        .raw_document_text
-        .contains("Harmonic Wave Motion"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .contains("Harmonic Wave Motion")
+    );
 }
 
 #[test]

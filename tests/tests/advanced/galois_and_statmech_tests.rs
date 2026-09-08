@@ -1,5 +1,5 @@
 use algebra_advanced::galois::{FieldExtension, GaloisGroupType};
-use algebra_advanced::statmech::{bose_einstein, fermi_dirac, CanonicalPartitionFunction};
+use algebra_advanced::statmech::{CanonicalPartitionFunction, bose_einstein, fermi_dirac};
 
 #[test]
 fn test_galois_theory() {

@@ -1,5 +1,5 @@
 use algebra_engine::hyperop::{ackermann, hyperoperation, knuth_up_arrow, super_log, tetration};
-use algebra_engine::tropical::{log_sum_exp, MaxPlus, MinPlus, TropicalMatrix};
+use algebra_engine::tropical::{MaxPlus, MinPlus, TropicalMatrix, log_sum_exp};
 use num_bigint::BigUint;
 
 #[test]

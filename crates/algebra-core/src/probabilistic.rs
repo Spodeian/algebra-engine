@@ -371,11 +371,7 @@ impl ProbabilisticVerifier {
             ExprKind::Div(num, den) => {
                 let n = Self::eval_float(graph, *num, env)?;
                 let d = Self::eval_float(graph, *den, env)?;
-                if d.abs() < 1e-15 {
-                    None
-                } else {
-                    Some(n / d)
-                }
+                if d.abs() < 1e-15 { None } else { Some(n / d) }
             }
             ExprKind::Pow(base, exp) => {
                 let b = Self::eval_float(graph, *base, env)?;
@@ -447,14 +443,16 @@ impl ProbabilisticVerifier {
         match &node.kind {
             ExprKind::Number(num) => match num {
                 Number::Integer(n) => Some(RealInterval::point(*n as f64)),
-                Number::BigInteger(b) => num_traits::ToPrimitive::to_f64(b).map(RealInterval::point),
+                Number::BigInteger(b) => {
+                    num_traits::ToPrimitive::to_f64(b).map(RealInterval::point)
+                }
                 Number::Rational(num, den) => Some(RealInterval::point(*num as f64 / *den as f64)),
                 Number::BigRational(r) => {
                     num_traits::ToPrimitive::to_f64(r.as_ref()).map(RealInterval::point)
                 }
-                Number::Scientific { mantissa, exponent } => {
-                    Some(RealInterval::point(*mantissa as f64 * 10.0f64.powi(*exponent)))
-                }
+                Number::Scientific { mantissa, exponent } => Some(RealInterval::point(
+                    *mantissa as f64 * 10.0f64.powi(*exponent),
+                )),
                 Number::Float(u) => Some(RealInterval::point(f64::from_bits(*u))),
                 Number::Constant(c) => match c {
                     Constant::Pi => Some(RealInterval::point(std::f64::consts::PI)),

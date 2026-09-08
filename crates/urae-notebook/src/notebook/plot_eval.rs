@@ -297,7 +297,10 @@ pub fn detect_periodic_sub_periods(
         match &node.kind {
             ExprKind::Function { name, args } => {
                 if let Some(fn_name) = graph.symbols.resolve(*name) {
-                    let is_trig = matches!(fn_name.as_str(), "sin" | "cos" | "tan" | "sec" | "csc" | "cot" | "sinc");
+                    let is_trig = matches!(
+                        fn_name.as_str(),
+                        "sin" | "cos" | "tan" | "sec" | "csc" | "cot" | "sinc"
+                    );
                     if is_trig && !args.is_empty() {
                         let arg_id = args[0];
                         let arg_free_syms = extract_symbols(graph, arg_id);
@@ -320,8 +323,14 @@ pub fn detect_periodic_sub_periods(
                                 ctx0.bindings.insert(active_var.to_string(), 0.0);
                                 let mut ctx1 = eval_ctx.clone();
                                 ctx1.bindings.insert(active_var.to_string(), 1.0);
-                                let v0 = graph.evalf(arg_id, &ctx0).map(|v| v.to_f64()).unwrap_or(0.0);
-                                let v1 = graph.evalf(arg_id, &ctx1).map(|v| v.to_f64()).unwrap_or(1.0);
+                                let v0 = graph
+                                    .evalf(arg_id, &ctx0)
+                                    .map(|v| v.to_f64())
+                                    .unwrap_or(0.0);
+                                let v1 = graph
+                                    .evalf(arg_id, &ctx1)
+                                    .map(|v| v.to_f64())
+                                    .unwrap_or(1.0);
                                 (v1 - v0).abs().max(1e-6)
                             });
 
@@ -358,7 +367,10 @@ pub fn detect_periodic_sub_periods(
     let max_p = periods[periods.len() - 1];
     let ratio = max_p / min_p.max(1e-9);
 
-    let freqs = periods.iter().map(|p| 2.0 * std::f64::consts::PI / p).collect();
+    let freqs = periods
+        .iter()
+        .map(|p| 2.0 * std::f64::consts::PI / p)
+        .collect();
 
     Some(PeriodicAnalysis {
         frequencies: freqs,
@@ -417,7 +429,11 @@ where
                     }
                 }
                 let root_val = 0.5 * (lo + hi);
-                if roots.last().map(|&r| (r - root_val).abs() > 1e-3).unwrap_or(true) {
+                if roots
+                    .last()
+                    .map(|&r| (r - root_val).abs() > 1e-3)
+                    .unwrap_or(true)
+                {
                     roots.push(root_val);
                 }
             }
@@ -446,7 +462,11 @@ where
                     }
                 }
                 let crit_val = 0.5 * (lo + hi);
-                if critical_pts.last().map(|&c| (c - crit_val).abs() > 1e-3).unwrap_or(true) {
+                if critical_pts
+                    .last()
+                    .map(|&c| (c - crit_val).abs() > 1e-3)
+                    .unwrap_or(true)
+                {
                     critical_pts.push(crit_val);
                 }
             }
@@ -514,7 +534,9 @@ pub fn compute_smart_plot_bounds(
     }
 
     // 1. Check for Periodic / Trigonometric Behavior
-    if let Some(periodic) = detect_periodic_sub_periods(graph, target_expr, &active_var, slider_values) {
+    if let Some(periodic) =
+        detect_periodic_sub_periods(graph, target_expr, &active_var, slider_values)
+    {
         let periods_to_show = if periodic.period_ratio <= 1.5 {
             2.0
         } else if periodic.period_ratio <= 3.0 {
@@ -577,7 +599,10 @@ pub fn compute_smart_plot_bounds(
         } else {
             let mut ctx = eval_ctx.clone();
             ctx.bindings.insert(active_var.clone(), x);
-            graph.evalf(target_expr, &ctx).map(|v| v.to_f64()).unwrap_or(f64::NAN)
+            graph
+                .evalf(target_expr, &ctx)
+                .map(|v| v.to_f64())
+                .unwrap_or(f64::NAN)
         }
     };
 
@@ -592,7 +617,10 @@ pub fn compute_smart_plot_bounds(
         } else {
             let mut ctx = eval_ctx.clone();
             ctx.bindings.insert(active_var.clone(), x);
-            graph.evalf(diff_expr, &ctx).map(|v| v.to_f64()).unwrap_or(f64::NAN)
+            graph
+                .evalf(diff_expr, &ctx)
+                .map(|v| v.to_f64())
+                .unwrap_or(f64::NAN)
         }
     };
 
@@ -609,7 +637,8 @@ pub fn compute_smart_plot_bounds(
     };
 
     // 4. Search for Roots and Critical Points across valid domain
-    let (roots, crit_pts) = find_roots_and_critical_points(&eval_f, &eval_df, search_min, 30.0, 240);
+    let (roots, crit_pts) =
+        find_roots_and_critical_points(&eval_f, &eval_df, search_min, 30.0, 240);
 
     for r in roots {
         if r.is_finite() && r.abs() < 25.0 {
@@ -745,7 +774,8 @@ pub fn inspect_function_features(
 
     let bytecode_prog = VmCompiler::compile(graph, target_expr, &active_var, &param_names).ok();
     let diff_bytecode_prog = VmCompiler::compile(graph, diff_expr, &active_var, &param_names).ok();
-    let diff2_bytecode_prog = VmCompiler::compile(graph, diff2_expr, &active_var, &param_names).ok();
+    let diff2_bytecode_prog =
+        VmCompiler::compile(graph, diff2_expr, &active_var, &param_names).ok();
     let vm = BytecodeVM::new();
 
     let mut eval_ctx = EvalContext::default();
@@ -767,7 +797,10 @@ pub fn inspect_function_features(
         } else {
             let mut ctx = eval_ctx.clone();
             ctx.bindings.insert(active_var.clone(), x);
-            graph.evalf(target_expr, &ctx).map(|v| v.to_f64()).unwrap_or(f64::NAN)
+            graph
+                .evalf(target_expr, &ctx)
+                .map(|v| v.to_f64())
+                .unwrap_or(f64::NAN)
         }
     };
 
@@ -782,7 +815,10 @@ pub fn inspect_function_features(
         } else {
             let mut ctx = eval_ctx.clone();
             ctx.bindings.insert(active_var.clone(), x);
-            graph.evalf(diff_expr, &ctx).map(|v| v.to_f64()).unwrap_or(f64::NAN)
+            graph
+                .evalf(diff_expr, &ctx)
+                .map(|v| v.to_f64())
+                .unwrap_or(f64::NAN)
         }
     };
 
@@ -797,7 +833,10 @@ pub fn inspect_function_features(
         } else {
             let mut ctx = eval_ctx.clone();
             ctx.bindings.insert(active_var.clone(), x);
-            graph.evalf(diff2_expr, &ctx).map(|v| v.to_f64()).unwrap_or(f64::NAN)
+            graph
+                .evalf(diff2_expr, &ctx)
+                .map(|v| v.to_f64())
+                .unwrap_or(f64::NAN)
         }
     };
 
@@ -816,7 +855,8 @@ pub fn inspect_function_features(
     let codomain = "ℝ".to_string();
 
     // 2. Linearity
-    let is_linear = eval_d2f(0.0).abs() < 1e-9 && eval_d2f(1.0).abs() < 1e-9 && eval_d2f(-1.0).abs() < 1e-9;
+    let is_linear =
+        eval_d2f(0.0).abs() < 1e-9 && eval_d2f(1.0).abs() < 1e-9 && eval_d2f(-1.0).abs() < 1e-9;
 
     // 3. Periodicity
     let periodic_info = detect_periodic_sub_periods(graph, target_expr, &active_var, slider_values);
@@ -863,7 +903,8 @@ pub fn inspect_function_features(
 
     // VM numerical roots fallback
     let search_min = if neg_valid { -30.0 } else { 0.0 };
-    let (vm_roots, vm_crit_pts) = find_roots_and_critical_points(&eval_f, &eval_df, search_min, 30.0, 240);
+    let (vm_roots, vm_crit_pts) =
+        find_roots_and_critical_points(&eval_f, &eval_df, search_min, 30.0, 240);
 
     if !is_roots_symbolic {
         for r in &vm_roots {
@@ -905,7 +946,10 @@ pub fn inspect_function_features(
                     "Inflection / Saddle Point"
                 };
                 if y_val.is_finite() {
-                    critical_points.push(format!("{} ≈ {:.4} ({}, y ≈ {:.4})", active_var, c, kind_desc, y_val));
+                    critical_points.push(format!(
+                        "{} ≈ {:.4} ({}, y ≈ {:.4})",
+                        active_var, c, kind_desc, y_val
+                    ));
                 } else {
                     critical_points.push(format!("{} ≈ {:.4} ({})", active_var, c, kind_desc));
                 }
@@ -922,7 +966,11 @@ pub fn inspect_function_features(
         let y_max = y0.abs().max(y_half.abs()).max(1.0);
         Some(format!("[-{:.2}, +{:.2}]", y_max, y_max))
     } else if !vm_crit_pts.is_empty() {
-        let mut crit_y: Vec<f64> = vm_crit_pts.iter().map(|&c| eval_f(c)).filter(|y| y.is_finite()).collect();
+        let mut crit_y: Vec<f64> = vm_crit_pts
+            .iter()
+            .map(|&c| eval_f(c))
+            .filter(|y| y.is_finite())
+            .collect();
         crit_y.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         if let (Some(&min_y), Some(&max_y)) = (crit_y.first(), crit_y.last()) {
             let y_far_pos = eval_f(25.0);
@@ -955,4 +1003,3 @@ pub fn inspect_function_features(
         period,
     }
 }
-

@@ -11,7 +11,7 @@
 
 use super::SymbolicLang;
 use algebra_core::domain::GoalDomain;
-use egg::{rewrite, Rewrite};
+use egg::{Rewrite, rewrite};
 
 /// Base Identity Group trait for modular rule cluster registration.
 pub trait IdentityGroup {

@@ -1,9 +1,9 @@
 //! Scalar numbers, arbitrary-precision rationals, exact scientific notation, and mathematical constants.
 
-use std::fmt;
 use num_bigint::BigInt;
 use num_rational::BigRational;
 use num_traits::{One, ToPrimitive, Zero};
+use std::fmt;
 
 /// Built-in mathematical constants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -421,9 +421,7 @@ impl Number {
                 let r2 = BigRational::new(BigInt::from(*n), BigInt::from(*d));
                 Some(Self::BigRational(Box::new(r1 + r2)))
             }
-            (Self::BigInteger(a), Self::BigInteger(b)) => {
-                Some(Self::BigInteger(a + b))
-            }
+            (Self::BigInteger(a), Self::BigInteger(b)) => Some(Self::BigInteger(a + b)),
             (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
                 Some(Self::BigInteger(a + BigInt::from(*b)))
             }
@@ -461,9 +459,7 @@ impl Number {
                     Some(Self::BigRational(Box::new(r)))
                 }
             }
-            (Self::BigInteger(a), Self::BigInteger(b)) => {
-                Some(Self::BigInteger(a * b))
-            }
+            (Self::BigInteger(a), Self::BigInteger(b)) => Some(Self::BigInteger(a * b)),
             (Self::BigInteger(a), Self::Integer(b)) | (Self::Integer(b), Self::BigInteger(a)) => {
                 Some(Self::BigInteger(a * BigInt::from(*b)))
             }

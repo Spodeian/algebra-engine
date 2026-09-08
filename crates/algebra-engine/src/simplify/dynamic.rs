@@ -3,15 +3,15 @@
 //! Dynamic rule selector that synthesizes conflict-free E-Graph rule sets from algebraic traits
 //! and detected domain features.
 
+use super::SymbolicLang;
 use super::bridges::{
     AskeySchemeGroup, BridgeRouter, HyperbolicIdentityGroup, IdentityGroup,
     ItoNilpotentBridgeGroup, LieAlgebraGroup, TransformClusterGroup, TrigIdentityGroup,
 };
 use super::detector::{DetectedFeatures, DomainFeatureDetector};
-use super::SymbolicLang;
 use algebra_core::domain::GoalDomain;
 use algebra_core::{ExprGraph, ExprId};
-use egg::{rewrite, Rewrite};
+use egg::{Rewrite, rewrite};
 
 /// Base Axiomatic Equational Rule Generator for Commutative and Non-Commutative Rings/Fields.
 pub struct AxiomaticRuleGenerator;

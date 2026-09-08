@@ -425,14 +425,30 @@ impl CliffordMultivector {
             let w = self.blades.get(&BladeMask::SCALAR).copied().unwrap_or(0.0);
             let x = self.blades.get(&BladeMask::E1).copied().unwrap_or(0.0);
             let y = self.blades.get(&BladeMask::E2).copied().unwrap_or(0.0);
-            let z = self.blades.get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0)).copied().unwrap_or(0.0);
+            let z = self
+                .blades
+                .get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0))
+                .copied()
+                .unwrap_or(0.0);
             Some((w, x, y, z))
         } else if self.sig == CliffordSignature::PGA3D {
             // Even subalgebra Cl+(3,0,0): 1, -e2e3, -e3e1, -e1e2
             let w = self.blades.get(&BladeMask::SCALAR).copied().unwrap_or(0.0);
-            let x = -self.blades.get(&BladeMask(BladeMask::E2.0 | BladeMask::E3.0)).copied().unwrap_or(0.0);
-            let y = -self.blades.get(&BladeMask(BladeMask::E3.0 | BladeMask::E1.0)).copied().unwrap_or(0.0);
-            let z = -self.blades.get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0)).copied().unwrap_or(0.0);
+            let x = -self
+                .blades
+                .get(&BladeMask(BladeMask::E2.0 | BladeMask::E3.0))
+                .copied()
+                .unwrap_or(0.0);
+            let y = -self
+                .blades
+                .get(&BladeMask(BladeMask::E3.0 | BladeMask::E1.0))
+                .copied()
+                .unwrap_or(0.0);
+            let z = -self
+                .blades
+                .get(&BladeMask(BladeMask::E1.0 | BladeMask::E2.0))
+                .copied()
+                .unwrap_or(0.0);
             Some((w, x, y, z))
         } else {
             None
@@ -559,7 +575,6 @@ impl CliffordMultivector {
         Ok(mat)
     }
 }
-
 
 /// Free Graded Tensor Algebra $T(V) = \bigoplus_{k=0}^N V^{\otimes k}$.
 #[derive(Debug, Clone, PartialEq)]

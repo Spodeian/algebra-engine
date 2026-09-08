@@ -2,7 +2,10 @@ use super::Uint;
 
 use std::ops::{Sub, SubAssign};
 
-use num::{BigUint, ToPrimitive, traits::{ConstZero, CheckedSub}};
+use num::{
+    BigUint, ToPrimitive,
+    traits::{CheckedSub, ConstZero},
+};
 
 impl<U> Sub<U> for Uint
 where
@@ -20,15 +23,14 @@ where
                     panic!("Uint subtraction underflow");
                 }
             }
-            Uint::Promoted(a) => {
-                Uint::from(a - rhs.into())
-            }
+            Uint::Promoted(a) => Uint::from(a - rhs.into()),
         }
     }
 }
 
 impl<U> SubAssign<U> for Uint
-where Self: Sub<U, Output = Self>
+where
+    Self: Sub<U, Output = Self>,
 {
     fn sub_assign(&mut self, rhs: U) {
         *self = std::mem::replace(self, Uint::ZERO) - rhs;

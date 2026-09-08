@@ -96,9 +96,15 @@ impl Formatter for LatexFormatter {
                     args.iter().map(|&a| self.format(graph, a)).collect();
                 let args_vec = arg_strs?;
                 if (fn_name == "BringRadical" || fn_name == "BR") && args_vec.len() == 1 {
-                    Ok(format!("\\operatorname{{BR}}\\left({}\\right)", args_vec[0]))
+                    Ok(format!(
+                        "\\operatorname{{BR}}\\left({}\\right)",
+                        args_vec[0]
+                    ))
                 } else if fn_name == "besselj" && args_vec.len() == 2 {
-                    Ok(format!("J_{{{}}}\\left({}\\right)", args_vec[0], args_vec[1]))
+                    Ok(format!(
+                        "J_{{{}}}\\left({}\\right)",
+                        args_vec[0], args_vec[1]
+                    ))
                 } else {
                     Ok(format!(
                         "\\operatorname{{{}}}\\left({}\\right)",
@@ -116,7 +122,10 @@ impl Formatter for LatexFormatter {
                         wrt_str, e_str
                     ))
                 } else {
-                    Ok(format!("\\frac{{\\mathrm{{d}}^{{{}}}}}{{\\mathrm{{d}}{}^{{{}}}}} \\left({}\\right)", order, wrt_str, order, e_str))
+                    Ok(format!(
+                        "\\frac{{\\mathrm{{d}}^{{{}}}}}{{\\mathrm{{d}}{}^{{{}}}}} \\left({}\\right)",
+                        order, wrt_str, order, e_str
+                    ))
                 }
             }
             ExprKind::Integral {
@@ -501,12 +510,19 @@ impl Formatter for MathMLFormatter {
                 Number::Integer(i) => format!("<mn>{}</mn>", i),
                 Number::BigInteger(b) => format!("<mn>{}</mn>", b),
                 Number::Rational(n, d) => format!("<mfrac><mn>{}</mn><mn>{}</mn></mfrac>", n, d),
-                Number::BigRational(r) => format!("<mfrac><mn>{}</mn><mn>{}</mn></mfrac>", r.numer(), r.denom()),
+                Number::BigRational(r) => format!(
+                    "<mfrac><mn>{}</mn><mn>{}</mn></mfrac>",
+                    r.numer(),
+                    r.denom()
+                ),
                 Number::Scientific { mantissa, exponent } => {
                     if *exponent == 0 {
                         format!("<mn>{}</mn>", mantissa)
                     } else {
-                        format!("<mn>{}</mn><mo>&times;</mo><msup><mn>10</mn><mn>{}</mn></msup>", mantissa, exponent)
+                        format!(
+                            "<mn>{}</mn><mo>&times;</mo><msup><mn>10</mn><mn>{}</mn></msup>",
+                            mantissa, exponent
+                        )
                     }
                 }
                 Number::Float(bits) => format!("<mn>{}</mn>", f64::from_bits(*bits)),

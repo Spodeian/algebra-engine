@@ -10,25 +10,25 @@ pub mod plot_eval;
 pub mod session;
 pub mod worker;
 
-pub use cache::{compute_slider_hash, LineCache, LineCacheEntry, PlotCache, PlotCacheKey};
+pub use cache::{LineCache, LineCacheEntry, PlotCache, PlotCacheKey, compute_slider_hash};
 pub use history::{HistorySnapshot, UndoRedoHistory};
 pub use line_shift::reconcile_line_references_on_shift;
 pub use parser::{
-    is_markdown_line, parse_permissive_solve_command, resolve_line_references, CellBlock,
-    CellBlockKind, LineKind, ObjectKind, ParsedLine, SymbolInfoCard,
+    CellBlock, CellBlockKind, LineKind, ObjectKind, ParsedLine, SymbolInfoCard, is_markdown_line,
+    parse_permissive_solve_command, resolve_line_references,
 };
 pub use plot_eval::{
-    compute_smart_plot_bounds, detect_periodic_sub_periods, evaluate_plot_points,
+    PeriodicAnalysis, compute_smart_plot_bounds, detect_periodic_sub_periods, evaluate_plot_points,
     evaluate_plot_points_with_domains, extract_symbols, find_roots_and_critical_points,
-    inspect_function_features, PeriodicAnalysis,
+    inspect_function_features,
 };
 pub use session::{
+    CardDisplayMode, MatrixPresetKind, NotebookSettings, ParameterBuilderParams,
+    ReactiveComputeMode, SESSION_FILE_NAME, SessionData, SymbolMetadata, SymbolRole,
     default_logging_level, export_session_to_compressed_bson, generate_branch_cut_syntax,
     generate_interval_syntax, generate_matrix_syntax, generate_ode_bc_syntax,
     generate_parameter_builder_syntax, generate_physical_unit_syntax,
     generate_universal_parameter_builder_syntax, import_session_from_compressed_bson,
-    CardDisplayMode, MatrixPresetKind, NotebookSettings, ParameterBuilderParams,
-    ReactiveComputeMode, SessionData, SymbolMetadata, SymbolRole, SESSION_FILE_NAME,
 };
 pub use worker::{
     BackgroundEvaluator, CancellationToken, DependencyGraph, EvaluationRequest, EvaluationResponse,
@@ -412,225 +412,343 @@ impl NotebookState {
         true
     }
 
-/// Inspects mathematical and physical structure of an expression or line to detect specialized domains:
-/// - Transfer Functions H(s) / G(s)
-/// - Itô Stochastic Differentials dX_t
-/// - FEA / CAD Isogeometric Analysis
-/// - Thermodynamics & Equations of State
-/// - Multi-Valued & Propositional Logic Systems
-/// - Differential Manifolds & Metric Tensors
-/// - Cryptographic Curves
-/// - Discrete Graphs & Spectral Networks
-/// - Probability Distributions
-/// - Canonical Algebraic Forms
-pub fn inspect_mathematical_object(
-    raw_text: &str,
-    slider_values: &HashMap<String, f64>,
-) -> Option<ObjectKind> {
-    let lower = raw_text.to_lowercase();
+    /// Inspects mathematical and physical structure of an expression or line to detect specialized domains:
+    /// - Transfer Functions H(s) / G(s)
+    /// - Itô Stochastic Differentials dX_t
+    /// - FEA / CAD Isogeometric Analysis
+    /// - Thermodynamics & Equations of State
+    /// - Multi-Valued & Propositional Logic Systems
+    /// - Differential Manifolds & Metric Tensors
+    /// - Cryptographic Curves
+    /// - Discrete Graphs & Spectral Networks
+    /// - Probability Distributions
+    /// - Canonical Algebraic Forms
+    pub fn inspect_mathematical_object(
+        raw_text: &str,
+        slider_values: &HashMap<String, f64>,
+    ) -> Option<ObjectKind> {
+        let lower = raw_text.to_lowercase();
 
-    // 1. Transfer Function H(s) in Laplace variable s or explicit rational form
-    if (lower.contains("(s)") || lower.contains("/ s") || lower.contains("/ (s") || lower.contains("* s") || lower.contains("s^2") || lower.contains("tf(") || lower.contains("bode("))
-        && (lower.contains('/') || lower.contains("tf") || lower.contains("h_") || lower.contains("h(") || lower.contains("g("))
-    {
-        let (num_deg, denom_deg, poles, zeros, is_stable) = if lower.contains("s^2") || lower.contains("s^ 2") {
-            let poles_list = if lower.contains("1.414") {
-                vec!["-0.707 + 0.707i".to_string(), "-0.707 - 0.707i".to_string()]
-            } else if lower.contains("rlc") || lower.contains("r * c") || lower.contains("l * c") {
-                vec!["-5000.0 + 3122.5i".to_string(), "-5000.0 - 3122.5i".to_string()]
+        // 1. Transfer Function H(s) in Laplace variable s or explicit rational form
+        if (lower.contains("(s)")
+            || lower.contains("/ s")
+            || lower.contains("/ (s")
+            || lower.contains("* s")
+            || lower.contains("s^2")
+            || lower.contains("tf(")
+            || lower.contains("bode("))
+            && (lower.contains('/')
+                || lower.contains("tf")
+                || lower.contains("h_")
+                || lower.contains("h(")
+                || lower.contains("g("))
+        {
+            let (num_deg, denom_deg, poles, zeros, is_stable) = if lower.contains("s^2")
+                || lower.contains("s^ 2")
+            {
+                let poles_list = if lower.contains("1.414") {
+                    vec!["-0.707 + 0.707i".to_string(), "-0.707 - 0.707i".to_string()]
+                } else if lower.contains("rlc")
+                    || lower.contains("r * c")
+                    || lower.contains("l * c")
+                {
+                    vec![
+                        "-5000.0 + 3122.5i".to_string(),
+                        "-5000.0 - 3122.5i".to_string(),
+                    ]
+                } else {
+                    vec!["-1.000 + 1.414i".to_string(), "-1.000 - 1.414i".to_string()]
+                };
+                (0, 2, poles_list, vec![], true)
+            } else if lower.contains("/ s") || lower.contains("/ (s +") || lower.contains("/ (s -")
+            {
+                let pole_val = if lower.contains('+') { "-1.0" } else { "1.0" };
+                let stable = pole_val.starts_with('-');
+                (0, 1, vec![pole_val.to_string()], vec![], stable)
             } else {
-                vec!["-1.000 + 1.414i".to_string(), "-1.000 - 1.414i".to_string()]
+                (
+                    1,
+                    2,
+                    vec!["-1.0 + 2.0i".to_string(), "-1.0 - 2.0i".to_string()],
+                    vec!["0.0".to_string()],
+                    true,
+                )
             };
-            (0, 2, poles_list, vec![], true)
-        } else if lower.contains("/ s") || lower.contains("/ (s +") || lower.contains("/ (s -") {
-            let pole_val = if lower.contains('+') { "-1.0" } else { "1.0" };
-            let stable = pole_val.starts_with('-');
-            (0, 1, vec![pole_val.to_string()], vec![], stable)
-        } else {
-            (1, 2, vec!["-1.0 + 2.0i".to_string(), "-1.0 - 2.0i".to_string()], vec!["0.0".to_string()], true)
-        };
 
-        return Some(ObjectKind::TransferFunction {
-            numerator_degree: num_deg,
-            denominator_degree: denom_deg,
-            poles,
-            zeros,
-            is_stable,
-        });
+            return Some(ObjectKind::TransferFunction {
+                numerator_degree: num_deg,
+                denominator_degree: denom_deg,
+                poles,
+                zeros,
+                is_stable,
+            });
+        }
+
+        // 2. Stochastic Differentials & Itô Diffusion (dX_t = μ dt + σ dW_t)
+        if lower.contains("dw_t")
+            || lower.contains("dw")
+            || lower.contains("ito_")
+            || lower.contains("dx_t")
+        {
+            let drift = if lower.contains("mu * s") || lower.contains('μ') {
+                "μ · S · dt".to_string()
+            } else if lower.contains("dt") {
+                "a(X_t, t) · dt".to_string()
+            } else {
+                "0".to_string()
+            };
+            let diff = if lower.contains("sigma * s") || lower.contains('σ') {
+                "σ · S · dW_t".to_string()
+            } else {
+                "b(X_t, t) · dW_t".to_string()
+            };
+            let is_martingale = drift == "0";
+            return Some(ObjectKind::StochasticProcess {
+                drift_term: drift,
+                diffusion_term: diff,
+                is_martingale,
+            });
+        }
+
+        // 3. Thermodynamic Systems & Equations of State (Van der Waals, Carnot, Maxwell relations)
+        if lower.contains("vdw")
+            || lower.contains("carnot")
+            || lower.contains("pv_")
+            || lower.contains("entropy")
+            || lower.contains("r_gas")
+            || lower.contains("maxwell_relation")
+        {
+            let (sys_type, eos, props) = if lower.contains("vdw") || lower.contains("van der waals")
+            {
+                let r_val = slider_values.get("R_gas").copied().unwrap_or(8.314);
+                let t_val = slider_values
+                    .get("T")
+                    .or_else(|| slider_values.get("T_h"))
+                    .copied()
+                    .unwrap_or(300.0);
+                (
+                    "Van der Waals Real Gas".to_string(),
+                    "(P + a/V²)(V - b) = R·T".to_string(),
+                    vec![
+                        ("Gas Constant R [J/(mol·K)]".to_string(), r_val),
+                        ("Temperature T [K]".to_string(), t_val),
+                        ("Compressibility Factor Z".to_string(), 0.92),
+                    ],
+                )
+            } else if lower.contains("carnot") {
+                let tc = slider_values
+                    .get("T_c")
+                    .or_else(|| slider_values.get("T_cold"))
+                    .copied()
+                    .unwrap_or(300.0);
+                let th = slider_values
+                    .get("T_h")
+                    .or_else(|| slider_values.get("T_hot"))
+                    .copied()
+                    .unwrap_or(600.0);
+                let eta = if th > 0.0 {
+                    (1.0 - tc / th).max(0.0)
+                } else {
+                    0.5
+                };
+                (
+                    "Carnot Thermodynamic Cycle".to_string(),
+                    "η_carnot = 1 - T_cold / T_hot".to_string(),
+                    vec![
+                        ("T_hot [K]".to_string(), th),
+                        ("T_cold [K]".to_string(), tc),
+                        ("Thermal Efficiency η".to_string(), eta),
+                    ],
+                )
+            } else {
+                (
+                    "Thermodynamic State System".to_string(),
+                    "dU = T dS - P dV".to_string(),
+                    vec![
+                        ("Entropy S [J/K]".to_string(), 189.4),
+                        ("Enthalpy H [kJ]".to_string(), 254.1),
+                    ],
+                )
+            };
+            return Some(ObjectKind::ThermodynamicState {
+                system_type: sys_type,
+                equation_of_state: eos,
+                properties: props,
+            });
+        }
+
+        // 4. Multi-Valued & Propositional Logic Systems
+        if lower.contains("logic")
+            || lower.contains("kleene")
+            || lower.contains("lukasiewicz")
+            || lower.contains("bochvar")
+            || lower.contains("godel")
+            || lower.contains("truth_table")
+            || lower.contains("modal")
+            || lower.contains("dpll")
+            || lower.contains("sat(")
+        {
+            let (sys_name, vals, paraconsistent, intuitionistic) = if lower.contains("kleene") {
+                ("Kleene K3 (Strong 3-Valued Logic)", 3, false, false)
+            } else if lower.contains("lukasiewicz") {
+                ("Łukasiewicz Ł3 (Multi-Valued Logic)", 3, false, false)
+            } else if lower.contains("bochvar") {
+                ("Bochvar B3 (Error/Nonsense Propagation)", 3, true, false)
+            } else if lower.contains("godel") {
+                ("Gödel-Dummett G3 (Intuitionistic Logic)", 3, false, true)
+            } else if lower.contains("modal") {
+                (
+                    "Modal S5 / Kripke (□ Necessity / ◊ Possibility)",
+                    2,
+                    false,
+                    false,
+                )
+            } else {
+                ("Classical Propositional Logic (DPLL SAT)", 2, false, false)
+            };
+            return Some(ObjectKind::LogicSystem {
+                system_name: sys_name.to_string(),
+                truth_values_count: vals,
+                is_paraconsistent: paraconsistent,
+                is_intuitionistic: intuitionistic,
+                tautologies_summary: "Truth value evaluation & SAT solver".to_string(),
+            });
+        }
+
+        // 5. Differential Manifolds, Spacetime & General Relativity
+        if lower.contains("schwarzschild")
+            || lower.contains("christoffel")
+            || lower.contains("riemann")
+            || lower.contains("ricci")
+            || lower.contains("metric_tensor")
+            || lower.contains("geodesic")
+        {
+            let dim = if lower.contains("schwarzschild")
+                || lower.contains("4d")
+                || lower.contains("[t,")
+                || lower.contains("[t ,")
+            {
+                4
+            } else {
+                2
+            };
+            let name = if lower.contains("schwarzschild") {
+                "Schwarzschild Spacetime Metric g_μν".to_string()
+            } else {
+                "Riemannian Metric Tensor g_ij".to_string()
+            };
+            return Some(ObjectKind::DifferentialManifold {
+                dimension: dim,
+                metric_name: name,
+                curvature_scalar: Some(0.0),
+            });
+        }
+
+        // 6. Finite Element Analysis, NURBS & Isogeometric Analysis (CAD Patches)
+        if lower.contains("fea")
+            || lower.contains("iga")
+            || lower.contains("mesh")
+            || lower.contains("nurbs")
+            || lower.contains("b_spline")
+            || lower.contains("stiffness")
+        {
+            return Some(ObjectKind::FEAResult {
+                nodes: 128,
+                elements: 216,
+                max_stress: 142.5,
+                deformation_scale: 1.0,
+                solution_type: if lower.contains("iga") || lower.contains("nurbs") {
+                    "NURBS Isogeometric Analysis".to_string()
+                } else {
+                    "Finite Element Analysis".to_string()
+                },
+            });
+        }
+
+        // 7. Probability Distributions & Random Variables
+        if lower.contains("distribution")
+            || lower.contains("gaussian")
+            || lower.contains("normal")
+            || lower.contains("poisson")
+            || lower.contains("bayesian")
+            || lower.contains("prior")
+            || lower.contains("posterior")
+        {
+            let is_discrete = lower.contains("poisson") || lower.contains("binomial");
+            let dist_name = if lower.contains("poisson") {
+                "Poisson Distribution Poisson(λ)".to_string()
+            } else if lower.contains("bayesian") {
+                "Bayesian Posterior Distribution".to_string()
+            } else {
+                "Normal / Gaussian Distribution N(μ, σ²)".to_string()
+            };
+            return Some(ObjectKind::ProbabilityDistribution {
+                dist_type: dist_name,
+                mean: 0.0,
+                variance: 1.0,
+                is_discrete,
+            });
+        }
+
+        // 8. Cryptographic Curves & Elliptic Groups
+        if lower.contains("secp256k1")
+            || lower.contains("elliptic")
+            || lower.contains("ecc")
+            || lower.contains("weierstrass")
+            || lower.contains("y^2 = x^3")
+        {
+            return Some(ObjectKind::CryptographicCurve {
+                curve_name: if lower.contains("secp256k1") {
+                    "secp256k1 (Koblitz Curve)".to_string()
+                } else {
+                    "Weierstrass Elliptic Curve".to_string()
+                },
+                field_order: if lower.contains("256") {
+                    "2^256 - 2^32 - 977".to_string()
+                } else {
+                    "2^127 - 1 (Mersenne)".to_string()
+                },
+                equation: "y² = x³ + ax + b (mod p)".to_string(),
+            });
+        }
+
+        // 9. Discrete Graphs & Network Topologies
+        if lower.contains("graph")
+            || lower.contains("laplacian")
+            || lower.contains("adjacency")
+            || lower.contains("spectral_gap")
+        {
+            return Some(ObjectKind::GraphStructure {
+                vertices: 24,
+                edges: 48,
+                is_directed: lower.contains("directed"),
+                spectral_gap: Some(0.854),
+            });
+        }
+
+        // 10. Canonical Algebraic Forms
+        if lower.contains("horner")
+            || lower.contains("factor(")
+            || lower.contains("expand(")
+            || lower.contains("tropical")
+        {
+            let form_name = if lower.contains("horner") {
+                "Nested Horner Polynomial Form"
+            } else if lower.contains("factor") {
+                "Irreducible Factored Form"
+            } else if lower.contains("tropical") {
+                "Tropical Min-Plus Semiring"
+            } else {
+                "Expanded Monomial Canonical Form"
+            };
+            return Some(ObjectKind::AlgebraicForm {
+                form_type: form_name.to_string(),
+                complexity_score: 4,
+            });
+        }
+
+        None
     }
-
-    // 2. Stochastic Differentials & Itô Diffusion (dX_t = μ dt + σ dW_t)
-    if lower.contains("dw_t") || lower.contains("dw") || lower.contains("ito_") || lower.contains("dx_t") {
-        let drift = if lower.contains("mu * s") || lower.contains('μ') {
-            "μ · S · dt".to_string()
-        } else if lower.contains("dt") {
-            "a(X_t, t) · dt".to_string()
-        } else {
-            "0".to_string()
-        };
-        let diff = if lower.contains("sigma * s") || lower.contains('σ') {
-            "σ · S · dW_t".to_string()
-        } else {
-            "b(X_t, t) · dW_t".to_string()
-        };
-        let is_martingale = drift == "0";
-        return Some(ObjectKind::StochasticProcess {
-            drift_term: drift,
-            diffusion_term: diff,
-            is_martingale,
-        });
-    }
-
-    // 3. Thermodynamic Systems & Equations of State (Van der Waals, Carnot, Maxwell relations)
-    if lower.contains("vdw") || lower.contains("carnot") || lower.contains("pv_") || lower.contains("entropy") || lower.contains("r_gas") || lower.contains("maxwell_relation") {
-        let (sys_type, eos, props) = if lower.contains("vdw") || lower.contains("van der waals") {
-            let r_val = slider_values.get("R_gas").copied().unwrap_or(8.314);
-            let t_val = slider_values.get("T").or_else(|| slider_values.get("T_h")).copied().unwrap_or(300.0);
-            (
-                "Van der Waals Real Gas".to_string(),
-                "(P + a/V²)(V - b) = R·T".to_string(),
-                vec![
-                    ("Gas Constant R [J/(mol·K)]".to_string(), r_val),
-                    ("Temperature T [K]".to_string(), t_val),
-                    ("Compressibility Factor Z".to_string(), 0.92),
-                ],
-            )
-        } else if lower.contains("carnot") {
-            let tc = slider_values.get("T_c").or_else(|| slider_values.get("T_cold")).copied().unwrap_or(300.0);
-            let th = slider_values.get("T_h").or_else(|| slider_values.get("T_hot")).copied().unwrap_or(600.0);
-            let eta = if th > 0.0 { (1.0 - tc / th).max(0.0) } else { 0.5 };
-            (
-                "Carnot Thermodynamic Cycle".to_string(),
-                "η_carnot = 1 - T_cold / T_hot".to_string(),
-                vec![
-                    ("T_hot [K]".to_string(), th),
-                    ("T_cold [K]".to_string(), tc),
-                    ("Thermal Efficiency η".to_string(), eta),
-                ],
-            )
-        } else {
-            (
-                "Thermodynamic State System".to_string(),
-                "dU = T dS - P dV".to_string(),
-                vec![
-                    ("Entropy S [J/K]".to_string(), 189.4),
-                    ("Enthalpy H [kJ]".to_string(), 254.1),
-                ],
-            )
-        };
-        return Some(ObjectKind::ThermodynamicState {
-            system_type: sys_type,
-            equation_of_state: eos,
-            properties: props,
-        });
-    }
-
-    // 4. Multi-Valued & Propositional Logic Systems
-    if lower.contains("logic") || lower.contains("kleene") || lower.contains("lukasiewicz") || lower.contains("bochvar") || lower.contains("godel") || lower.contains("truth_table") || lower.contains("modal") || lower.contains("dpll") || lower.contains("sat(") {
-        let (sys_name, vals, paraconsistent, intuitionistic) = if lower.contains("kleene") {
-            ("Kleene K3 (Strong 3-Valued Logic)", 3, false, false)
-        } else if lower.contains("lukasiewicz") {
-            ("Łukasiewicz Ł3 (Multi-Valued Logic)", 3, false, false)
-        } else if lower.contains("bochvar") {
-            ("Bochvar B3 (Error/Nonsense Propagation)", 3, true, false)
-        } else if lower.contains("godel") {
-            ("Gödel-Dummett G3 (Intuitionistic Logic)", 3, false, true)
-        } else if lower.contains("modal") {
-            ("Modal S5 / Kripke (□ Necessity / ◊ Possibility)", 2, false, false)
-        } else {
-            ("Classical Propositional Logic (DPLL SAT)", 2, false, false)
-        };
-        return Some(ObjectKind::LogicSystem {
-            system_name: sys_name.to_string(),
-            truth_values_count: vals,
-            is_paraconsistent: paraconsistent,
-            is_intuitionistic: intuitionistic,
-            tautologies_summary: "Truth value evaluation & SAT solver".to_string(),
-        });
-    }
-
-    // 5. Differential Manifolds, Spacetime & General Relativity
-    if lower.contains("schwarzschild") || lower.contains("christoffel") || lower.contains("riemann") || lower.contains("ricci") || lower.contains("metric_tensor") || lower.contains("geodesic") {
-        let dim = if lower.contains("schwarzschild") || lower.contains("4d") || lower.contains("[t,") || lower.contains("[t ,") { 4 } else { 2 };
-        let name = if lower.contains("schwarzschild") {
-            "Schwarzschild Spacetime Metric g_μν".to_string()
-        } else {
-            "Riemannian Metric Tensor g_ij".to_string()
-        };
-        return Some(ObjectKind::DifferentialManifold {
-            dimension: dim,
-            metric_name: name,
-            curvature_scalar: Some(0.0),
-        });
-    }
-
-    // 6. Finite Element Analysis, NURBS & Isogeometric Analysis (CAD Patches)
-    if lower.contains("fea") || lower.contains("iga") || lower.contains("mesh") || lower.contains("nurbs") || lower.contains("b_spline") || lower.contains("stiffness") {
-        return Some(ObjectKind::FEAResult {
-            nodes: 128,
-            elements: 216,
-            max_stress: 142.5,
-            deformation_scale: 1.0,
-            solution_type: if lower.contains("iga") || lower.contains("nurbs") { "NURBS Isogeometric Analysis".to_string() } else { "Finite Element Analysis".to_string() },
-        });
-    }
-
-    // 7. Probability Distributions & Random Variables
-    if lower.contains("distribution") || lower.contains("gaussian") || lower.contains("normal") || lower.contains("poisson") || lower.contains("bayesian") || lower.contains("prior") || lower.contains("posterior") {
-        let is_discrete = lower.contains("poisson") || lower.contains("binomial");
-        let dist_name = if lower.contains("poisson") {
-            "Poisson Distribution Poisson(λ)".to_string()
-        } else if lower.contains("bayesian") {
-            "Bayesian Posterior Distribution".to_string()
-        } else {
-            "Normal / Gaussian Distribution N(μ, σ²)".to_string()
-        };
-        return Some(ObjectKind::ProbabilityDistribution {
-            dist_type: dist_name,
-            mean: 0.0,
-            variance: 1.0,
-            is_discrete,
-        });
-    }
-
-    // 8. Cryptographic Curves & Elliptic Groups
-    if lower.contains("secp256k1") || lower.contains("elliptic") || lower.contains("ecc") || lower.contains("weierstrass") || lower.contains("y^2 = x^3") {
-        return Some(ObjectKind::CryptographicCurve {
-            curve_name: if lower.contains("secp256k1") { "secp256k1 (Koblitz Curve)".to_string() } else { "Weierstrass Elliptic Curve".to_string() },
-            field_order: if lower.contains("256") { "2^256 - 2^32 - 977".to_string() } else { "2^127 - 1 (Mersenne)".to_string() },
-            equation: "y² = x³ + ax + b (mod p)".to_string(),
-        });
-    }
-
-    // 9. Discrete Graphs & Network Topologies
-    if lower.contains("graph") || lower.contains("laplacian") || lower.contains("adjacency") || lower.contains("spectral_gap") {
-        return Some(ObjectKind::GraphStructure {
-            vertices: 24,
-            edges: 48,
-            is_directed: lower.contains("directed"),
-            spectral_gap: Some(0.854),
-        });
-    }
-
-    // 10. Canonical Algebraic Forms
-    if lower.contains("horner") || lower.contains("factor(") || lower.contains("expand(") || lower.contains("tropical") {
-        let form_name = if lower.contains("horner") {
-            "Nested Horner Polynomial Form"
-        } else if lower.contains("factor") {
-            "Irreducible Factored Form"
-        } else if lower.contains("tropical") {
-            "Tropical Min-Plus Semiring"
-        } else {
-            "Expanded Monomial Canonical Form"
-        };
-        return Some(ObjectKind::AlgebraicForm {
-            form_type: form_name.to_string(),
-            complexity_score: 4,
-        });
-    }
-
-    None
-}
 
     /// Retrieve detailed hover inspector card metadata for symbol or object `sym_name`.
     pub fn get_symbol_info_card(&self, sym_name: &str) -> Option<SymbolInfoCard> {
@@ -658,7 +776,11 @@ pub fn inspect_mathematical_object(
                         approx_val: std::f64::consts::PI,
                     }),
                     computation_time_ms: None,
-                    compound_tags: vec!["Constant".to_string(), "Transcendental".to_string(), "Scalar".to_string()],
+                    compound_tags: vec![
+                        "Constant".to_string(),
+                        "Transcendental".to_string(),
+                        "Scalar".to_string(),
+                    ],
                 });
             }
             "tau" | "τ" => {
@@ -672,11 +794,17 @@ pub fn inspect_mathematical_object(
                     formula_references: Vec::new(),
                     object_kind: Some(ObjectKind::Constant {
                         symbol_name: "τ".to_string(),
-                        exact_desc: "Tau constant (2π), the ratio of a circle's circumference to its radius".to_string(),
+                        exact_desc:
+                            "Tau constant (2π), the ratio of a circle's circumference to its radius"
+                                .to_string(),
                         approx_val: std::f64::consts::TAU,
                     }),
                     computation_time_ms: None,
-                    compound_tags: vec!["Constant".to_string(), "Transcendental".to_string(), "Scalar".to_string()],
+                    compound_tags: vec![
+                        "Constant".to_string(),
+                        "Transcendental".to_string(),
+                        "Scalar".to_string(),
+                    ],
                 });
             }
             "e" => {
@@ -783,7 +911,8 @@ pub fn inspect_mathematical_object(
                     formula_references: Vec::new(),
                     object_kind: Some(ObjectKind::Constant {
                         symbol_name: "c".to_string(),
-                        exact_desc: "Speed of light in vacuum (Exact, 2019 SI Redefinition)".to_string(),
+                        exact_desc: "Speed of light in vacuum (Exact, 2019 SI Redefinition)"
+                            .to_string(),
                         approx_val: 299_792_458.0,
                     }),
                     computation_time_ms: None,
@@ -838,7 +967,8 @@ pub fn inspect_mathematical_object(
                     formula_references: Vec::new(),
                     object_kind: Some(ObjectKind::Constant {
                         symbol_name: "ℏ".to_string(),
-                        exact_desc: "Reduced Planck constant h/2π (Exact base, 2019 SI)".to_string(),
+                        exact_desc: "Reduced Planck constant h/2π (Exact base, 2019 SI)"
+                            .to_string(),
                         approx_val: hbar_val,
                     }),
                     computation_time_ms: None,
@@ -922,7 +1052,8 @@ pub fn inspect_mathematical_object(
 
         // 1.5 Built-in Mathematical Functions
         match clean_name {
-            "sin" | "cos" | "tan" | "sec" | "csc" | "cot" | "arcsin" | "arccos" | "arctan" | "sinh" | "cosh" | "tanh" => {
+            "sin" | "cos" | "tan" | "sec" | "csc" | "cot" | "arcsin" | "arccos" | "arctan"
+            | "sinh" | "cosh" | "tanh" => {
                 return Some(SymbolInfoCard {
                     name: clean_name.to_string(),
                     role: SymbolRole::Variable,
@@ -942,7 +1073,11 @@ pub fn inspect_mathematical_object(
                         critical_points: Vec::new(),
                         is_critical_points_symbolic: false,
                         parity: None,
-                        period: if clean_name == "tan" || clean_name == "cot" { Some(std::f64::consts::PI) } else { Some(std::f64::consts::TAU) },
+                        period: if clean_name == "tan" || clean_name == "cot" {
+                            Some(std::f64::consts::PI)
+                        } else {
+                            Some(std::f64::consts::TAU)
+                        },
                     }),
                     computation_time_ms: None,
                     compound_tags: vec!["Constant".to_string(), "Scalar".to_string()],
@@ -959,7 +1094,12 @@ pub fn inspect_mathematical_object(
                     formula_references: Vec::new(),
                     object_kind: Some(ObjectKind::Function {
                         arity: 1,
-                        domain: if clean_name.starts_with("log") || clean_name == "ln" { "ℝ⁺" } else { "ℝ" }.to_string(),
+                        domain: if clean_name.starts_with("log") || clean_name == "ln" {
+                            "ℝ⁺"
+                        } else {
+                            "ℝ"
+                        }
+                        .to_string(),
                         codomain: "ℝ".to_string(),
                         range: None,
                         is_linear: false,
@@ -1014,7 +1154,10 @@ pub fn inspect_mathematical_object(
                         domain: "Expression".to_string(),
                         codomain: "Expression".to_string(),
                         range: None,
-                        is_linear: clean_name == "diff" || clean_name == "integrate" || clean_name == "sum" || clean_name == "limit",
+                        is_linear: clean_name == "diff"
+                            || clean_name == "integrate"
+                            || clean_name == "sum"
+                            || clean_name == "limit",
                         roots: Vec::new(),
                         is_roots_symbolic: true,
                         critical_points: Vec::new(),
@@ -1069,19 +1212,29 @@ pub fn inspect_mathematical_object(
                 if l_idx < self.parsed_lines.len() {
                     let pl = &self.parsed_lines[l_idx];
                     let val = pl.linearized_estimate.unwrap_or(0.0);
-                    let kind = Self::inspect_mathematical_object(&pl.raw_text, &self.session.slider_values)
-                        .unwrap_or_else(|| ObjectKind::LineResult {
-                            line_idx: l_idx + 1,
-                            summary: if !pl.output_unicode.is_empty() {
-                                pl.output_unicode.clone()
-                            } else {
-                                pl.raw_text.clone()
-                            },
-                        });
-                        let dep_lines: Vec<usize> = self.parsed_lines.iter().enumerate()
-                            .filter(|(idx, p)| *idx > l_idx && (p.raw_text.contains(&format!("${}", l_idx + 1)) || p.raw_text.contains(&format!("Line {}", l_idx + 1))))
-                            .map(|(idx, _)| idx)
-                            .collect();
+                    let kind = Self::inspect_mathematical_object(
+                        &pl.raw_text,
+                        &self.session.slider_values,
+                    )
+                    .unwrap_or_else(|| ObjectKind::LineResult {
+                        line_idx: l_idx + 1,
+                        summary: if !pl.output_unicode.is_empty() {
+                            pl.output_unicode.clone()
+                        } else {
+                            pl.raw_text.clone()
+                        },
+                    });
+                    let dep_lines: Vec<usize> = self
+                        .parsed_lines
+                        .iter()
+                        .enumerate()
+                        .filter(|(idx, p)| {
+                            *idx > l_idx
+                                && (p.raw_text.contains(&format!("${}", l_idx + 1))
+                                    || p.raw_text.contains(&format!("Line {}", l_idx + 1)))
+                        })
+                        .map(|(idx, _)| idx)
+                        .collect();
 
                     return Some(SymbolInfoCard {
                         name: clean_name.to_string(),
@@ -1109,33 +1262,53 @@ pub fn inspect_mathematical_object(
             }
             let raw = pl.raw_text.trim();
             let matches_fn = raw.starts_with(clean_name)
-                || (pl.is_function && raw.split('=').next().map(|h| {
-                    let h_trim = h.trim();
-                    h_trim == clean_name || h_trim.split('(').next().map(|b| b.trim() == clean_name).unwrap_or(false)
-                }).unwrap_or(false));
+                || (pl.is_function
+                    && raw
+                        .split('=')
+                        .next()
+                        .map(|h| {
+                            let h_trim = h.trim();
+                            h_trim == clean_name
+                                || h_trim
+                                    .split('(')
+                                    .next()
+                                    .map(|b| b.trim() == clean_name)
+                                    .unwrap_or(false)
+                        })
+                        .unwrap_or(false));
 
             if matches_fn && pl.is_function {
                 let formula_refs = vec![pl.raw_text.clone()];
-                let fn_kind = Self::inspect_mathematical_object(&pl.raw_text, &self.session.slider_values)
-                    .unwrap_or_else(|| inspect_function_features(
-                        &self.graph,
-                        &self.session.slider_values,
-                        Some(&self.session.symbol_metadata),
-                        &pl.raw_text,
-                        "x",
-                        &self.unicode_formatter,
-                    ));
+                let fn_kind =
+                    Self::inspect_mathematical_object(&pl.raw_text, &self.session.slider_values)
+                        .unwrap_or_else(|| {
+                            inspect_function_features(
+                                &self.graph,
+                                &self.session.slider_values,
+                                Some(&self.session.symbol_metadata),
+                                &pl.raw_text,
+                                "x",
+                                &self.unicode_formatter,
+                            )
+                        });
 
                 let domain_desc = match &fn_kind {
-                    ObjectKind::Function { domain, codomain, .. } => {
+                    ObjectKind::Function {
+                        domain, codomain, ..
+                    } => {
                         format!("Function Mapping ({} → {})", domain, codomain)
                     }
                     ObjectKind::TransferFunction { .. } => "LTI Transfer Function H(s)".to_string(),
-                    ObjectKind::DifferentialManifold { dimension, .. } => format!("{}-Dimensional Manifold", dimension),
+                    ObjectKind::DifferentialManifold { dimension, .. } => {
+                        format!("{}-Dimensional Manifold", dimension)
+                    }
                     _ => "Function Mapping (ℝ → ℝ)".to_string(),
                 };
 
-                let fn_deps: Vec<usize> = self.parsed_lines.iter().enumerate()
+                let fn_deps: Vec<usize> = self
+                    .parsed_lines
+                    .iter()
+                    .enumerate()
                     .filter(|(idx, p)| *idx != pl.line_idx && p.raw_text.contains(clean_name))
                     .map(|(idx, _)| idx)
                     .collect();
@@ -1166,28 +1339,32 @@ pub fn inspect_mathematical_object(
 
             let mut dependent_lines = Vec::new();
             if let Some(deps) = self.symbol_dependencies.get(clean_name) {
-                dependent_lines = deps.iter().copied().filter(|&idx| {
-                    if idx < self.parsed_lines.len() {
-                        let p = &self.parsed_lines[idx];
-                        match &p.kind {
-                            LineKind::SliderDef { name, .. }
-                            | LineKind::DomainRestriction { name, .. }
-                            | LineKind::RoleDeclaration { name, .. } => name != clean_name,
-                            LineKind::SetBuilder { var_name, .. } => var_name != clean_name,
-                            LineKind::Formula => {
-                                let raw = p.raw_text.trim();
-                                if let Some((lhs, _)) = raw.split_once('=') {
-                                    lhs.trim() != clean_name
-                                } else {
-                                    true
+                dependent_lines = deps
+                    .iter()
+                    .copied()
+                    .filter(|&idx| {
+                        if idx < self.parsed_lines.len() {
+                            let p = &self.parsed_lines[idx];
+                            match &p.kind {
+                                LineKind::SliderDef { name, .. }
+                                | LineKind::DomainRestriction { name, .. }
+                                | LineKind::RoleDeclaration { name, .. } => name != clean_name,
+                                LineKind::SetBuilder { var_name, .. } => var_name != clean_name,
+                                LineKind::Formula => {
+                                    let raw = p.raw_text.trim();
+                                    if let Some((lhs, _)) = raw.split_once('=') {
+                                        lhs.trim() != clean_name
+                                    } else {
+                                        true
+                                    }
                                 }
+                                _ => true,
                             }
-                            _ => true,
+                        } else {
+                            true
                         }
-                    } else {
-                        true
-                    }
-                }).collect();
+                    })
+                    .collect();
                 dependent_lines.sort_unstable();
             }
 
@@ -1914,7 +2091,11 @@ pub fn inspect_mathematical_object(
             }
 
             // Check Parametric CAD machinery macro lines (gear!, screw!, airfoil!, spring!)
-            if trimmed.starts_with("gear!(") || trimmed.starts_with("screw!(") || trimmed.starts_with("airfoil!(") || trimmed.starts_with("spring!(") {
+            if trimmed.starts_with("gear!(")
+                || trimmed.starts_with("screw!(")
+                || trimmed.starts_with("airfoil!(")
+                || trimmed.starts_with("spring!(")
+            {
                 let (model_kind, summary) = if trimmed.starts_with("gear!(") {
                     let m_kind = if trimmed.contains("\"helical\"") {
                         "HelicalGear"
@@ -1929,13 +2110,22 @@ pub fn inspect_mathematical_object(
                     } else {
                         "SpurGear"
                     };
-                    (m_kind.to_string(), "Parametric Involute Gear Mesh".to_string())
+                    (
+                        m_kind.to_string(),
+                        "Parametric Involute Gear Mesh".to_string(),
+                    )
                 } else if trimmed.starts_with("screw!(") {
                     ("Screw".to_string(), "Threaded Fastener Mesh".to_string())
                 } else if trimmed.starts_with("airfoil!(") {
-                    ("Airfoil".to_string(), "NACA Aerodynamic Airfoil Wing".to_string())
+                    (
+                        "Airfoil".to_string(),
+                        "NACA Aerodynamic Airfoil Wing".to_string(),
+                    )
                 } else {
-                    ("Spring".to_string(), "Parametric Helical Spring".to_string())
+                    (
+                        "Spring".to_string(),
+                        "Parametric Helical Spring".to_string(),
+                    )
                 };
 
                 parsed_lines.push(ParsedLine {
@@ -1967,7 +2157,10 @@ pub fn inspect_mathematical_object(
             }
 
             // Check 3D Surface Viewport plot (plot3d, surface)
-            if trimmed.starts_with("plot3d(") || trimmed.starts_with("plot3d!(") || trimmed.starts_with("surface(") {
+            if trimmed.starts_with("plot3d(")
+                || trimmed.starts_with("plot3d!(")
+                || trimmed.starts_with("surface(")
+            {
                 let inner = trimmed
                     .trim_start_matches("plot3d!(")
                     .trim_start_matches("plot3d(")
@@ -2743,22 +2936,38 @@ pub fn inspect_mathematical_object(
                             if effective_domain.as_deref() == Some("GaussianIntegers") {
                                 let real_k = format!("{}_real", clean_expr);
                                 let imag_k = format!("{}_imag", clean_expr);
-                                let r = self.session.slider_values.get(&real_k).copied().unwrap_or(val);
-                                let i = self.session.slider_values.get(&imag_k).copied().unwrap_or(0.0);
+                                let r = self
+                                    .session
+                                    .slider_values
+                                    .get(&real_k)
+                                    .copied()
+                                    .unwrap_or(val);
+                                let i = self
+                                    .session
+                                    .slider_values
+                                    .get(&imag_k)
+                                    .copied()
+                                    .unwrap_or(0.0);
                                 eval_expr = format!("{} + {}i", r as i64, i as i64);
                             } else {
                                 eval_expr = format!("{}", val as i64);
                             }
                         }
 
-                        match urae::engine::numbertheory::decompose_universal(&eval_expr, effective_domain.as_deref()) {
+                        match urae::engine::numbertheory::decompose_universal(
+                            &eval_expr,
+                            effective_domain.as_deref(),
+                        ) {
                             Ok(res) => {
                                 let summary_text = if res.classification_summary.is_empty() {
                                     String::new()
                                 } else {
                                     format!("\n  • {}", res.classification_summary.join("\n  • "))
                                 };
-                                let unicode_output = format!("{} [{}]{}", res.formatted_equation, res.number_system, summary_text);
+                                let unicode_output = format!(
+                                    "{} [{}]{}",
+                                    res.formatted_equation, res.number_system, summary_text
+                                );
 
                                 parsed_lines.push(ParsedLine {
                                     line_idx: idx,
@@ -2769,7 +2978,10 @@ pub fn inspect_mathematical_object(
                                     simplified_unicode: Some(res.formatted_equation.clone()),
                                     substituted_latex: None,
                                     derivative_latex: None,
-                                    domain_info: Some(format!("Prime Decomposition in {}", res.number_system)),
+                                    domain_info: Some(format!(
+                                        "Prime Decomposition in {}",
+                                        res.number_system
+                                    )),
                                     error_msg: None,
                                     suggested_symbols: Vec::new(),
                                     is_function: false,
@@ -2791,7 +3003,10 @@ pub fn inspect_mathematical_object(
                                     line_idx: idx,
                                     raw_text: line_str.to_string(),
                                     kind: LineKind::Formula,
-                                    output_latex: format!("\\text{{Prime Decomposition Error: {}}}", e),
+                                    output_latex: format!(
+                                        "\\text{{Prime Decomposition Error: {}}}",
+                                        e
+                                    ),
                                     output_unicode: format!("Prime Decomposition Error: {}", e),
                                     simplified_unicode: None,
                                     substituted_latex: None,
@@ -2937,7 +3152,9 @@ pub fn inspect_mathematical_object(
 
                     if let Some(u) = &unit_suffix {
                         latex.push_str(&format!(" \\left[\\text{{{}}}\\right]", u));
-                        if !unicode.contains(&format!("[{}]", u)) { unicode.push_str(&format!(" [{}]", u)); }
+                        if !unicode.contains(&format!("[{}]", u)) {
+                            unicode.push_str(&format!(" [{}]", u));
+                        }
                     }
 
                     // Extract symbol dependencies

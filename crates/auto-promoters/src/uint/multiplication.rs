@@ -1,12 +1,18 @@
 use super::Uint;
 
-use std::{ops::{Mul, MulAssign}, iter::Product};
+use std::{
+    iter::Product,
+    ops::{Mul, MulAssign},
+};
 
-use num::{BigUint, ToPrimitive, traits::{ConstZero, ConstOne, CheckedMul}};
+use num::{
+    BigUint, ToPrimitive,
+    traits::{CheckedMul, ConstOne, ConstZero},
+};
 
 impl<U> Mul<U> for Uint
 where
-    U: Into<BigUint> + ToPrimitive
+    U: Into<BigUint> + ToPrimitive,
 {
     type Output = Self;
 
@@ -33,7 +39,8 @@ impl Product for Uint {
 }
 
 impl<U> MulAssign<U> for Uint
-where Self: Mul<U, Output = Self>
+where
+    Self: Mul<U, Output = Self>,
 {
     fn mul_assign(&mut self, rhs: U) {
         *self = std::mem::replace(self, Uint::ZERO) * rhs;
@@ -43,13 +50,13 @@ where Self: Mul<U, Output = Self>
 impl CheckedMul for Uint {
     fn checked_mul(&self, v: &Self) -> Option<Self> {
         match (self, v) {
-            (Uint::Machine(a), Uint::Machine(b)) => {
-                match a.checked_mul(b) {
-                    Some(res) => Some(Uint::Machine(res)),
-                    None => Some(Uint::from(BigUint::from(*a) * BigUint::from(*b))),
-                }
-            }
-            _ => Some(Uint::from(BigUint::from(self.clone()) * BigUint::from(v.clone()))),
+            (Uint::Machine(a), Uint::Machine(b)) => match a.checked_mul(b) {
+                Some(res) => Some(Uint::Machine(res)),
+                None => Some(Uint::from(BigUint::from(*a) * BigUint::from(*b))),
+            },
+            _ => Some(Uint::from(
+                BigUint::from(self.clone()) * BigUint::from(v.clone()),
+            )),
         }
     }
 }

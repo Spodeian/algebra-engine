@@ -1,5 +1,5 @@
-use algebra_core::domain::GoalDomain;
 use algebra_core::ExprGraph;
+use algebra_core::domain::GoalDomain;
 use algebra_engine::simplify::{DomainFeatureDetector, DynamicRuleSelector, Simplifier};
 
 #[test]

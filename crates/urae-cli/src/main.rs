@@ -5,7 +5,6 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|arg| arg == "--json" || arg == "-j") {
@@ -20,4 +19,3 @@ fn main() {
         urae_cli::run_repl();
     }
 }
-

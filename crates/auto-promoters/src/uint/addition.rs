@@ -1,12 +1,18 @@
 use super::Uint;
 
-use std::{ops::{Add, AddAssign}, iter::Sum};
+use std::{
+    iter::Sum,
+    ops::{Add, AddAssign},
+};
 
-use num::{BigUint, ToPrimitive, traits::{ConstZero, CheckedAdd}};
+use num::{
+    BigUint, ToPrimitive,
+    traits::{CheckedAdd, ConstZero},
+};
 
 impl<U> Add<U> for Uint
 where
-    U: Into<BigUint> + ToPrimitive
+    U: Into<BigUint> + ToPrimitive,
 {
     type Output = Self;
 
@@ -33,7 +39,8 @@ impl Sum for Uint {
 }
 
 impl<U> AddAssign<U> for Uint
-where Self: Add<U, Output = Self>
+where
+    Self: Add<U, Output = Self>,
 {
     fn add_assign(&mut self, rhs: U) {
         *self = std::mem::replace(self, Uint::ZERO) + rhs;
@@ -43,12 +50,10 @@ where Self: Add<U, Output = Self>
 impl CheckedAdd for Uint {
     fn checked_add(&self, v: &Self) -> Option<Self> {
         match (self, v) {
-            (Uint::Machine(a), Uint::Machine(b)) => {
-                match a.checked_add(b) {
-                    Some(res) => Some(Uint::Machine(res)),
-                    None => Some(Uint::Promoted(BigUint::from(*a) + BigUint::from(*b))),
-                }
-            }
+            (Uint::Machine(a), Uint::Machine(b)) => match a.checked_add(b) {
+                Some(res) => Some(Uint::Machine(res)),
+                None => Some(Uint::Promoted(BigUint::from(*a) + BigUint::from(*b))),
+            },
             (Uint::Promoted(a), Uint::Machine(b)) => Some(Uint::from(a + BigUint::from(*b))),
             (Uint::Machine(a), Uint::Promoted(b)) => Some(Uint::from(BigUint::from(*a) + b)),
             (Uint::Promoted(a), Uint::Promoted(b)) => Some(Uint::Promoted(a + b)),

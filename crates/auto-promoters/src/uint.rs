@@ -1,6 +1,9 @@
 use std::fmt;
 
-use num::{BigUint, One, Unsigned, Zero, traits::{ConstZero, ConstOne}, Integer};
+use num::{
+    BigUint, Integer, One, Unsigned, Zero,
+    traits::{ConstOne, ConstZero},
+};
 
 mod addition;
 mod division;
@@ -11,9 +14,9 @@ mod bits;
 mod convert;
 mod iter;
 mod power;
+mod roots;
 mod serde;
 mod shift;
-mod roots;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Uint {
@@ -111,7 +114,9 @@ impl Integer for Uint {
     }
 
     fn is_multiple_of(&self, other: &Self) -> bool {
-        if other.is_zero() { return false; }
+        if other.is_zero() {
+            return false;
+        }
         let a_big = BigUint::from(self.clone());
         let b_big = BigUint::from(other.clone());
         a_big.is_multiple_of(&b_big)

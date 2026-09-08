@@ -1,5 +1,5 @@
-use algebra_core::domain::GoalDomain;
 use algebra_core::ExprGraph;
+use algebra_core::domain::GoalDomain;
 use algebra_engine::lifting::DomainCompatibilityChecker;
 use algebra_engine::tropical::MinPlus;
 

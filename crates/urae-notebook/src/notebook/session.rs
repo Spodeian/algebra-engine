@@ -96,13 +96,21 @@ impl SymbolMetadata {
             }
             Some(2) => {
                 if self.tensor_shape.len() >= 2 {
-                    tags.push(format!("Matrix ({}×{})", self.tensor_shape[0], self.tensor_shape[1]));
+                    tags.push(format!(
+                        "Matrix ({}×{})",
+                        self.tensor_shape[0], self.tensor_shape[1]
+                    ));
                 } else {
                     tags.push("Matrix".to_string());
                 }
             }
             Some(r) => {
-                let dims = self.tensor_shape.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("×");
+                let dims = self
+                    .tensor_shape
+                    .iter()
+                    .map(|d| d.to_string())
+                    .collect::<Vec<_>>()
+                    .join("×");
                 if dims.is_empty() {
                     tags.push(format!("Rank-{} Tensor", r));
                 } else {
@@ -130,7 +138,10 @@ impl SymbolMetadata {
                     && tag != "Constant"
                     && tag != "Scalar"
                     && tag != &self.domain_type
-                    && !self.unit_str.as_ref().is_some_and(|u| tag == &format!("[{}]", u))
+                    && !self
+                        .unit_str
+                        .as_ref()
+                        .is_some_and(|u| tag == &format!("[{}]", u))
             })
             .collect()
     }
@@ -286,7 +297,7 @@ pub struct ParameterBuilderParams<'a> {
     pub is_param: bool,
     pub category: usize, // 0 = Standard/Discrete, 1 = Cayley-Dickson, 2 = Adjoined, 3 = Non-Archimedean, 4 = Modular/Galois, 5 = Matrix/Tensor
     pub standard_kind: usize, // 0 = Reals, 1 = Positive, 2 = NonNegative, 3 = Integers, 4 = Naturals, 5 = Rationals, 6 = Complex
-    pub cayley_depth: usize, // 0..=5
+    pub cayley_depth: usize,  // 0..=5
     pub adjoin_i: bool,
     pub adjoin_eps: bool,
     pub adjoin_j: bool,
@@ -302,7 +313,7 @@ pub struct ParameterBuilderParams<'a> {
     pub matrix_domain: &'a str,
     pub tensor_rank: u32,
     pub discrete_kind: usize, // 0 = Modulo, 1 = Integers/Step, 2 = GaloisField, 3 = Gaussian/Eisenstein, 4 = Boolean/BitVector
-    pub modulo_rep: usize, // 0 = Canonical [0, n-1], 1 = Balanced [-n/2, n/2], 2 = Units (Z/nZ)*
+    pub modulo_rep: usize,    // 0 = Canonical [0, n-1], 1 = Balanced [-n/2, n/2], 2 = Units (Z/nZ)*
     pub congruence_rem: i64,
     pub congruence_mod: u64,
     pub has_congruence: bool,
@@ -355,8 +366,16 @@ impl<'a> Default for ParameterBuilderParams<'a> {
 
 /// Universal code generator for Parameter & Variable Builder covering all mathematical number systems.
 pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderParams) -> String {
-    let clean_var = if params.var.trim().is_empty() { "x" } else { params.var.trim() };
-    let role_str = if params.is_param { "Parameter" } else { "Variable" };
+    let clean_var = if params.var.trim().is_empty() {
+        "x"
+    } else {
+        params.var.trim()
+    };
+    let role_str = if params.is_param {
+        "Parameter"
+    } else {
+        "Variable"
+    };
 
     match params.category {
         0 => {
@@ -376,19 +395,30 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                 let mut bound_parts = Vec::new();
                 for (coord_name, min_v, max_v, enabled) in params.coords {
                     if *enabled {
-                        bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                        bound_parts.push(format!(
+                            "{}({}) in [{:.2}, {:.2}]",
+                            coord_name, clean_var, min_v, max_v
+                        ));
                     }
                 }
                 if bound_parts.is_empty() {
                     format!("{}: {} in Complex", clean_var, role_str)
                 } else {
-                    format!("{}: {} in Complex where {}", clean_var, role_str, bound_parts.join(", "))
+                    format!(
+                        "{}: {} in Complex where {}",
+                        clean_var,
+                        role_str,
+                        bound_parts.join(", ")
+                    )
                 }
             } else {
                 // Scalar domains (Reals, Integers, Positive, etc.)
                 if let Some((_, min_v, max_v, enabled)) = params.coords.first() {
                     if *enabled {
-                        format!("{}: {} in {} [{:.2}, {:.2}]", clean_var, role_str, domain_name, min_v, max_v)
+                        format!(
+                            "{}: {} in {} [{:.2}, {:.2}]",
+                            clean_var, role_str, domain_name, min_v, max_v
+                        )
                     } else {
                         format!("{}: {} in {}", clean_var, role_str, domain_name)
                     }
@@ -411,22 +441,37 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
             let mut bound_parts = Vec::new();
             for (coord_name, min_v, max_v, enabled) in params.coords {
                 if *enabled {
-                    bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                    bound_parts.push(format!(
+                        "{}({}) in [{:.2}, {:.2}]",
+                        coord_name, clean_var, min_v, max_v
+                    ));
                 }
             }
 
             if bound_parts.is_empty() {
-                format!("{}: {} in CayleyDickson(depth={}) /* {} */", clean_var, role_str, params.cayley_depth, class_name)
+                format!(
+                    "{}: {} in CayleyDickson(depth={}) /* {} */",
+                    clean_var, role_str, params.cayley_depth, class_name
+                )
             } else {
                 format!(
                     "{}: {} in CayleyDickson(depth={}) /* {} */ where {}",
-                    clean_var, role_str, params.cayley_depth, class_name, bound_parts.join(", ")
+                    clean_var,
+                    role_str,
+                    params.cayley_depth,
+                    class_name,
+                    bound_parts.join(", ")
                 )
             }
         }
         2 => {
             // Category 2: Adjoin Elements / Generators to Base Field
-            let algebra_desc = match (params.adjoin_i, params.adjoin_eps, params.adjoin_j, params.adjoin_clifford) {
+            let algebra_desc = match (
+                params.adjoin_i,
+                params.adjoin_eps,
+                params.adjoin_j,
+                params.adjoin_clifford,
+            ) {
                 (true, false, false, false) => "Complex",
                 (false, true, false, false) => "Dual(1, epsilon)",
                 (true, true, false, false) => "DualComplex(1, i, epsilon)",
@@ -439,24 +484,39 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
             let mut bound_parts = Vec::new();
             for (coord_name, min_v, max_v, enabled) in params.coords {
                 if *enabled {
-                    bound_parts.push(format!("{}({}) in [{:.2}, {:.2}]", coord_name, clean_var, min_v, max_v));
+                    bound_parts.push(format!(
+                        "{}({}) in [{:.2}, {:.2}]",
+                        coord_name, clean_var, min_v, max_v
+                    ));
                 }
             }
 
             if bound_parts.is_empty() {
                 format!("{}: {} in {}", clean_var, role_str, algebra_desc)
             } else {
-                format!("{}: {} in {} where {}", clean_var, role_str, algebra_desc, bound_parts.join(", "))
+                format!(
+                    "{}: {} in {} where {}",
+                    clean_var,
+                    role_str,
+                    algebra_desc,
+                    bound_parts.join(", ")
+                )
             }
         }
         3 => {
             // Category 3: Non-Archimedean & Infinitesimals (p-Adics, Surreals, Adeles)
             match params.standard_kind {
                 0 => {
-                    format!("{}: {} in PAdics(p={}) where valuation({}) >= {}", clean_var, role_str, params.padic_prime, clean_var, params.padic_valuation)
+                    format!(
+                        "{}: {} in PAdics(p={}) where valuation({}) >= {}",
+                        clean_var, role_str, params.padic_prime, clean_var, params.padic_valuation
+                    )
                 }
                 1 => {
-                    format!("{}: {} in Surreals where generation({}) <= {}", clean_var, role_str, clean_var, params.surreal_generation)
+                    format!(
+                        "{}: {} in Surreals where generation({}) <= {}",
+                        clean_var, role_str, clean_var, params.surreal_generation
+                    )
                 }
                 _ => {
                     format!("{}: {} in Adeles", clean_var, role_str)
@@ -475,7 +535,10 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                     // Modular Arithmetic Z/nZ
                     let mod_n = params.modulo_n.max(2);
                     let cong_str = if params.has_congruence {
-                        format!(", {} == {} (mod {})", clean_var, params.congruence_rem, params.congruence_mod)
+                        format!(
+                            ", {} == {} (mod {})",
+                            clean_var, params.congruence_rem, params.congruence_mod
+                        )
                     } else {
                         String::new()
                     };
@@ -483,17 +546,31 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                     match params.modulo_rep {
                         0 => {
                             // Canonical residue: [0, n-1]
-                            format!("{}: {} in Modulo(n={}) where {} in [0, {}]{}", clean_var, role_str, mod_n, clean_var, mod_n.saturating_sub(1), cong_str)
+                            format!(
+                                "{}: {} in Modulo(n={}) where {} in [0, {}]{}",
+                                clean_var,
+                                role_str,
+                                mod_n,
+                                clean_var,
+                                mod_n.saturating_sub(1),
+                                cong_str
+                            )
                         }
                         1 => {
                             // Balanced / Symmetric residue: [-lower, upper]
                             let upper = (mod_n as i64) / 2;
                             let lower = -((mod_n as i64 - 1) / 2);
-                            format!("{}: {} in Modulo(n={}, symmetric=true) where {} in [{}, {}]{}", clean_var, role_str, mod_n, clean_var, lower, upper, cong_str)
+                            format!(
+                                "{}: {} in Modulo(n={}, symmetric=true) where {} in [{}, {}]{}",
+                                clean_var, role_str, mod_n, clean_var, lower, upper, cong_str
+                            )
                         }
                         _ => {
                             // Units multiplicative group (Z/nZ)*
-                            format!("{}: {} in ModuloUnits(n={}) /* (Z/{}Z)* gcd({}, {})=1 */{}", clean_var, role_str, mod_n, mod_n, clean_var, mod_n, cong_str)
+                            format!(
+                                "{}: {} in ModuloUnits(n={}) /* (Z/{}Z)* gcd({}, {})=1 */{}",
+                                clean_var, role_str, mod_n, mod_n, clean_var, mod_n, cong_str
+                            )
                         }
                     }
                 }
@@ -503,28 +580,46 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                     let max_v = params.coords.first().map(|c| c.2 as i64).unwrap_or(100);
                     match params.integer_parity {
                         1 => {
-                            format!("{}: {} in EvenIntegers [{}, {}]", clean_var, role_str, min_v, max_v)
+                            format!(
+                                "{}: {} in EvenIntegers [{}, {}]",
+                                clean_var, role_str, min_v, max_v
+                            )
                         }
                         2 => {
-                            format!("{}: {} in OddIntegers [{}, {}]", clean_var, role_str, min_v, max_v)
+                            format!(
+                                "{}: {} in OddIntegers [{}, {}]",
+                                clean_var, role_str, min_v, max_v
+                            )
                         }
                         3 => {
                             let k = params.integer_multiple.max(2);
-                            format!("{}: {} in Integers where {} in {}*Integers [{}, {}]", clean_var, role_str, clean_var, k, min_v, max_v)
+                            format!(
+                                "{}: {} in Integers where {} in {}*Integers [{}, {}]",
+                                clean_var, role_str, clean_var, k, min_v, max_v
+                            )
                         }
                         _ => {
                             let step = params.integer_step.max(1);
                             if step > 1 {
-                                format!("{}: {} in Integers [{}, {}] step {}", clean_var, role_str, min_v, max_v, step)
+                                format!(
+                                    "{}: {} in Integers [{}, {}] step {}",
+                                    clean_var, role_str, min_v, max_v, step
+                                )
                             } else {
-                                format!("{}: {} in Integers [{}, {}]", clean_var, role_str, min_v, max_v)
+                                format!(
+                                    "{}: {} in Integers [{}, {}]",
+                                    clean_var, role_str, min_v, max_v
+                                )
                             }
                         }
                     }
                 }
                 2 => {
                     // Finite Galois Field GF(p^k)
-                    format!("{}: {} in GaloisField(prime={}, power={})", clean_var, role_str, params.galois_prime, params.galois_power)
+                    format!(
+                        "{}: {} in GaloisField(prime={}, power={})",
+                        clean_var, role_str, params.galois_prime, params.galois_power
+                    )
                 }
                 3 => {
                     // Discrete Complex Lattices (Gaussian Z[i] & Eisenstein Z[omega])
@@ -536,12 +631,26 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                     if params.lattice_kind == 0 {
                         format!(
                             "{}: {} in GaussianIntegers /* Z[i] */ where Re({}) in [{}, {}], Im({}) in [{}, {}]",
-                            clean_var, role_str, clean_var, min_re, max_re, clean_var, min_im, max_im
+                            clean_var,
+                            role_str,
+                            clean_var,
+                            min_re,
+                            max_re,
+                            clean_var,
+                            min_im,
+                            max_im
                         )
                     } else {
                         format!(
                             "{}: {} in EisensteinIntegers /* Z[omega] */ where Re({}) in [{}, {}], Im({}) in [{}, {}]",
-                            clean_var, role_str, clean_var, min_re, max_re, clean_var, min_im, max_im
+                            clean_var,
+                            role_str,
+                            clean_var,
+                            min_re,
+                            max_re,
+                            clean_var,
+                            min_im,
+                            max_im
                         )
                     }
                 }
@@ -550,7 +659,10 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
                     if params.bit_width <= 1 {
                         format!("{}: {} in Boolean", clean_var, role_str)
                     } else {
-                        format!("{}: {} in BitVector(width={}, signed={})", clean_var, role_str, params.bit_width, params.bit_signed)
+                        format!(
+                            "{}: {} in BitVector(width={}, signed={})",
+                            clean_var, role_str, params.bit_width, params.bit_signed
+                        )
                     }
                 }
             }
@@ -558,11 +670,25 @@ pub fn generate_universal_parameter_builder_syntax(params: &ParameterBuilderPara
         _ => {
             // Category 5: Matrix & Multilinear Tensor Spaces
             if params.standard_kind == 0 {
-                let dom = if params.matrix_domain.trim().is_empty() { "Reals" } else { params.matrix_domain.trim() };
-                format!("{}: {} in Matrix(rows={}, cols={}, domain={})", clean_var, role_str, params.matrix_rows, params.matrix_cols, dom)
+                let dom = if params.matrix_domain.trim().is_empty() {
+                    "Reals"
+                } else {
+                    params.matrix_domain.trim()
+                };
+                format!(
+                    "{}: {} in Matrix(rows={}, cols={}, domain={})",
+                    clean_var, role_str, params.matrix_rows, params.matrix_cols, dom
+                )
             } else {
-                let dom = if params.matrix_domain.trim().is_empty() { "Reals" } else { params.matrix_domain.trim() };
-                format!("{}: {} in Tensor(rank={}, domain={})", clean_var, role_str, params.tensor_rank, dom)
+                let dom = if params.matrix_domain.trim().is_empty() {
+                    "Reals"
+                } else {
+                    params.matrix_domain.trim()
+                };
+                format!(
+                    "{}: {} in Tensor(rank={}, domain={})",
+                    clean_var, role_str, params.tensor_rank, dom
+                )
             }
         }
     }
@@ -660,7 +786,10 @@ pub fn generate_tensor_syntax(
 
     match rank {
         0 => {
-            let val = elements.and_then(|e| e.first()).map(|s| s.as_str()).unwrap_or("0");
+            let val = elements
+                .and_then(|e| e.first())
+                .map(|s| s.as_str())
+                .unwrap_or("0");
             format!("{}: Scalar = {}", name_prefix, val)
         }
         1 => {
@@ -702,7 +831,11 @@ pub fn generate_tensor_syntax(
             }
         }
         _ => {
-            let shape_str = shape.iter().map(|d| d.to_string()).collect::<Vec<_>>().join(", ");
+            let shape_str = shape
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
             format!(
                 "{}: Tensor = tensor(shape = [{}], preset = \"{}\")",
                 name_prefix, shape_str, preset
@@ -731,7 +864,10 @@ pub fn generate_pde_bc_syntax(
 
     let mut parts = Vec::new();
     // 1. PDE Classification Header
-    parts.push(format!("// PDE Model: {} for {}({}{})", pde_kind, u, spat, t_part));
+    parts.push(format!(
+        "// PDE Model: {} for {}({}{})",
+        pde_kind, u, spat, t_part
+    ));
 
     // 2. Boundary Conditions
     if !bcs.is_empty() {
@@ -739,7 +875,10 @@ pub fn generate_pde_bc_syntax(
             parts.push(format!("bc: {} | {}", bc_kind, bc));
         }
     } else {
-        parts.push(format!("bc: {} | {}(0{}) = 0, {}(L{}) = 0", bc_kind, u, t_part, u, t_part));
+        parts.push(format!(
+            "bc: {} | {}(0{}) = 0, {}(L{}) = 0",
+            bc_kind, u, t_part, u, t_part
+        ));
     }
 
     // 3. Initial Conditions (if time-dependent)
@@ -948,8 +1087,7 @@ pub struct SessionData {
 
 /// Export `SessionData` to zlib-compressed BSON binary blob
 pub fn export_session_to_compressed_bson(session: &SessionData) -> Result<Vec<u8>, String> {
-    let raw_bson =
-        bson::to_vec(session).map_err(|e| format!("BSON serialization error: {}", e))?;
+    let raw_bson = bson::to_vec(session).map_err(|e| format!("BSON serialization error: {}", e))?;
     let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&raw_bson, 6);
     Ok(compressed)
 }

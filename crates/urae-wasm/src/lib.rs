@@ -3,9 +3,9 @@
 //! WebAssembly edge compilation targets providing near-zero cold start latency
 //! execution of URAE symbolic differentiation, simplification, equation solving, and JSON API payloads.
 
+use algebra_core::ExprGraph;
 use algebra_core::format::{Formatter, LatexFormatter, UnicodeFormatter};
 use algebra_core::parser::ExprParser;
-use algebra_core::ExprGraph;
 use algebra_engine::calculus::SymbolicCalculus;
 use algebra_engine::simplify::Simplifier;
 use algebra_engine::solver::SymbolicSolver;

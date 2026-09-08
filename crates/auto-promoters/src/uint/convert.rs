@@ -2,19 +2,25 @@ use super::Uint;
 
 use std::iter::FromIterator;
 
-use num::{bigint::ParseBigIntError, BigUint, FromPrimitive, ToPrimitive, Num, traits::ConstZero};
+use num::{BigUint, FromPrimitive, Num, ToPrimitive, bigint::ParseBigIntError, traits::ConstZero};
 
 impl FromPrimitive for Uint {
     fn from_i64(value: i64) -> Option<Self> {
         if value >= 0 {
-            value.to_usize().and_then(|v| Some(Uint::Machine(v))).or_else(|| BigUint::from_i64(value).map(Uint::Promoted))
+            value
+                .to_usize()
+                .and_then(|v| Some(Uint::Machine(v)))
+                .or_else(|| BigUint::from_i64(value).map(Uint::Promoted))
         } else {
             None
         }
     }
 
     fn from_u64(value: u64) -> Option<Self> {
-        value.to_usize().and_then(|v| Some(Uint::Machine(v))).or_else(|| BigUint::from_u64(value).map(Uint::Promoted))
+        value
+            .to_usize()
+            .and_then(|v| Some(Uint::Machine(v)))
+            .or_else(|| BigUint::from_u64(value).map(Uint::Promoted))
     }
 }
 
@@ -42,7 +48,10 @@ impl From<usize> for Uint {
 
 impl From<BigUint> for Uint {
     fn from(value: BigUint) -> Self {
-        value.to_usize().and_then(|v| Some(Uint::Machine(v))).unwrap_or(Uint::Promoted(value))
+        value
+            .to_usize()
+            .and_then(|v| Some(Uint::Machine(v)))
+            .unwrap_or(Uint::Promoted(value))
     }
 }
 

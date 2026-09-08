@@ -27,10 +27,7 @@ fn test_siso_vs_mimo_classification() {
         vec![0.0, -0.2, 25.0, 0.0],
     ];
     let b_mimo = vec![vec![0.0], vec![1.0], vec![0.0], vec![2.0]];
-    let c_mimo = vec![
-        vec![1.0, 0.0, 0.0, 0.0],
-        vec![0.0, 0.0, 1.0, 0.0],
-    ];
+    let c_mimo = vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 0.0, 1.0, 0.0]];
     let d_mimo = vec![vec![0.0], vec![0.0]];
     let sys_mimo = StateSpaceSystem::new(a_mimo, b_mimo, c_mimo, d_mimo);
 
@@ -113,7 +110,9 @@ fn test_ackermann_pole_placement() {
     let d = vec![vec![0.0]];
     let sys = StateSpaceSystem::new(a, b, c, d);
 
-    let k = sys.pole_placement_ackermann(&[-2.0, -3.0]).expect("Pole placement should succeed");
+    let k = sys
+        .pole_placement_ackermann(&[-2.0, -3.0])
+        .expect("Pole placement should succeed");
     assert_eq!(k.len(), 2);
     assert!((k[0] - 6.0).abs() < 1e-6, "Expected k0 = 6.0, got {}", k[0]);
     assert!((k[1] - 5.0).abs() < 1e-6, "Expected k1 = 5.0, got {}", k[1]);
@@ -133,10 +132,22 @@ fn test_frequency_response_bode_eval() {
 
     let (mag_dc, phase_dc) = sys.eval_frequency_response_siso(0.001);
     assert!(mag_dc.abs() < 0.1, "Expected ~0 dB at DC, got {}", mag_dc);
-    assert!(phase_dc.abs() < 1.0, "Expected ~0 deg at DC, got {}", phase_dc);
+    assert!(
+        phase_dc.abs() < 1.0,
+        "Expected ~0 deg at DC, got {}",
+        phase_dc
+    );
 
     // At resonance w = 2.0:
     let (mag_res, phase_res) = sys.eval_frequency_response_siso(2.0);
-    assert!(mag_res.abs() < 0.5, "Expected ~0 dB at w=2 (Q=1), got {}", mag_res);
-    assert!((phase_res - (-90.0)).abs() < 1.0, "Expected -90 deg at resonance, got {}", phase_res);
+    assert!(
+        mag_res.abs() < 0.5,
+        "Expected ~0 dB at w=2 (Q=1), got {}",
+        mag_res
+    );
+    assert!(
+        (phase_res - (-90.0)).abs() < 1.0,
+        "Expected -90 deg at resonance, got {}",
+        phase_res
+    );
 }

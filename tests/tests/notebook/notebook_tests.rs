@@ -105,7 +105,7 @@ fn test_notebook_equation_solving() {
 
 #[test]
 fn test_permissive_notations_and_background_simplification() {
-    use urae_notebook::notebook::{parse_permissive_solve_command, NotebookState};
+    use urae_notebook::notebook::{NotebookState, parse_permissive_solve_command};
 
     // 1. Verify permissive solve command parser
     assert_eq!(
@@ -295,16 +295,20 @@ fn test_advanced_algebra_notation_clifford_and_matrix() {
     state.session.raw_document_text = math_doc;
     state.evaluate_all();
 
-    assert!(state.parsed_lines[0]
-        .domain_info
-        .as_ref()
-        .map(|d| d.to_lowercase().contains("clifford"))
-        .unwrap_or(false));
-    assert!(state.parsed_lines[1]
-        .domain_info
-        .as_ref()
-        .map(|d| d.to_lowercase().contains("matrix"))
-        .unwrap_or(false));
+    assert!(
+        state.parsed_lines[0]
+            .domain_info
+            .as_ref()
+            .map(|d| d.to_lowercase().contains("clifford"))
+            .unwrap_or(false)
+    );
+    assert!(
+        state.parsed_lines[1]
+            .domain_info
+            .as_ref()
+            .map(|d| d.to_lowercase().contains("matrix"))
+            .unwrap_or(false)
+    );
 }
 
 #[test]

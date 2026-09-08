@@ -162,11 +162,8 @@ pub trait SymbolicSolver {
     ) -> AlgebraResult<ExprId>;
 
     /// Solve polynomial equations using exact radicals (binomial, biquadratic, reciprocal, Cardano cubic, Bring radicals, or RootOf).
-    fn solve_polynomial_radicals(
-        &self,
-        eq: ExprId,
-        target: SymbolId,
-    ) -> AlgebraResult<Vec<ExprId>>;
+    fn solve_polynomial_radicals(&self, eq: ExprId, target: SymbolId)
+    -> AlgebraResult<Vec<ExprId>>;
 }
 
 impl SymbolicSolver for ExprGraph {
@@ -421,9 +418,8 @@ impl SymbolicSolver for ExprGraph {
         }
 
         // Pure Binomial: c_n * x^n + c_0 = 0
-        let is_pure_binomial = deg >= 2
-            && (1..deg).all(|k| coeffs[k].abs() < 1e-12)
-            && coeffs[0].abs() > 1e-12;
+        let is_pure_binomial =
+            deg >= 2 && (1..deg).all(|k| coeffs[k].abs() < 1e-12) && coeffs[0].abs() > 1e-12;
 
         if is_pure_binomial {
             let r_val = -coeffs[0] / coeffs[deg];
@@ -456,7 +452,11 @@ impl SymbolicSolver for ExprGraph {
                 }
             } else if deg == 3 {
                 let one_third = self.div(self.integer(1), self.integer(3));
-                let root_val = if r_val >= 0.0 { r_val.cbrt() } else { -(-r_val).cbrt() };
+                let root_val = if r_val >= 0.0 {
+                    r_val.cbrt()
+                } else {
+                    -(-r_val).cbrt()
+                };
                 if (root_val - root_val.round()).abs() < 1e-10 {
                     let r_int = root_val.round() as i64;
                     let r0 = self.integer(r_int);
@@ -507,7 +507,11 @@ impl SymbolicSolver for ExprGraph {
                 }
             } else if deg == 5 {
                 let one_fifth = self.div(self.integer(1), self.integer(5));
-                let root_val = if r_val >= 0.0 { r_val.powf(0.2) } else { -(-r_val).powf(0.2) };
+                let root_val = if r_val >= 0.0 {
+                    r_val.powf(0.2)
+                } else {
+                    -(-r_val).powf(0.2)
+                };
                 if (root_val - root_val.round()).abs() < 1e-10 {
                     let r_int = root_val.round() as i64;
                     return Ok(vec![self.integer(r_int)]);
@@ -693,9 +697,27 @@ impl SymbolicSolver for ExprGraph {
         // Degree 3: Cardano's Cubic Formula (with rational root factoring first)
         if deg == 3 {
             let test_candidates = [
-                0.0, 1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0, 5.0, -5.0,
-                0.5, -0.5, 1.0 / 3.0, -1.0 / 3.0, 2.0 / 3.0, -2.0 / 3.0,
-                0.25, -0.25, 0.75, -0.75,
+                0.0,
+                1.0,
+                -1.0,
+                2.0,
+                -2.0,
+                3.0,
+                -3.0,
+                4.0,
+                -4.0,
+                5.0,
+                -5.0,
+                0.5,
+                -0.5,
+                1.0 / 3.0,
+                -1.0 / 3.0,
+                2.0 / 3.0,
+                -2.0 / 3.0,
+                0.25,
+                -0.25,
+                0.75,
+                -0.75,
             ];
             let mut found_rational: Option<f64> = None;
             for &cand in &test_candidates {
@@ -825,10 +847,7 @@ impl SymbolicSolver for ExprGraph {
         }
 
         // Degree 5: Bring Radical check: c4 == 0, c3 == 0, c2 == 0
-        if deg == 5
-            && coeffs[4].abs() < 1e-12
-            && coeffs[3].abs() < 1e-12
-            && coeffs[2].abs() < 1e-12
+        if deg == 5 && coeffs[4].abs() < 1e-12 && coeffs[3].abs() < 1e-12 && coeffs[2].abs() < 1e-12
         {
             let p = coeffs[1] / coeffs[5];
             let q = coeffs[0] / coeffs[5];
@@ -859,9 +878,29 @@ impl SymbolicSolver for ExprGraph {
 
         // General Rational Root Theorem for higher degree polynomials
         let test_candidates = [
-            0.0, 1.0, -1.0, 2.0, -2.0, 3.0, -3.0, 4.0, -4.0, 5.0, -5.0,
-            0.5, -0.5, 1.0 / 3.0, -1.0 / 3.0, 2.0 / 3.0, -2.0 / 3.0,
-            0.25, -0.25, 0.75, -0.75, 1.0 / 5.0, -1.0 / 5.0,
+            0.0,
+            1.0,
+            -1.0,
+            2.0,
+            -2.0,
+            3.0,
+            -3.0,
+            4.0,
+            -4.0,
+            5.0,
+            -5.0,
+            0.5,
+            -0.5,
+            1.0 / 3.0,
+            -1.0 / 3.0,
+            2.0 / 3.0,
+            -2.0 / 3.0,
+            0.25,
+            -0.25,
+            0.75,
+            -0.75,
+            1.0 / 5.0,
+            -1.0 / 5.0,
         ];
         let mut rational_roots = Vec::new();
         for &cand in &test_candidates {
@@ -883,7 +922,10 @@ impl SymbolicSolver for ExprGraph {
         }
 
         // Exact Symbolic RootOf representation before lossy fallback
-        let target_name = self.symbols.resolve(target).unwrap_or_else(|| "x".to_string());
+        let target_name = self
+            .symbols
+            .resolve(target)
+            .unwrap_or_else(|| "x".to_string());
         let target_node = self.symbol(&target_name);
         let mut root_of_nodes = Vec::new();
         for k in 1..=deg {

@@ -98,7 +98,11 @@ impl DiffEqClassifier {
         let mut sorted_indep: Vec<String> = indep_vars.into_iter().collect();
         sorted_indep.sort();
         if sorted_indep.is_empty() {
-            sorted_indep.push(if kind == DiffEqKind::Pde { "x".to_string() } else { "t".to_string() });
+            sorted_indep.push(if kind == DiffEqKind::Pde {
+                "x".to_string()
+            } else {
+                "t".to_string()
+            });
             if kind == DiffEqKind::Pde {
                 sorted_indep.push("t".to_string());
             }
@@ -207,7 +211,9 @@ impl DiffEqClassifier {
             }
             ExprKind::Function { name, args } => {
                 if let Some(fn_name) = graph.symbols.resolve(*name) {
-                    if ["sin", "cos", "tan", "exp", "log", "sinh", "cosh"].contains(&fn_name.as_str()) {
+                    if ["sin", "cos", "tan", "exp", "log", "sinh", "cosh"]
+                        .contains(&fn_name.as_str())
+                    {
                         for &arg in args {
                             if Self::contains_non_constant_symbol(graph, arg) {
                                 *has_nonlinear_dep = true;
@@ -269,9 +275,9 @@ impl DiffEqClassifier {
                 }
             }
             ExprKind::Derivative { .. } => true,
-            ExprKind::Add(terms) | ExprKind::Mul(terms) => {
-                terms.iter().any(|&t| Self::contains_non_constant_symbol(graph, t))
-            }
+            ExprKind::Add(terms) | ExprKind::Mul(terms) => terms
+                .iter()
+                .any(|&t| Self::contains_non_constant_symbol(graph, t)),
             ExprKind::Sub(a, b) | ExprKind::Div(a, b) => {
                 Self::contains_non_constant_symbol(graph, *a)
                     || Self::contains_non_constant_symbol(graph, *b)
@@ -281,9 +287,9 @@ impl DiffEqClassifier {
                 Self::contains_non_constant_symbol(graph, *b)
                     || Self::contains_non_constant_symbol(graph, *e)
             }
-            ExprKind::Function { args, .. } => {
-                args.iter().any(|&a| Self::contains_non_constant_symbol(graph, a))
-            }
+            ExprKind::Function { args, .. } => args
+                .iter()
+                .any(|&a| Self::contains_non_constant_symbol(graph, a)),
             _ => false,
         }
     }
@@ -291,13 +297,27 @@ impl DiffEqClassifier {
     fn contains_symbol_name(graph: &ExprGraph, node_id: ExprId, target: &str) -> bool {
         let node = graph.get(node_id);
         match &node.kind {
-            ExprKind::Symbol(s) => graph.symbols.resolve(*s).map(|name| name == target).unwrap_or(false),
+            ExprKind::Symbol(s) => graph
+                .symbols
+                .resolve(*s)
+                .map(|name| name == target)
+                .unwrap_or(false),
             ExprKind::Derivative { expr, .. } => Self::contains_symbol_name(graph, *expr, target),
-            ExprKind::Add(terms) | ExprKind::Mul(terms) => terms.iter().any(|&t| Self::contains_symbol_name(graph, t, target)),
-            ExprKind::Sub(a, b) | ExprKind::Div(a, b) => Self::contains_symbol_name(graph, *a, target) || Self::contains_symbol_name(graph, *b, target),
+            ExprKind::Add(terms) | ExprKind::Mul(terms) => terms
+                .iter()
+                .any(|&t| Self::contains_symbol_name(graph, t, target)),
+            ExprKind::Sub(a, b) | ExprKind::Div(a, b) => {
+                Self::contains_symbol_name(graph, *a, target)
+                    || Self::contains_symbol_name(graph, *b, target)
+            }
             ExprKind::Neg(inner) => Self::contains_symbol_name(graph, *inner, target),
-            ExprKind::Pow(b, e) => Self::contains_symbol_name(graph, *b, target) || Self::contains_symbol_name(graph, *e, target),
-            ExprKind::Function { args, .. } => args.iter().any(|&a| Self::contains_symbol_name(graph, a, target)),
+            ExprKind::Pow(b, e) => {
+                Self::contains_symbol_name(graph, *b, target)
+                    || Self::contains_symbol_name(graph, *e, target)
+            }
+            ExprKind::Function { args, .. } => args
+                .iter()
+                .any(|&a| Self::contains_symbol_name(graph, a, target)),
             _ => false,
         }
     }

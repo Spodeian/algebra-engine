@@ -119,7 +119,7 @@ pub use noneuclidean::{
     HyperbolicTessellation, HyperbolicTriangle, PoincareDiskPoint, SchwarzChristoffel,
     SphericalPoint, UpperHalfPlanePoint,
 };
-pub use numbertheory::{extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
+pub use numbertheory::{ContinuedFraction, extended_gcd, is_prime, legendre_symbol};
 pub use numeric::{BigValue, EvalContext, NumericalEval};
 pub use ode::{
     ButcherTableau, NumericalOdeConfig, NumericalOdeMethod, NumericalOdeSolver, OdeTrajectory,
@@ -166,7 +166,7 @@ pub use tda::{
 pub use tensor::SymbolicTensor;
 pub use topology::SimplicialComplex;
 pub use transforms::SymbolicTransforms;
-pub use tropical::{log_sum_exp, MaxPlus, MinPlus, TropicalMatrix};
+pub use tropical::{MaxPlus, MinPlus, TropicalMatrix, log_sum_exp};
 pub use visualizer::{ColorRgba, DomainColoring, RiemannSurface, VectorFieldVisualizer};
 pub use weyl_dmodules::{
     AlmkvistZeilberger, WeylDOperator, WeylGrobnerBasis, WeylMonomial, WeylTerm,

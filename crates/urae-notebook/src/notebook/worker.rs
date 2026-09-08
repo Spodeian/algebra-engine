@@ -12,7 +12,7 @@ use crate::notebook::parser::ParsedLine;
 use crate::notebook::session::SymbolMetadata;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Instant;

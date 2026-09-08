@@ -1,6 +1,6 @@
+use algebra_core::ExprGraph;
 use algebra_core::operation::*;
 use algebra_core::parser::parse_operation;
-use algebra_core::ExprGraph;
 use algebra_engine::executor::{ExecutionContext, OperationExecutor};
 
 #[test]
@@ -161,7 +161,9 @@ fn test_executor_control_and_system() {
     let op_help = parse_operation("help");
     let res_help = OperationExecutor::execute(&graph, &op_help, &ctx);
     assert!(!res_help.is_error);
-    assert!(res_help
-        .output_text
-        .contains("Universal Rust Algebra Engine"));
+    assert!(
+        res_help
+            .output_text
+            .contains("Universal Rust Algebra Engine")
+    );
 }

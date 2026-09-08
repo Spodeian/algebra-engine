@@ -27,7 +27,9 @@ fn main() -> Result<(), eframe::Error> {
     }));
 
     if std::env::var("ANTIGRAVITY").is_ok() || std::env::var("VSCODE_PID").is_ok() {
-        urae_notebook::log_info("Tip: Launching from external PowerShell / Windows Terminal or Windows Explorer enables full native desktop window interaction.");
+        urae_notebook::log_info(
+            "Tip: Launching from external PowerShell / Windows Terminal or Windows Explorer enables full native desktop window interaction.",
+        );
     }
 
     urae_notebook::run_gui()

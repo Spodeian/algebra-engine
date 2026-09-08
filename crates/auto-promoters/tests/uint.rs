@@ -1,5 +1,5 @@
 use auto_promoters::uint::Uint;
-use num::{integer::Roots, traits::Pow, BigUint, Integer, One, Zero};
+use num::{BigUint, Integer, One, Zero, integer::Roots, traits::Pow};
 
 #[test]
 fn test_uint_machine_arithmetic() {

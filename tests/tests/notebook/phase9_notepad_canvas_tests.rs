@@ -2,9 +2,9 @@
 
 use urae_notebook::app::{UraeNotebookApp, ViewMode};
 use urae_notebook::notebook::{
+    MatrixPresetKind, NotebookSettings, NotebookState, ReactiveComputeMode, SymbolRole,
     generate_branch_cut_syntax, generate_interval_syntax, generate_matrix_syntax,
-    generate_ode_bc_syntax, generate_physical_unit_syntax, MatrixPresetKind, NotebookSettings,
-    NotebookState, ReactiveComputeMode, SymbolRole,
+    generate_ode_bc_syntax, generate_physical_unit_syntax,
 };
 
 #[test]
@@ -73,7 +73,10 @@ fn test_phase9_insert_text_at_active_line() {
     state.start_editing_line(0);
     state.insert_text_at_active_line("a = 5.00 [m]");
 
-    assert_eq!(state.session.raw_document_text, "x: Variable\na = 5.00 [m]\nf(x) = x^2");
+    assert_eq!(
+        state.session.raw_document_text,
+        "x: Variable\na = 5.00 [m]\nf(x) = x^2"
+    );
     assert_eq!(state.parsed_lines[1].raw_text, "a = 5.00 [m]");
 
     // Insert without focus (appends at end)
@@ -207,7 +210,9 @@ fn test_phase9_full_notepad_app_initialization() {
 
 #[test]
 fn test_universal_parameter_builder_all_number_systems() {
-    use urae_notebook::notebook::{generate_universal_parameter_builder_syntax, ParameterBuilderParams};
+    use urae_notebook::notebook::{
+        ParameterBuilderParams, generate_universal_parameter_builder_syntax,
+    };
 
     // 1. Standard Reals with bound
     let coords_scalar = vec![("Bound".to_string(), 0.0, 10.0, true)];
@@ -343,7 +348,9 @@ s in Surreals
 m in Modulo
 F in GaloisField
 A in Matrix
-"#.trim().to_string();
+"#
+    .trim()
+    .to_string();
 
     state.evaluate_all();
     assert_eq!(state.parsed_lines.len(), 8);
@@ -360,7 +367,9 @@ A in Matrix
 
 #[test]
 fn test_discrete_parameter_builder_syntax() {
-    use urae_notebook::notebook::{generate_universal_parameter_builder_syntax, ParameterBuilderParams};
+    use urae_notebook::notebook::{
+        ParameterBuilderParams, generate_universal_parameter_builder_syntax,
+    };
 
     let coords_base = vec![("Val".to_string(), 0.0, 11.0, true)];
     let p_base = ParameterBuilderParams {
@@ -500,15 +509,23 @@ b in Boolean
 w in BitVector
 k in EvenIntegers
 j in OddIntegers
-"#.trim().to_string();
+"#
+    .trim()
+    .to_string();
 
     state.evaluate_all();
     assert_eq!(state.parsed_lines.len(), 8);
 
     assert_eq!(state.parsed_lines[0].output_unicode, "∀ m ∈ ℤ/nℤ");
     assert_eq!(state.parsed_lines[1].output_unicode, "∀ u ∈ (ℤ/nℤ)ˣ");
-    assert_eq!(state.parsed_lines[2].output_unicode, "∀ g ∈ ℤ[i] (Gaussian)");
-    assert_eq!(state.parsed_lines[3].output_unicode, "∀ e ∈ ℤ[ω] (Eisenstein)");
+    assert_eq!(
+        state.parsed_lines[2].output_unicode,
+        "∀ g ∈ ℤ[i] (Gaussian)"
+    );
+    assert_eq!(
+        state.parsed_lines[3].output_unicode,
+        "∀ e ∈ ℤ[ω] (Eisenstein)"
+    );
     assert_eq!(state.parsed_lines[4].output_unicode, "∀ b ∈ 𝔹");
     assert_eq!(state.parsed_lines[5].output_unicode, "∀ w ∈ 𝔹ʷ");
     assert_eq!(state.parsed_lines[6].output_unicode, "∀ k ∈ 2ℤ");
@@ -525,33 +542,71 @@ prime_factors 7 in Eisenstein
 prime_factors 12 in Modulo(15)
 prime_factors 45 in PAdics(p=3)
 prime_factors 21/40
-"#.trim().to_string();
+"#
+    .trim()
+    .to_string();
 
     state.evaluate_all();
     assert_eq!(state.parsed_lines.len(), 6);
 
     // 1. Integers 60 = 2^2 * 3 * 5
-    assert!(state.parsed_lines[0].output_unicode.contains("Integers (ℤ)"));
-    assert!(state.parsed_lines[0].output_unicode.contains("60 = 2^2 * 3 * 5"));
+    assert!(
+        state.parsed_lines[0]
+            .output_unicode
+            .contains("Integers (ℤ)")
+    );
+    assert!(
+        state.parsed_lines[0]
+            .output_unicode
+            .contains("60 = 2^2 * 3 * 5")
+    );
     assert!(state.parsed_lines[0].output_unicode.contains("Even prime"));
 
     // 2. Gaussian Integers 3 + 4i
-    assert!(state.parsed_lines[1].output_unicode.contains("Gaussian Integers (ℤ[i])"));
+    assert!(
+        state.parsed_lines[1]
+            .output_unicode
+            .contains("Gaussian Integers (ℤ[i])")
+    );
     assert!(state.parsed_lines[1].output_unicode.contains("3 + 4i ="));
 
     // 3. Eisenstein Integers 7
-    assert!(state.parsed_lines[2].output_unicode.contains("Eisenstein Integers (ℤ[ω])"));
+    assert!(
+        state.parsed_lines[2]
+            .output_unicode
+            .contains("Eisenstein Integers (ℤ[ω])")
+    );
     assert!(state.parsed_lines[2].output_unicode.contains("7 ="));
 
     // 4. Modulo(15) 12
-    assert!(state.parsed_lines[3].output_unicode.contains("Modular Ring (ℤ/15ℤ)"));
-    assert!(state.parsed_lines[3].output_unicode.contains("Modular prime/maximal ideal"));
+    assert!(
+        state.parsed_lines[3]
+            .output_unicode
+            .contains("Modular Ring (ℤ/15ℤ)")
+    );
+    assert!(
+        state.parsed_lines[3]
+            .output_unicode
+            .contains("Modular prime/maximal ideal")
+    );
 
     // 5. p-Adics 45 in Q_3
-    assert!(state.parsed_lines[4].output_unicode.contains("p-Adic Field (ℚ_3)"));
-    assert!(state.parsed_lines[4].output_unicode.contains("Valuation v_3(45) = 2"));
+    assert!(
+        state.parsed_lines[4]
+            .output_unicode
+            .contains("p-Adic Field (ℚ_3)")
+    );
+    assert!(
+        state.parsed_lines[4]
+            .output_unicode
+            .contains("Valuation v_3(45) = 2")
+    );
 
     // 6. Rationals 21/40
-    assert!(state.parsed_lines[5].output_unicode.contains("Rationals (ℚ)"));
+    assert!(
+        state.parsed_lines[5]
+            .output_unicode
+            .contains("Rationals (ℚ)")
+    );
     assert!(state.parsed_lines[5].output_unicode.contains("21/40 ="));
 }

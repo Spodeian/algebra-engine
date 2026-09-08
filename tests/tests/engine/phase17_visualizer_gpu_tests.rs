@@ -64,12 +64,16 @@ fn test_wgsl_shader_generator_kernels() {
     let grid_shader = WgslShaderGenerator::generate_grid_evaluation_shader("x * x + 2.0 * x", 64);
     assert_eq!(grid_shader.kernel_name, "grid_evaluation");
     assert_eq!(grid_shader.workgroup_size, [64, 1, 1]);
-    assert!(grid_shader
-        .wgsl_source
-        .contains("@compute @workgroup_size(64, 1, 1)"));
-    assert!(grid_shader
-        .wgsl_source
-        .contains("output_values[idx] = val;"));
+    assert!(
+        grid_shader
+            .wgsl_source
+            .contains("@compute @workgroup_size(64, 1, 1)")
+    );
+    assert!(
+        grid_shader
+            .wgsl_source
+            .contains("output_values[idx] = val;")
+    );
 
     // 2. Matrix-Free FEM shader
     let fem_shader = WgslShaderGenerator::generate_matrix_free_fem_shader(3, 64);

@@ -51,15 +51,15 @@ pub mod examples;
 pub mod notebook;
 pub mod ui;
 
-pub use eframe::egui;
 pub use app::{UraeNotebookApp, ViewMode};
+pub use eframe::egui;
 pub use examples::{ExampleCategory, ExampleNotebook, ExampleRegistry};
 pub use notebook::{
-    generate_branch_cut_syntax, generate_interval_syntax, generate_matrix_syntax,
-    generate_ode_bc_syntax, generate_parameter_builder_syntax, generate_physical_unit_syntax,
-    generate_universal_parameter_builder_syntax, CellBlock, CellBlockKind, HistorySnapshot,
-    MatrixPresetKind, NotebookSettings, NotebookState, ParameterBuilderParams,
-    ReactiveComputeMode, SessionData, SymbolInfoCard, SymbolMetadata, SymbolRole, UndoRedoHistory,
+    CellBlock, CellBlockKind, HistorySnapshot, MatrixPresetKind, NotebookSettings, NotebookState,
+    ParameterBuilderParams, ReactiveComputeMode, SessionData, SymbolInfoCard, SymbolMetadata,
+    SymbolRole, UndoRedoHistory, generate_branch_cut_syntax, generate_interval_syntax,
+    generate_matrix_syntax, generate_ode_bc_syntax, generate_parameter_builder_syntax,
+    generate_physical_unit_syntax, generate_universal_parameter_builder_syntax,
 };
 pub use ui::{
     CommandItem, CommandPalette, CommandPaletteState, PalettesUi, ThemeKind, ThemePalette,

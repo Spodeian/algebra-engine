@@ -2,7 +2,7 @@
 
 use urae_kernel::UraeKernel;
 use urae_py::{
-    py_diff, py_integrate, py_simplify, py_solve, PyExprGraph, PyInvoluteGear, PyQuantumCircuit,
+    PyExprGraph, PyInvoluteGear, PyQuantumCircuit, py_diff, py_integrate, py_simplify, py_solve,
 };
 
 #[test]

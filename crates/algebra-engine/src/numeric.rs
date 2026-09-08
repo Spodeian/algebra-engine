@@ -312,11 +312,7 @@ impl NumericalEval for ExprGraph {
 /// Numerical evaluation of Bessel function of the first kind $J_n(x)$ via power series.
 pub fn eval_bessel_j(n: i64, x: f64) -> f64 {
     let sign = if n < 0 {
-        if n % 2 != 0 {
-            -1.0
-        } else {
-            1.0
-        }
+        if n % 2 != 0 { -1.0 } else { 1.0 }
     } else {
         1.0
     };

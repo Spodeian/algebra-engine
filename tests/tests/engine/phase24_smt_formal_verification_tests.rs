@@ -163,6 +163,8 @@ fn test_phase24_dsl_macros() {
         "ring"
     );
     let lean_out = cert.to_lean4_theorem();
-    assert!(lean_out
-        .contains("theorem pythagorean_identity (x : Real) : sin(x)^2 + cos(x)^2 = 1 := by"));
+    assert!(
+        lean_out
+            .contains("theorem pythagorean_identity (x : Real) : sin(x)^2 + cos(x)^2 = 1 := by")
+    );
 }

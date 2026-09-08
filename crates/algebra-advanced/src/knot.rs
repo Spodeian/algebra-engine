@@ -132,9 +132,7 @@ impl BraidWord {
         let n = self.num_strands;
         let steps = self.word.len();
 
-        let vertex_id = |strand: usize, step: usize| -> usize {
-            step * n + strand
-        };
+        let vertex_id = |strand: usize, step: usize| -> usize { step * n + strand };
 
         // 0-simplices (vertices)
         for t in 0..=steps {
@@ -151,7 +149,10 @@ impl BraidWord {
             // Across straight strands
             for s in 0..n {
                 if s + 1 != generator.index && s != generator.index {
-                    simplices.push(Simplex::new(vec![vertex_id(s, t), vertex_id(s, next_t)], t as f64));
+                    simplices.push(Simplex::new(
+                        vec![vertex_id(s, t), vertex_id(s, next_t)],
+                        t as f64,
+                    ));
                 }
             }
 

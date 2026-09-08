@@ -21,6 +21,9 @@ fn main() {
 
     // 3. Almkvist-Zeilberger Gaussian Integral ODE
     let ode_proof = almkvist_zeilberger_gaussian!();
-    println!("Differential annihilating operator for gaussian integral: Operator = {:?}, Certificate = {}", ode_proof.0, ode_proof.1);
+    println!(
+        "Differential annihilating operator for gaussian integral: Operator = {:?}, Certificate = {}",
+        ode_proof.0, ode_proof.1
+    );
     println!("=== Execution Complete ===");
 }

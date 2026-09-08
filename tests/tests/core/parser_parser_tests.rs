@@ -1,5 +1,5 @@
-use algebra_core::parser::ExprParser;
 use algebra_core::ExprGraph;
+use algebra_core::parser::ExprParser;
 
 #[test]
 fn test_parse_latex_and_unicode_inputs() {
@@ -19,7 +19,7 @@ fn test_parse_latex_and_unicode_inputs() {
 
 #[test]
 fn test_permissive_intent_parsing() {
-    use algebra_core::parser::{parse_permissive_intent, PermissiveIntent};
+    use algebra_core::parser::{PermissiveIntent, parse_permissive_intent};
 
     // 1. Solve commands
     assert_eq!(

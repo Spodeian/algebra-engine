@@ -56,7 +56,10 @@ impl Adele {
     }
 
     /// Construct an Adele from a GlobalValuationProfile.
-    pub fn from_valuation_profile(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Self> {
+    pub fn from_valuation_profile(
+        profile: &algebra_engine::numbertheory::GlobalValuationProfile,
+        precision: usize,
+    ) -> AlgebraResult<Self> {
         ArtinProduct::to_adele_vector(profile, precision)
     }
 
@@ -117,9 +120,12 @@ impl Idele {
 pub trait AdeleEmbedding {
     /// Verifies the Global Product Formula $\prod_{v \le \infty} |x|_v = 1$ for a non-zero rational $x = n / d$.
     fn verify_artin_product(profile: &impl ValuationProvider) -> bool;
-    
+
     /// Embeds a global rational number $x = n / d \in \mathbb{Q}$ diagonally into the Adele Ring $\mathbb{A}_\mathbb{Q}$.
-    fn to_adele_vector(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Adele>;
+    fn to_adele_vector(
+        profile: &algebra_engine::numbertheory::GlobalValuationProfile,
+        precision: usize,
+    ) -> AlgebraResult<Adele>;
 }
 
 /// Global Artin Product Formula Verifier.
@@ -129,7 +135,9 @@ impl ArtinProduct {
     /// Convenience method: verifies the Global Product Formula for $n / d$ by constructing a `GlobalValuationProfile`.
     pub fn verify_product_formula(n: i64, d: i64) -> AlgebraResult<bool> {
         let profile = algebra_engine::numbertheory::GlobalValuationProfile::from_rational(n, d)
-            .ok_or_else(|| AlgebraError::EvaluationError("Number must be non-zero rational in Q*".into()))?;
+            .ok_or_else(|| {
+                AlgebraError::EvaluationError("Number must be non-zero rational in Q*".into())
+            })?;
         Ok(<Self as AdeleEmbedding>::verify_artin_product(&profile))
     }
 }
@@ -151,7 +159,10 @@ impl AdeleEmbedding for ArtinProduct {
         (total_product - 1.0).abs() < 1e-9
     }
 
-    fn to_adele_vector(profile: &algebra_engine::numbertheory::GlobalValuationProfile, precision: usize) -> AlgebraResult<Adele> {
+    fn to_adele_vector(
+        profile: &algebra_engine::numbertheory::GlobalValuationProfile,
+        precision: usize,
+    ) -> AlgebraResult<Adele> {
         let archimedean = profile.num as f64 / profile.den as f64;
         let mut finite_places = Vec::with_capacity(profile.finite_places.len());
 

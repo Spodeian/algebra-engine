@@ -502,14 +502,20 @@ impl HolonomicFunction for BesselJ {
     fn annihilator(&self) -> WeylOperator {
         let mut op = WeylOperator::zero(1);
         // x^2 d^2
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![2])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![2])));
         // x d
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![1], vec![1])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![1], vec![1])));
         // x^2
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![0])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![2], vec![0])));
         // -nu^2
         if self.nu != 0.0 {
-            op.terms.push(WeylTerm::new(-self.nu * self.nu, WeylMonomial::new(vec![0], vec![0])));
+            op.terms.push(WeylTerm::new(
+                -self.nu * self.nu,
+                WeylMonomial::new(vec![0], vec![0]),
+            ));
         }
         op.normalize();
         op
@@ -527,12 +533,17 @@ impl HolonomicFunction for HermiteH {
     fn annihilator(&self) -> WeylOperator {
         let mut op = WeylOperator::zero(1);
         // d^2
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
         // -2 x d
-        op.terms.push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
+        op.terms
+            .push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
         // +2n
         if self.n > 0 {
-            op.terms.push(WeylTerm::new(2.0 * self.n as f64, WeylMonomial::new(vec![0], vec![0])));
+            op.terms.push(WeylTerm::new(
+                2.0 * self.n as f64,
+                WeylMonomial::new(vec![0], vec![0]),
+            ));
         }
         op.normalize();
         op
@@ -550,15 +561,19 @@ impl HolonomicFunction for LegendreP {
     fn annihilator(&self) -> WeylOperator {
         let mut op = WeylOperator::zero(1);
         // d^2
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
         // -x^2 d^2
-        op.terms.push(WeylTerm::new(-1.0, WeylMonomial::new(vec![2], vec![2])));
+        op.terms
+            .push(WeylTerm::new(-1.0, WeylMonomial::new(vec![2], vec![2])));
         // -2x d
-        op.terms.push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
+        op.terms
+            .push(WeylTerm::new(-2.0, WeylMonomial::new(vec![1], vec![1])));
         // n(n+1)
         let lambda = (self.n * (self.n + 1)) as f64;
         if lambda > 0.0 {
-            op.terms.push(WeylTerm::new(lambda, WeylMonomial::new(vec![0], vec![0])));
+            op.terms
+                .push(WeylTerm::new(lambda, WeylMonomial::new(vec![0], vec![0])));
         }
         op.normalize();
         op
@@ -574,11 +589,12 @@ impl HolonomicFunction for ErrorFunctionErf {
     fn annihilator(&self) -> WeylOperator {
         let mut op = WeylOperator::zero(1);
         // d^2
-        op.terms.push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
+        op.terms
+            .push(WeylTerm::new(1.0, WeylMonomial::new(vec![0], vec![2])));
         // 2 x d
-        op.terms.push(WeylTerm::new(2.0, WeylMonomial::new(vec![1], vec![1])));
+        op.terms
+            .push(WeylTerm::new(2.0, WeylMonomial::new(vec![1], vec![1])));
         op.normalize();
         op
     }
 }
-

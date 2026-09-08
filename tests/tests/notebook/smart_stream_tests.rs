@@ -78,17 +78,21 @@ fn test_domain_declaration_and_validation() {
     state.evaluate_all();
 
     assert_eq!(state.parsed_lines.len(), 2);
-    assert!(state.parsed_lines[0]
-        .output_unicode
-        .contains("a ∈ ℝ ∩ [0.00, 100.00]"));
+    assert!(
+        state.parsed_lines[0]
+            .output_unicode
+            .contains("a ∈ ℝ ∩ [0.00, 100.00]")
+    );
 
     // Second line should trigger Out of domain warning badge
     assert!(state.parsed_lines[1].error_msg.is_some());
-    assert!(state.parsed_lines[1]
-        .error_msg
-        .as_ref()
-        .unwrap()
-        .contains("Out of domain"));
+    assert!(
+        state.parsed_lines[1]
+            .error_msg
+            .as_ref()
+            .unwrap()
+            .contains("Out of domain")
+    );
 }
 
 #[test]
@@ -218,10 +222,12 @@ fn test_refactor_line_to_named_variable() {
     let success = state.refactor_line_to_named_variable(0, "sum_val");
     assert!(success);
 
-    assert!(state
-        .session
-        .raw_document_text
-        .contains("sum_val = 10 + 20"));
+    assert!(
+        state
+            .session
+            .raw_document_text
+            .contains("sum_val = 10 + 20")
+    );
     assert!(state.session.raw_document_text.contains("sum_val * 2"));
     assert!(state.session.raw_document_text.contains("sum_val + 5"));
     assert_eq!(state.parsed_lines.len(), 3);
@@ -362,7 +368,8 @@ fn test_wrapped_lines_do_not_get_duplicate_line_numbers() {
     use urae_notebook::egui;
 
     let ctx = egui::Context::default();
-    let long_formula = "f(x) = sin(x) + cos(x) * exp(-x^2) + sqrt(x^2 + 1) + ln(abs(x) + 1) + tan(x) * 2.50";
+    let long_formula =
+        "f(x) = sin(x) + cos(x) * exp(-x^2) + sqrt(x^2 + 1) + ln(abs(x) + 1) + tan(x) * 2.50";
     let doc_text = format!("{}\ny = 42", long_formula);
 
     let mut galley_opt = None;
@@ -376,7 +383,11 @@ fn test_wrapped_lines_do_not_get_duplicate_line_numbers() {
     output.textures_delta.clear();
 
     let galley = galley_opt.expect("Galley must be produced by layouter");
-    assert!(galley.rows.len() > 2, "Expected wrapped lines across multiple visual rows (got {})", galley.rows.len());
+    assert!(
+        galley.rows.len() > 2,
+        "Expected wrapped lines across multiple visual rows (got {})",
+        galley.rows.len()
+    );
 
     // Count how many visual rows are starts of new logical lines
     let mut logical_line_count = 0;
@@ -392,8 +403,14 @@ fn test_wrapped_lines_do_not_get_duplicate_line_numbers() {
         is_new_logical_line = row.ends_with_newline;
     }
 
-    assert_eq!(logical_line_count, 2, "Must identify exactly 2 logical lines");
-    assert!(unnumbered_wrapped_rows >= 1, "Wrapped continuation rows must remain unnumbered");
+    assert_eq!(
+        logical_line_count, 2,
+        "Must identify exactly 2 logical lines"
+    );
+    assert!(
+        unnumbered_wrapped_rows >= 1,
+        "Wrapped continuation rows must remain unnumbered"
+    );
 }
 
 #[test]
@@ -402,19 +419,43 @@ fn test_smart_plot_bounds_baseline_and_critical_points() {
 
     // 1. Simple linear function f(x) = 2*x: must cover at least [-1.0, 1.0]
     let (min_lin, max_lin) = state.compute_smart_plot_bounds("f(x) = 2*x", "x");
-    assert!(min_lin <= -1.0, "Must cover at least x = -1.0, got {}", min_lin);
-    assert!(max_lin >= 1.0, "Must cover at least x = 1.0, got {}", max_lin);
+    assert!(
+        min_lin <= -1.0,
+        "Must cover at least x = -1.0, got {}",
+        min_lin
+    );
+    assert!(
+        max_lin >= 1.0,
+        "Must cover at least x = 1.0, got {}",
+        max_lin
+    );
 
     // 2. Parabola f(x) = x^2 - 9: roots at x = -3, +3 and vertex at x = 0
     let (min_quad, max_quad) = state.compute_smart_plot_bounds("f(x) = x^2 - 9", "x");
-    assert!(min_quad < -3.0, "Must include left root -3 with margin, got {}", min_quad);
-    assert!(max_quad > 3.0, "Must include right root +3 with margin, got {}", max_quad);
+    assert!(
+        min_quad < -3.0,
+        "Must include left root -3 with margin, got {}",
+        min_quad
+    );
+    assert!(
+        max_quad > 3.0,
+        "Must include right root +3 with margin, got {}",
+        max_quad
+    );
     assert!(min_quad <= -1.0 && max_quad >= 1.0, "Must contain [-1, 1]");
 
     // 3. Cubic f(x) = x^3 - 12*x: roots at x = -sqrt(12) (~ -3.46), 0, +3.46; critical points at x = -2, 2
     let (min_cub, max_cub) = state.compute_smart_plot_bounds("f(x) = x^3 - 12*x", "x");
-    assert!(min_cub < -3.46, "Must encompass all roots and extrema, got {}", min_cub);
-    assert!(max_cub > 3.46, "Must encompass all roots and extrema, got {}", max_cub);
+    assert!(
+        min_cub < -3.46,
+        "Must encompass all roots and extrema, got {}",
+        min_cub
+    );
+    assert!(
+        max_cub > 3.46,
+        "Must encompass all roots and extrema, got {}",
+        max_cub
+    );
 }
 
 #[test]
@@ -426,12 +467,20 @@ fn test_smart_plot_bounds_periodic_trigonometric() {
     let (min_sin, max_sin) = state.compute_smart_plot_bounds("f(x) = sin(x)", "x");
     assert!(min_sin <= -1.0 && max_sin >= 1.0, "Must contain [-1, 1]");
     let span_sin = max_sin - min_sin;
-    assert!((std::f64::consts::TAU..=20.0).contains(&span_sin), "Must cover 1-3 full periods of sin(x), got span {}", span_sin);
+    assert!(
+        (std::f64::consts::TAU..=20.0).contains(&span_sin),
+        "Must cover 1-3 full periods of sin(x), got span {}",
+        span_sin
+    );
 
     // 2. High frequency sine wave f(x) = sin(4*x): period T = 2*pi/4 (~ 1.57)
     // Must cover 1-3 full periods AND at least [-1.0, 1.0]
     let (min_fast, max_fast) = state.compute_smart_plot_bounds("f(x) = sin(4*x)", "x");
-    assert!(min_fast <= -1.0, "Must cover at least -1.0, got {}", min_fast);
+    assert!(
+        min_fast <= -1.0,
+        "Must cover at least -1.0, got {}",
+        min_fast
+    );
     assert!(max_fast >= 1.0, "Must cover at least 1.0, got {}", max_fast);
 }
 
@@ -444,8 +493,15 @@ fn test_smart_plot_bounds_multi_frequency_sub_periods() {
     // Must cover 1-2 periods of the modulation envelope T_max (~ 6.28)
     let (min_multi, max_multi) = state.compute_smart_plot_bounds("f(x) = sin(10*x) + cos(x)", "x");
     let span_multi = max_multi - min_multi;
-    assert!(span_multi >= std::f64::consts::TAU, "Must cover envelope period, got span {}", span_multi);
-    assert!(min_multi <= -1.0 && max_multi >= 1.0, "Must contain [-1, 1]");
+    assert!(
+        span_multi >= std::f64::consts::TAU,
+        "Must cover envelope period, got span {}",
+        span_multi
+    );
+    assert!(
+        min_multi <= -1.0 && max_multi >= 1.0,
+        "Must contain [-1, 1]"
+    );
 }
 
 #[test]
@@ -454,8 +510,15 @@ fn test_smart_plot_bounds_natural_domain_clamping() {
 
     // Non-negative function f(x) = sqrt(x): natural domain is x >= 0
     let (min_sqrt, max_sqrt) = state.compute_smart_plot_bounds("f(x) = sqrt(x)", "x");
-    assert_eq!(min_sqrt, 0.0, "Square root domain must be clamped to non-negative 0.0");
-    assert!(max_sqrt >= 1.0, "Square root upper bound must cover at least 1.0, got {}", max_sqrt);
+    assert_eq!(
+        min_sqrt, 0.0,
+        "Square root domain must be clamped to non-negative 0.0"
+    );
+    assert!(
+        max_sqrt >= 1.0,
+        "Square root upper bound must cover at least 1.0, got {}",
+        max_sqrt
+    );
 }
 
 #[test]
@@ -482,37 +545,59 @@ fn test_function_tooltip_vm_and_symbolic_features() {
         assert!(!is_linear, "Parabola must be non-linear");
         assert!(!roots.is_empty(), "Must discover roots for x^2 - 9");
         let roots_joined = roots.join(", ");
-        assert!(roots_joined.contains("3") || roots_joined.contains("-3"), "Roots must contain 3 or -3, got: {}", roots_joined);
+        assert!(
+            roots_joined.contains("3") || roots_joined.contains("-3"),
+            "Roots must contain 3 or -3, got: {}",
+            roots_joined
+        );
 
-        assert!(!critical_points.is_empty(), "Must discover critical point (vertex) for x^2 - 9");
+        assert!(
+            !critical_points.is_empty(),
+            "Must discover critical point (vertex) for x^2 - 9"
+        );
         let crit_joined = critical_points.join(", ");
-        assert!(crit_joined.contains("0"), "Critical point must be at x = 0, got: {}", crit_joined);
+        assert!(
+            crit_joined.contains("0"),
+            "Critical point must be at x = 0, got: {}",
+            crit_joined
+        );
 
         assert!(range.is_some(), "Range must be inferred");
         let range_str = range.as_ref().unwrap();
-        assert!(range_str.contains("-9"), "Range for x^2 - 9 must start at -9, got: {}", range_str);
+        assert!(
+            range_str.contains("-9"),
+            "Range for x^2 - 9 must start at -9, got: {}",
+            range_str
+        );
 
         assert_eq!(parity.as_deref(), Some("Even: f(-x) = f(x)"));
     } else {
-        panic!("Expected ObjectKind::Function, got {:?}", card_f.object_kind);
+        panic!(
+            "Expected ObjectKind::Function, got {:?}",
+            card_f.object_kind
+        );
     }
 
     // 2. Inspect periodic g(x) = sin(x)
     let card_g = state
         .get_symbol_info_card("g")
         .expect("g function card should be resolved");
-    if let Some(urae_notebook::notebook::ObjectKind::Function {
-        period,
-        parity,
-        ..
-    }) = &card_g.object_kind
+    if let Some(urae_notebook::notebook::ObjectKind::Function { period, parity, .. }) =
+        &card_g.object_kind
     {
         assert!(period.is_some(), "sin(x) must have detected period");
         let t = period.unwrap();
-        assert!((t - std::f64::consts::TAU).abs() < 0.1, "Period must be ~ 2*pi, got: {}", t);
+        assert!(
+            (t - std::f64::consts::TAU).abs() < 0.1,
+            "Period must be ~ 2*pi, got: {}",
+            t
+        );
         assert_eq!(parity.as_deref(), Some("Odd: f(-x) = -f(x)"));
     } else {
-        panic!("Expected ObjectKind::Function, got {:?}", card_g.object_kind);
+        panic!(
+            "Expected ObjectKind::Function, got {:?}",
+            card_g.object_kind
+        );
     }
 }
 
@@ -642,7 +727,10 @@ fn test_dual_halves_resizing_and_single_display() {
     use urae_notebook::ui::WorkspaceLayoutPreset;
 
     let mut app = UraeNotebookApp::default();
-    assert_eq!(app.workspace.layout_preset, WorkspaceLayoutPreset::DualHalves);
+    assert_eq!(
+        app.workspace.layout_preset,
+        WorkspaceLayoutPreset::DualHalves
+    );
 
     // Initial default split
     assert_eq!(app.workspace.split_ratio, 0.50);
@@ -651,9 +739,10 @@ fn test_dual_halves_resizing_and_single_display() {
     let available_space = 1000.0_f32;
     let initial_width = app.right_sidebar_width;
     let delta_x = -50.0_f32; // Drag 50px to the left (widening results column)
-    app.right_sidebar_width = (app.right_sidebar_width - delta_x)
-        .clamp(180.0, (available_space - 120.0).max(200.0));
-    app.workspace.split_ratio = (1.0 - (app.right_sidebar_width / available_space)).clamp(0.15, 0.85);
+    app.right_sidebar_width =
+        (app.right_sidebar_width - delta_x).clamp(180.0, (available_space - 120.0).max(200.0));
+    app.workspace.split_ratio =
+        (1.0 - (app.right_sidebar_width / available_space)).clamp(0.15, 0.85);
 
     // Right sidebar width adjusted
     assert!(app.right_sidebar_width > initial_width);
@@ -810,8 +899,14 @@ fn test_left_panel_parameter_distinct_badges_and_graph_options() {
     // Scaling mode persistence
     app.plot_scale_modes.insert(0, PlotScaleMode::SemiLogY);
     app.plot_scale_modes.insert(1, PlotScaleMode::LogLog);
-    assert_eq!(app.plot_scale_modes.get(&0).copied(), Some(PlotScaleMode::SemiLogY));
-    assert_eq!(app.plot_scale_modes.get(&1).copied(), Some(PlotScaleMode::LogLog));
+    assert_eq!(
+        app.plot_scale_modes.get(&0).copied(),
+        Some(PlotScaleMode::SemiLogY)
+    );
+    assert_eq!(
+        app.plot_scale_modes.get(&1).copied(),
+        Some(PlotScaleMode::LogLog)
+    );
 
     // Plot collapse tracking
     assert!(!app.collapsed_plot_lines.contains(&0));
@@ -850,11 +945,25 @@ alpha_attenuation = Gamma_graphene * 0.023 / n_eff
     state.evaluate_all();
 
     for (idx, pl) in state.parsed_lines.iter().enumerate() {
-        println!("Line {}: raw={:?}, out={:?}, err={:?}", idx + 1, pl.raw_text, pl.output_unicode, pl.error_msg);
+        println!(
+            "Line {}: raw={:?}, out={:?}, err={:?}",
+            idx + 1,
+            pl.raw_text,
+            pl.output_unicode,
+            pl.error_msg
+        );
     }
-    println!("Symbols: {:?}", state.session.symbol_metadata.keys().collect::<Vec<_>>());
+    println!(
+        "Symbols: {:?}",
+        state.session.symbol_metadata.keys().collect::<Vec<_>>()
+    );
 
-    assert!(state.parsed_lines.iter().any(|p| p.raw_text.contains("n_eff")));
+    assert!(
+        state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("n_eff"))
+    );
 
     // 2. Test assembled ODE & PDE notebook text
     let ode_text = r#"
@@ -880,10 +989,26 @@ soliton(x) = (c_soliton / 2.0) / (cosh(sqrt(c_soliton) / 2.0 * x))^2
     ode_state.evaluate_all();
 
     for (idx, pl) in ode_state.parsed_lines.iter().enumerate() {
-        assert!(pl.error_msg.is_none(), "ODE Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+        assert!(
+            pl.error_msg.is_none(),
+            "ODE Line {} failed ({}): {:?}",
+            idx + 1,
+            pl.raw_text,
+            pl.error_msg
+        );
     }
-    assert!(ode_state.parsed_lines.iter().any(|p| p.raw_text.contains("y_resp(t)")));
-    assert!(ode_state.parsed_lines.iter().any(|p| p.raw_text.contains("soliton(x)")));
+    assert!(
+        ode_state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("y_resp(t)"))
+    );
+    assert!(
+        ode_state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("soliton(x)"))
+    );
 
     // 3. Test assembled Fluid Dynamics Navier-Stokes channel flow
     let fluid_text = r#"
@@ -903,9 +1028,20 @@ Re_flow = (rho * u_mean * (2.0 * h)) / mu
     fluid_state.session.raw_document_text = fluid_text.trim().to_string();
     fluid_state.evaluate_all();
     for (idx, pl) in fluid_state.parsed_lines.iter().enumerate() {
-        assert!(pl.error_msg.is_none(), "Fluid Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+        assert!(
+            pl.error_msg.is_none(),
+            "Fluid Line {} failed ({}): {:?}",
+            idx + 1,
+            pl.raw_text,
+            pl.error_msg
+        );
     }
-    assert!(fluid_state.parsed_lines.iter().any(|p| p.raw_text.contains("u_channel(y)")));
+    assert!(
+        fluid_state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("u_channel(y)"))
+    );
 
     // 4. Test assembled Multiphysics Poisson Heat Conduction
     let heat_text = r#"
@@ -924,9 +1060,20 @@ solve C1_val - (Q_source / k_thermal) * x = 0, x
     heat_state.session.raw_document_text = heat_text.trim().to_string();
     heat_state.evaluate_all();
     for (idx, pl) in heat_state.parsed_lines.iter().enumerate() {
-        assert!(pl.error_msg.is_none(), "Heat Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+        assert!(
+            pl.error_msg.is_none(),
+            "Heat Line {} failed ({}): {:?}",
+            idx + 1,
+            pl.raw_text,
+            pl.error_msg
+        );
     }
-    assert!(heat_state.parsed_lines.iter().any(|p| p.raw_text.contains("T_profile(x)")));
+    assert!(
+        heat_state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("T_profile(x)"))
+    );
 
     // 5. Test assembled Control Theory State-Space & Pole Placement
     let control_text = r#"
@@ -945,10 +1092,18 @@ k2_gain = 6.9 / 9.0
     control_state.session.raw_document_text = control_text.trim().to_string();
     control_state.evaluate_all();
     for (idx, pl) in control_state.parsed_lines.iter().enumerate() {
-        assert!(pl.error_msg.is_none(), "Control Line {} failed ({}): {:?}", idx + 1, pl.raw_text, pl.error_msg);
+        assert!(
+            pl.error_msg.is_none(),
+            "Control Line {} failed ({}): {:?}",
+            idx + 1,
+            pl.raw_text,
+            pl.error_msg
+        );
     }
-    assert!(control_state.parsed_lines.iter().any(|p| p.raw_text.contains("H_siso(s)")));
+    assert!(
+        control_state
+            .parsed_lines
+            .iter()
+            .any(|p| p.raw_text.contains("H_siso(s)"))
+    );
 }
-
-
-

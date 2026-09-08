@@ -57,11 +57,7 @@ impl DiracGamma {
                 }
             }
         }
-        if inversions % 2 == 0 {
-            1.0
-        } else {
-            -1.0
-        }
+        if inversions % 2 == 0 { 1.0 } else { -1.0 }
     }
 
     /// Exact recursive trace of product of gamma matrices $\operatorname{Tr}[\gamma^{\mu_1} \dots \gamma^{\mu_n}]$.

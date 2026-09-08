@@ -80,13 +80,21 @@ fn test_evalf_command_syntax() {
     let op1 = parse_operation("evalf 1/2");
     let res1 = OperationExecutor::execute(&graph, &op1, &ctx);
     assert!(!res1.is_error, "evalf failed: {:?}", res1.error_msg);
-    assert!(res1.output_text.contains("0.5"), "Expected 0.5, got {}", res1.output_text);
+    assert!(
+        res1.output_text.contains("0.5"),
+        "Expected 0.5, got {}",
+        res1.output_text
+    );
 
     // "N(1/4)" evaluates to float 0.25
     let op2 = parse_operation("N(1/4)");
     let res2 = OperationExecutor::execute(&graph, &op2, &ctx);
     assert!(!res2.is_error, "N(1/4) failed: {:?}", res2.error_msg);
-    assert!(res2.output_text.contains("0.25"), "Expected 0.25, got {}", res2.output_text);
+    assert!(
+        res2.output_text.contains("0.25"),
+        "Expected 0.25, got {}",
+        res2.output_text
+    );
 }
 
 #[test]
@@ -186,7 +194,10 @@ fn test_solveset_hybrid_factored_polynomial() {
         ExprKind::Number(Number::Rational(1, 3)) => true,
         _ => false,
     });
-    assert!(has_exact_third, "Expected exact root 1/3 in solveset output");
+    assert!(
+        has_exact_third,
+        "Expected exact root 1/3 in solveset output"
+    );
 
     // Verify none of the roots are degraded to Float
     for &r in &roots {

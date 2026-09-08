@@ -1,7 +1,7 @@
 //! Phase 7 Tests: Resource Budgets, Soft/Hard Caps, Graceful Degradation, and Schwartz-Zippel Equivalence.
 
-use algebra_core::config::{BudgetStatus, EngineConfig, ResourceBudget};
 use algebra_core::ExprGraph;
+use algebra_core::config::{BudgetStatus, EngineConfig, ResourceBudget};
 use algebra_engine::simplify::SchwartzZippel;
 
 #[test]

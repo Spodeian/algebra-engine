@@ -387,11 +387,7 @@ impl BranchCutManager {
                 // High-precision iterative evaluation for W_k(z)
                 // W_0(z) vs W_{-1}(z)
                 let mut w_re = if k == 0 {
-                    if r < 1.0 {
-                        re
-                    } else {
-                        r.ln()
-                    }
+                    if r < 1.0 { re } else { r.ln() }
                 } else {
                     // W_{-1}(z) initial approximation
                     -2.0

@@ -1,8 +1,8 @@
 //! Integration Tests for In-App Example Notebook Gallery & Interactive Tutorials.
 
 use std::collections::HashSet;
-use urae_notebook::examples::{ExampleCategory, ExampleRegistry};
 use urae_notebook::UraeNotebookApp;
+use urae_notebook::examples::{ExampleCategory, ExampleRegistry};
 
 #[test]
 fn test_example_registry_all_examples_count_and_uniqueness() {

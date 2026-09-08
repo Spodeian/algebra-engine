@@ -237,7 +237,9 @@ impl Viewport3D {
 
                 ui.menu_button("📥 Export 3D", |ui| {
                     let model_name = match state.active_model {
-                        ViewportModelPreset::InvoluteGear | ViewportModelPreset::SpurGear => "spur_gear",
+                        ViewportModelPreset::InvoluteGear | ViewportModelPreset::SpurGear => {
+                            "spur_gear"
+                        }
                         ViewportModelPreset::HelicalGear => "helical_gear",
                         ViewportModelPreset::BevelGear => "bevel_gear",
                         ViewportModelPreset::WormGear => "worm_gear",
@@ -329,7 +331,6 @@ impl Viewport3D {
                 egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(51, 65, 85)),
                 egui::StrokeKind::Inside,
             );
-
 
             // Project 3D vertices to 2D screen space
             let cos_y = state.yaw.cos();
@@ -508,7 +509,11 @@ impl Viewport3D {
                         combined_mesh.add_vertex(*v);
                     }
                     for t in &p_mesh.triangles {
-                        combined_mesh.add_triangle(t[0] + v_offset, t[1] + v_offset, t[2] + v_offset);
+                        combined_mesh.add_triangle(
+                            t[0] + v_offset,
+                            t[1] + v_offset,
+                            t[2] + v_offset,
+                        );
                     }
                 }
                 (combined_mesh.vertices, combined_mesh.triangles, Vec::new())
@@ -554,9 +559,21 @@ pub fn export_stl_binary(verts: &[[f64; 3]], tris: &[[usize; 3]]) -> Vec<u8> {
     buf.extend_from_slice(&(tris.len() as u32).to_le_bytes());
 
     for tri in tris {
-        let v0 = if tri[0] < verts.len() { verts[tri[0]] } else { [0.0; 3] };
-        let v1 = if tri[1] < verts.len() { verts[tri[1]] } else { [0.0; 3] };
-        let v2 = if tri[2] < verts.len() { verts[tri[2]] } else { [0.0; 3] };
+        let v0 = if tri[0] < verts.len() {
+            verts[tri[0]]
+        } else {
+            [0.0; 3]
+        };
+        let v1 = if tri[1] < verts.len() {
+            verts[tri[1]]
+        } else {
+            [0.0; 3]
+        };
+        let v2 = if tri[2] < verts.len() {
+            verts[tri[2]]
+        } else {
+            [0.0; 3]
+        };
 
         let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
         let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
@@ -600,9 +617,21 @@ pub fn export_stl_binary(verts: &[[f64; 3]], tris: &[[usize; 3]]) -> Vec<u8> {
 pub fn export_stl_ascii(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> String {
     let mut out = format!("solid {}\n", name);
     for tri in tris {
-        let v0 = if tri[0] < verts.len() { verts[tri[0]] } else { [0.0; 3] };
-        let v1 = if tri[1] < verts.len() { verts[tri[1]] } else { [0.0; 3] };
-        let v2 = if tri[2] < verts.len() { verts[tri[2]] } else { [0.0; 3] };
+        let v0 = if tri[0] < verts.len() {
+            verts[tri[0]]
+        } else {
+            [0.0; 3]
+        };
+        let v1 = if tri[1] < verts.len() {
+            verts[tri[1]]
+        } else {
+            [0.0; 3]
+        };
+        let v2 = if tri[2] < verts.len() {
+            verts[tri[2]]
+        } else {
+            [0.0; 3]
+        };
 
         let e1 = [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]];
         let e2 = [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]];
@@ -620,11 +649,23 @@ pub fn export_stl_ascii(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> 
             nz = 1.0;
         }
 
-        out.push_str(&format!("  facet normal {:.6e} {:.6e} {:.6e}\n", nx, ny, nz));
+        out.push_str(&format!(
+            "  facet normal {:.6e} {:.6e} {:.6e}\n",
+            nx, ny, nz
+        ));
         out.push_str("    outer loop\n");
-        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v0[0], v0[1], v0[2]));
-        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v1[0], v1[1], v1[2]));
-        out.push_str(&format!("      vertex {:.6e} {:.6e} {:.6e}\n", v2[0], v2[1], v2[2]));
+        out.push_str(&format!(
+            "      vertex {:.6e} {:.6e} {:.6e}\n",
+            v0[0], v0[1], v0[2]
+        ));
+        out.push_str(&format!(
+            "      vertex {:.6e} {:.6e} {:.6e}\n",
+            v1[0], v1[1], v1[2]
+        ));
+        out.push_str(&format!(
+            "      vertex {:.6e} {:.6e} {:.6e}\n",
+            v2[0], v2[1], v2[2]
+        ));
         out.push_str("    endloop\n");
         out.push_str("  endfacet\n");
     }
@@ -634,7 +675,10 @@ pub fn export_stl_ascii(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> 
 
 /// Serializes 3D triangular mesh into Wavefront OBJ format.
 pub fn export_obj(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> String {
-    let mut out = format!("# Wavefront OBJ exported by URAE Notebook\n# Model: {}\n\no {}\n", name, name);
+    let mut out = format!(
+        "# Wavefront OBJ exported by URAE Notebook\n# Model: {}\n\no {}\n",
+        name, name
+    );
     for v in verts {
         out.push_str(&format!("v {:.6} {:.6} {:.6}\n", v[0], v[1], v[2]));
     }
@@ -664,46 +708,76 @@ pub fn export_step(verts: &[[f64; 3]], tris: &[[usize; 3]], name: &str) -> Strin
     let mut id = 10;
     let mut vert_ids = Vec::with_capacity(verts.len());
     for v in verts {
-        out.push_str(&format!("#{id} = CARTESIAN_POINT('',({:.6},{:.6},{:.6}));\n", v[0], v[1], v[2]));
+        out.push_str(&format!(
+            "#{id} = CARTESIAN_POINT('',({:.6},{:.6},{:.6}));\n",
+            v[0], v[1], v[2]
+        ));
         vert_ids.push(id);
         id += 1;
     }
 
     let mut face_ids = Vec::with_capacity(tris.len());
     for t in tris {
-        let p0 = if t[0] < vert_ids.len() { vert_ids[t[0]] } else { 10 };
-        let p1 = if t[1] < vert_ids.len() { vert_ids[t[1]] } else { 10 };
-        let p2 = if t[2] < vert_ids.len() { vert_ids[t[2]] } else { 10 };
+        let p0 = if t[0] < vert_ids.len() {
+            vert_ids[t[0]]
+        } else {
+            10
+        };
+        let p1 = if t[1] < vert_ids.len() {
+            vert_ids[t[1]]
+        } else {
+            10
+        };
+        let p2 = if t[2] < vert_ids.len() {
+            vert_ids[t[2]]
+        } else {
+            10
+        };
 
         let loop_id = id;
         id += 1;
-        out.push_str(&format!("#{loop_id} = POLY_LOOP('',(#{p0},#{p1},#{p2}));\n"));
+        out.push_str(&format!(
+            "#{loop_id} = POLY_LOOP('',(#{p0},#{p1},#{p2}));\n"
+        ));
 
         let face_bound_id = id;
         id += 1;
-        out.push_str(&format!("#{face_bound_id} = FACE_OUTER_BOUND('',#{loop_id},.T.);\n"));
+        out.push_str(&format!(
+            "#{face_bound_id} = FACE_OUTER_BOUND('',#{loop_id},.T.);\n"
+        ));
 
         let face_id = id;
         id += 1;
-        out.push_str(&format!("#{face_id} = FACE_SURFACE('',(#{face_bound_id}),#{p0},.T.);\n"));
+        out.push_str(&format!(
+            "#{face_id} = FACE_SURFACE('',(#{face_bound_id}),#{p0},.T.);\n"
+        ));
         face_ids.push(face_id);
     }
 
-    let faces_str = face_ids.iter().map(|f| format!("#{f}")).collect::<Vec<_>>().join(",");
+    let faces_str = face_ids
+        .iter()
+        .map(|f| format!("#{f}"))
+        .collect::<Vec<_>>()
+        .join(",");
     let shell_id = id;
     id += 1;
     out.push_str(&format!("#{shell_id} = CLOSED_SHELL('',({faces_str}));\n"));
 
     let brep_id = id;
     id += 1;
-    out.push_str(&format!("#{brep_id} = FACETED_BREP('{name}',#{shell_id});\n"));
+    out.push_str(&format!(
+        "#{brep_id} = FACETED_BREP('{name}',#{shell_id});\n"
+    ));
 
     let shape_rep_id = id;
     id += 1;
-    out.push_str(&format!("#{shape_rep_id} = MANIFOLD_SURFACE_SHAPE_REPRESENTATION('{name}',(#{brep_id}),#8);\n"));
-    out.push_str(&format!("#{id} = SHAPE_DEFINITION_REPRESENTATION(#7,#{shape_rep_id});\n"));
+    out.push_str(&format!(
+        "#{shape_rep_id} = MANIFOLD_SURFACE_SHAPE_REPRESENTATION('{name}',(#{brep_id}),#8);\n"
+    ));
+    out.push_str(&format!(
+        "#{id} = SHAPE_DEFINITION_REPRESENTATION(#7,#{shape_rep_id});\n"
+    ));
     out.push_str("ENDSEC;\nEND-ISO-10303-21;\n");
 
     out
 }
-

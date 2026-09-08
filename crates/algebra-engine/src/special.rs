@@ -3,8 +3,8 @@
 //! Symbolic special functions including Gamma $\Gamma(x)$, Bessel functions $J_\nu(x)$,
 //! Riemann Zeta $\zeta(s)$, Dirac Delta $\delta(x)$, and Error function $\text{erf}(x)$.
 
-use algebra_core::{AlgebraResult, ExprGraph, ExprId};
 pub use crate::weyl_dmodules::{BesselJ, ErrorFunctionErf, HermiteH, HolonomicFunction, LegendreP};
+use algebra_core::{AlgebraResult, ExprGraph, ExprId};
 
 /// Special functions constructors for symbolic expressions.
 pub trait SpecialFunctions {

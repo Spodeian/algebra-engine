@@ -3,8 +3,8 @@
 //! Interactive Builder Palettes & Wizards (Matrix Builder, ODE Wizard, Domain Picker, Units, CAD Machinery).
 
 use crate::notebook::{
-    generate_branch_cut_syntax, generate_interval_syntax, generate_matrix_syntax,
-    generate_ode_bc_syntax, generate_physical_unit_syntax, MatrixPresetKind, NotebookState,
+    MatrixPresetKind, NotebookState, generate_branch_cut_syntax, generate_interval_syntax,
+    generate_matrix_syntax, generate_ode_bc_syntax, generate_physical_unit_syntax,
 };
 use eframe::egui;
 

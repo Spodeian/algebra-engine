@@ -1,5 +1,5 @@
-use algebra_core::format::LatexFormatter;
 use algebra_core::ExprGraph;
+use algebra_core::format::LatexFormatter;
 use urae_cli::process_input;
 
 #[test]
@@ -24,7 +24,7 @@ fn test_cli_differentiation() {
 #[test]
 fn test_json_request_response_api() {
     use algebra_core::ExprGraph;
-    use urae_cli::{process_json_request, UraeJsonResponse};
+    use urae_cli::{UraeJsonResponse, process_json_request};
 
     let graph = ExprGraph::new();
 

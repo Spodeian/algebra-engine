@@ -1,10 +1,15 @@
 use super::Uint;
 
-use std::ops::{BitAnd, BitOr, BitXor, BitAndAssign, BitOrAssign, BitXorAssign, ShlAssign, ShrAssign};
+use std::ops::{
+    BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, ShlAssign, ShrAssign,
+};
 
 use num::{BigUint, ToPrimitive, traits::ConstZero};
 
-impl<U> BitAnd<U> for Uint where U: Into<BigUint> + ToPrimitive {
+impl<U> BitAnd<U> for Uint
+where
+    U: Into<BigUint> + ToPrimitive,
+{
     type Output = Self;
     fn bitand(self, rhs: U) -> Self {
         if let Uint::Machine(a) = self {
@@ -16,7 +21,10 @@ impl<U> BitAnd<U> for Uint where U: Into<BigUint> + ToPrimitive {
     }
 }
 
-impl<U> BitOr<U> for Uint where U: Into<BigUint> + ToPrimitive {
+impl<U> BitOr<U> for Uint
+where
+    U: Into<BigUint> + ToPrimitive,
+{
     type Output = Self;
     fn bitor(self, rhs: U) -> Self {
         if let Uint::Machine(a) = self {
@@ -28,7 +36,10 @@ impl<U> BitOr<U> for Uint where U: Into<BigUint> + ToPrimitive {
     }
 }
 
-impl<U> BitXor<U> for Uint where U: Into<BigUint> + ToPrimitive {
+impl<U> BitXor<U> for Uint
+where
+    U: Into<BigUint> + ToPrimitive,
+{
     type Output = Self;
     fn bitxor(self, rhs: U) -> Self {
         if let Uint::Machine(a) = self {
@@ -49,29 +60,50 @@ impl std::ops::Not for Uint {
                 // Logical NOT for BigUint usually implies a fixed bit-width.
                 // Here we flip all bits within the existing allocated limbs.
                 let mut digits = a.to_u32_digits();
-                for d in &mut digits { *d = !*d; }
+                for d in &mut digits {
+                    *d = !*d;
+                }
                 Uint::from(BigUint::from_slice(&digits))
             }
         }
     }
 }
 
-impl<U> BitAndAssign<U> for Uint where Self: BitAnd<U, Output = Self> {
-    fn bitand_assign(&mut self, rhs: U) { *self = std::mem::replace(self, Uint::ZERO) & rhs; }
+impl<U> BitAndAssign<U> for Uint
+where
+    Self: BitAnd<U, Output = Self>,
+{
+    fn bitand_assign(&mut self, rhs: U) {
+        *self = std::mem::replace(self, Uint::ZERO) & rhs;
+    }
 }
 
-impl<U> BitOrAssign<U> for Uint where Self: BitOr<U, Output = Self> {
-    fn bitor_assign(&mut self, rhs: U) { *self = std::mem::replace(self, Uint::ZERO) | rhs; }
+impl<U> BitOrAssign<U> for Uint
+where
+    Self: BitOr<U, Output = Self>,
+{
+    fn bitor_assign(&mut self, rhs: U) {
+        *self = std::mem::replace(self, Uint::ZERO) | rhs;
+    }
 }
 
-impl<U> BitXorAssign<U> for Uint where Self: BitXor<U, Output = Self> {
-    fn bitxor_assign(&mut self, rhs: U) { *self = std::mem::replace(self, Uint::ZERO) ^ rhs; }
+impl<U> BitXorAssign<U> for Uint
+where
+    Self: BitXor<U, Output = Self>,
+{
+    fn bitxor_assign(&mut self, rhs: U) {
+        *self = std::mem::replace(self, Uint::ZERO) ^ rhs;
+    }
 }
 
 impl ShlAssign<usize> for Uint {
-    fn shl_assign(&mut self, rhs: usize) { *self = std::mem::replace(self, Uint::ZERO) << rhs; }
+    fn shl_assign(&mut self, rhs: usize) {
+        *self = std::mem::replace(self, Uint::ZERO) << rhs;
+    }
 }
 
 impl ShrAssign<usize> for Uint {
-    fn shr_assign(&mut self, rhs: usize) { *self = std::mem::replace(self, Uint::ZERO) >> rhs; }
+    fn shr_assign(&mut self, rhs: usize) {
+        *self = std::mem::replace(self, Uint::ZERO) >> rhs;
+    }
 }

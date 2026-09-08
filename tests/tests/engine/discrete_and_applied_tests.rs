@@ -3,7 +3,7 @@ use algebra_engine::combinatorics::{
     permutations, stirling_second_kind,
 };
 use algebra_engine::control::StateSpaceSystem;
-use algebra_engine::numbertheory::{extended_gcd, is_prime, legendre_symbol, ContinuedFraction};
+use algebra_engine::numbertheory::{ContinuedFraction, extended_gcd, is_prime, legendre_symbol};
 use algebra_engine::topology::SimplicialComplex;
 use num_bigint::BigUint;
 
@@ -78,9 +78,9 @@ fn test_number_theory() {
 #[test]
 fn test_universal_prime_decomposition_and_classification() {
     use algebra_engine::numbertheory::{
-        decompose_eisenstein, decompose_galois, decompose_gaussian, decompose_integer,
-        decompose_modulo, decompose_padic, decompose_rational, decompose_universal,
-        PrimeClassification,
+        PrimeClassification, decompose_eisenstein, decompose_galois, decompose_gaussian,
+        decompose_integer, decompose_modulo, decompose_padic, decompose_rational,
+        decompose_universal,
     };
 
     // 1. Rational Integers (Z)
@@ -88,83 +88,157 @@ fn test_universal_prime_decomposition_and_classification() {
     assert_eq!(dec_60.factors.len(), 3);
     assert_eq!(dec_60.factors[0].factor_repr, "2");
     assert_eq!(dec_60.factors[0].exponent, 2);
-    assert!(dec_60.factors[0].classifications.contains(&PrimeClassification::EvenPrime));
+    assert!(
+        dec_60.factors[0]
+            .classifications
+            .contains(&PrimeClassification::EvenPrime)
+    );
 
     assert_eq!(dec_60.factors[1].factor_repr, "3");
-    assert!(dec_60.factors[1].classifications.contains(&PrimeClassification::EisensteinRamified));
-    assert!(dec_60.factors[1].classifications.contains(&PrimeClassification::GaussianInert));
+    assert!(
+        dec_60.factors[1]
+            .classifications
+            .contains(&PrimeClassification::EisensteinRamified)
+    );
+    assert!(
+        dec_60.factors[1]
+            .classifications
+            .contains(&PrimeClassification::GaussianInert)
+    );
 
     assert_eq!(dec_60.factors[2].factor_repr, "5");
-    assert!(dec_60.factors[2].classifications.contains(&PrimeClassification::GaussianSplit { u: 1, v: 2 }));
+    assert!(
+        dec_60.factors[2]
+            .classifications
+            .contains(&PrimeClassification::GaussianSplit { u: 1, v: 2 })
+    );
 
     // Negative integer: preserves sign unit -1
     let dec_neg = decompose_integer(-13);
     assert_eq!(dec_neg.unit_part, "-1");
     assert_eq!(dec_neg.factors[0].factor_repr, "13");
-    assert!(dec_neg.factors[0].classifications.contains(&PrimeClassification::GaussianSplit { u: 2, v: 3 }));
+    assert!(
+        dec_neg.factors[0]
+            .classifications
+            .contains(&PrimeClassification::GaussianSplit { u: 2, v: 3 })
+    );
 
     // 2. Rational Numbers (Q)
     let dec_q = decompose_rational(21, 40); // (3 * 7) / (2^3 * 5)
     assert_eq!(dec_q.factors.len(), 4);
     let p_2 = dec_q.factors.iter().find(|f| f.factor_repr == "2").unwrap();
     assert_eq!(p_2.exponent, -3);
-    assert!(p_2.classifications.contains(&PrimeClassification::RationalDenominatorPrime));
+    assert!(
+        p_2.classifications
+            .contains(&PrimeClassification::RationalDenominatorPrime)
+    );
 
     let p_7 = dec_q.factors.iter().find(|f| f.factor_repr == "7").unwrap();
     assert_eq!(p_7.exponent, 1);
-    assert!(p_7.classifications.contains(&PrimeClassification::RationalNumeratorPrime));
+    assert!(
+        p_7.classifications
+            .contains(&PrimeClassification::RationalNumeratorPrime)
+    );
 
     // 3. Gaussian Integers Z[i]
     // 3 + 4i = (2 + i)^2 * (-i) or associate, norm 25 = 5^2
     let dec_gi = decompose_gaussian(3, 4);
     assert_eq!(dec_gi.number_system, "Gaussian Integers (ℤ[i])");
     assert!(!dec_gi.factors.is_empty());
-    assert!(dec_gi.factors.iter().all(|f| f.classifications.contains(&PrimeClassification::GaussianSplitPrime)));
+    assert!(dec_gi.factors.iter().all(|f| {
+        f.classifications
+            .contains(&PrimeClassification::GaussianSplitPrime)
+    }));
 
     // 5 in Z[i] splits as (1 + 2i)(1 - 2i)
     let dec_5_gi = decompose_gaussian(5, 0);
     assert_eq!(dec_5_gi.factors.len(), 2);
-    assert!(dec_5_gi.factors[0].classifications.contains(&PrimeClassification::GaussianSplitPrime));
+    assert!(
+        dec_5_gi.factors[0]
+            .classifications
+            .contains(&PrimeClassification::GaussianSplitPrime)
+    );
 
     // 1 + i is ramified
     let dec_ram = decompose_gaussian(1, 1);
-    assert_eq!(dec_ram.factors[0].classifications, vec![PrimeClassification::GaussianRamifiedPrime]);
+    assert_eq!(
+        dec_ram.factors[0].classifications,
+        vec![PrimeClassification::GaussianRamifiedPrime]
+    );
 
     // 3 in Z[i] is inert
     let dec_3_gi = decompose_gaussian(3, 0);
-    assert_eq!(dec_3_gi.factors[0].classifications, vec![PrimeClassification::GaussianInertPrime]);
+    assert_eq!(
+        dec_3_gi.factors[0].classifications,
+        vec![PrimeClassification::GaussianInertPrime]
+    );
 
     // 4. Eisenstein Integers Z[w]
     // 3 is ramified: associate of (1 - w)^2
     let dec_3_ei = decompose_eisenstein(3, 0);
     assert_eq!(dec_3_ei.number_system, "Eisenstein Integers (ℤ[ω])");
-    assert!(dec_3_ei.factors[0].classifications.contains(&PrimeClassification::EisensteinRamifiedPrime));
+    assert!(
+        dec_3_ei.factors[0]
+            .classifications
+            .contains(&PrimeClassification::EisensteinRamifiedPrime)
+    );
 
     // 7 in Z[w] splits
     let dec_7_ei = decompose_eisenstein(7, 0);
-    assert!(dec_7_ei.factors.iter().any(|f| f.classifications.contains(&PrimeClassification::EisensteinSplitPrime)));
+    assert!(dec_7_ei.factors.iter().any(|f| {
+        f.classifications
+            .contains(&PrimeClassification::EisensteinSplitPrime)
+    }));
 
     // 2 in Z[w] is inert
     let dec_2_ei = decompose_eisenstein(2, 0);
-    assert_eq!(dec_2_ei.factors[0].classifications, vec![PrimeClassification::EisensteinInertPrime]);
+    assert_eq!(
+        dec_2_ei.factors[0].classifications,
+        vec![PrimeClassification::EisensteinInertPrime]
+    );
 
     // 5. Modular Rings Z/nZ
     // 12 in Z/15Z: gcd(12, 15) = 3, zero-divisor, prime ideal generator
     let dec_mod = decompose_modulo(12, 15);
-    assert!(dec_mod.classification_summary.iter().any(|s| s.contains("gcd(x, n) = 3")));
-    assert!(dec_mod.classification_summary.iter().any(|s| s.contains("Modular prime/maximal ideal")));
+    assert!(
+        dec_mod
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("gcd(x, n) = 3"))
+    );
+    assert!(
+        dec_mod
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("Modular prime/maximal ideal"))
+    );
 
     // 4 in Z/15Z: gcd(4, 15) = 1, unit with multiplicative order 2 (4^2 = 16 = 1 mod 15)
     let dec_mod_unit = decompose_modulo(4, 15);
-    assert!(dec_mod_unit.classification_summary.iter().any(|s| s.contains("order 2")));
+    assert!(
+        dec_mod_unit
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("order 2"))
+    );
 
     // 6 in Z/9Z: nilpotent (6^2 = 36 = 0 mod 9)
     let dec_mod_nil = decompose_modulo(6, 9);
-    assert!(dec_mod_nil.classification_summary.iter().any(|s| s.contains("nilpotent")));
+    assert!(
+        dec_mod_nil
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("nilpotent"))
+    );
 
     // 10 in Z/15Z: idempotent (10^2 = 100 = 10 mod 15)
     let dec_mod_idem = decompose_modulo(10, 15);
-    assert!(dec_mod_idem.classification_summary.iter().any(|s| s.contains("idempotent")));
+    assert!(
+        dec_mod_idem
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("idempotent"))
+    );
 
     // 6. p-Adic Field Q_p
     // 45 in Q_3: 45 = 3^2 * 5. Valuation v_3(45) = 2, unit is 5
@@ -176,7 +250,12 @@ fn test_universal_prime_decomposition_and_classification() {
     // 7. Galois Field GF(p^k)
     // In GF(7): q = 7, group order = 6. Element 3 has order 6 (primitive generator: 3^1=3, 3^2=2, 3^3=6, 3^4=4, 3^5=5, 3^6=1 mod 7)
     let dec_gf = decompose_galois(3, 7, 1);
-    assert!(dec_gf.classification_summary.iter().any(|s| s.contains("Primitive Generator")));
+    assert!(
+        dec_gf
+            .classification_summary
+            .iter()
+            .any(|s| s.contains("Primitive Generator"))
+    );
 
     // 8. Universal string parser and domain routing
     let univ_int = decompose_universal("120", None).unwrap();
@@ -232,7 +311,9 @@ fn test_tropical_newton_polygon_padic_roots() {
 
 #[test]
 fn test_special_functions_weyl_annihilators() {
-    use algebra_engine::special::{BesselJ, ErrorFunctionErf, HermiteH, HolonomicFunction, LegendreP};
+    use algebra_engine::special::{
+        BesselJ, ErrorFunctionErf, HermiteH, HolonomicFunction, LegendreP,
+    };
 
     // 1. Bessel J_0(x): x^2 d^2 + x d + x^2 = 0 (nu = 0)
     let j0 = BesselJ { nu: 0.0 };
@@ -268,11 +349,10 @@ fn test_creative_telescoping_definite_integration() {
     // Gaussian integrand: exp(-x * y^2)
     let integrand = graph.symbol("f"); // placeholder
 
-    let (ode_op, certificate) = RischIntegrator::creative_telescoping_integral(&graph, integrand, x_sym, y_sym).unwrap();
+    let (ode_op, certificate) =
+        RischIntegrator::creative_telescoping_integral(&graph, integrand, x_sym, y_sym).unwrap();
     // Returns 2x d_x + 1
     assert_eq!(ode_op.num_vars, 1);
     assert_eq!(ode_op.terms.len(), 2);
     assert!(certificate.contains("exp"));
 }
-
-

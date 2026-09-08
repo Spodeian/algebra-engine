@@ -16,7 +16,7 @@ use algebra_core::{AlgebraResult, ExprGraph, ExprId};
 use algebra_engine::calculus::SymbolicCalculus;
 use algebra_engine::simplify::Simplifier;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Supported LLM API Providers for AI Copilot and Symbolic Integration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]

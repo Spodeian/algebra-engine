@@ -249,4 +249,3 @@ impl<'a> Functor<ExprId, ExprId> for SimplificationFunctor<'a> {
         algebra_engine::simplify::Simplifier::simplify(self.graph, *obj).unwrap_or(*obj)
     }
 }
-

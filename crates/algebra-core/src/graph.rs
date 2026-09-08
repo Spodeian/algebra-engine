@@ -319,10 +319,8 @@ impl ExprGraph {
                 return num;
             }
         }
-        if let (
-            ExprKind::Number(Number::Integer(n)),
-            ExprKind::Number(Number::Integer(d)),
-        ) = (&n_node.kind, &den_node.kind)
+        if let (ExprKind::Number(Number::Integer(n)), ExprKind::Number(Number::Integer(d))) =
+            (&n_node.kind, &den_node.kind)
         {
             if *d != 0 {
                 return self.rational(*n, *d);

@@ -7,8 +7,8 @@
 //! - **Viscous Burgers Equation**: Traveling shock front profile
 //! - **Fisher-KPP Reaction-Diffusion**: Traveling wave invasion front
 
-use algebra_core::{AlgebraResult, ExprGraph, ExprId, SymbolId};
 use crate::simplify::Simplifier;
+use algebra_core::{AlgebraResult, ExprGraph, ExprId, SymbolId};
 
 /// Nonlinear PDE Traveling Wave Reductions.
 pub struct PdeTravelingWaveReduction;

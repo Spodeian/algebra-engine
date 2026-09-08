@@ -16,8 +16,8 @@ pub use algebra_core::{
         SymbolRoleKind, SystemCommandKind, TopologyOpKind, TransformOpKind, TropicalOpKind,
     },
     parser::{
-        normalize_latex_input, parse_domain_declaration, parse_operation, parse_permissive_intent,
-        ExprParser, PermissiveIntent,
+        ExprParser, PermissiveIntent, normalize_latex_input, parse_domain_declaration,
+        parse_operation, parse_permissive_intent,
     },
     probabilistic::{ProbabilisticVerifier, Solution},
     step::{MathStep, StepByStepResult},
@@ -86,7 +86,7 @@ pub use algebra_engine::{
         HyperbolicTessellation, HyperbolicTriangle, PoincareDiskPoint, SchwarzChristoffel,
         SphericalPoint, UpperHalfPlanePoint,
     },
-    numbertheory::{extended_gcd, is_prime, legendre_symbol, ContinuedFraction},
+    numbertheory::{ContinuedFraction, extended_gcd, is_prime, legendre_symbol},
     numeric::{BigValue, EvalContext, NumericalEval},
     ode::{
         ButcherTableau, NumericalOdeConfig, NumericalOdeMethod, NumericalOdeSolver, OdeTrajectory,
@@ -132,7 +132,7 @@ pub use algebra_engine::{
     tensor::SymbolicTensor,
     topology::SimplicialComplex,
     transforms::SymbolicTransforms,
-    tropical::{log_sum_exp, MaxPlus, MinPlus, TropicalMatrix},
+    tropical::{MaxPlus, MinPlus, TropicalMatrix, log_sum_exp},
     weyl_dmodules::{
         AlmkvistZeilberger, WeylDOperator, WeylGrobnerBasis, WeylMonomial, WeylTerm,
         ZeilbergerAlgorithm, ZeilbergerResult,

@@ -98,15 +98,24 @@ fn test_clifford_pauli_dirac_isomorphisms() {
     // Test Pauli matrix representation
     // sigma_x = e1
     let pauli_e1 = e1.to_pauli_spinor_2x2().unwrap();
-    assert_eq!(pauli_e1, [[(0.0, 0.0), (1.0, 0.0)], [(1.0, 0.0), (0.0, 0.0)]]);
+    assert_eq!(
+        pauli_e1,
+        [[(0.0, 0.0), (1.0, 0.0)], [(1.0, 0.0), (0.0, 0.0)]]
+    );
 
     // sigma_y = e2
     let pauli_e2 = e2.to_pauli_spinor_2x2().unwrap();
-    assert_eq!(pauli_e2, [[(0.0, 0.0), (0.0, -1.0)], [(0.0, 1.0), (0.0, 0.0)]]);
+    assert_eq!(
+        pauli_e2,
+        [[(0.0, 0.0), (0.0, -1.0)], [(0.0, 1.0), (0.0, 0.0)]]
+    );
 
     // sigma_z = e3
     let pauli_e3 = e3.to_pauli_spinor_2x2().unwrap();
-    assert_eq!(pauli_e3, [[(1.0, 0.0), (0.0, 0.0)], [(0.0, 0.0), (-1.0, 0.0)]]);
+    assert_eq!(
+        pauli_e3,
+        [[(1.0, 0.0), (0.0, 0.0)], [(0.0, 0.0), (-1.0, 0.0)]]
+    );
 
     // Even subalgebra to Quaternion
     // Rotor R = cos(pi/4) - sin(pi/4) e12 = 1/sqrt(2) (1 - e12)
@@ -128,4 +137,3 @@ fn test_clifford_pauli_dirac_isomorphisms() {
     assert_eq!(dirac0[2][2].0, -1.0);
     assert_eq!(dirac0[3][3].0, -1.0);
 }
-

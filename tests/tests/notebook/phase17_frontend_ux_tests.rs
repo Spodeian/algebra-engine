@@ -1,7 +1,7 @@
 //! Integration Tests for Phase 17 Frontend UX Enhancements: Command Palette, 3D Viewport & CAD Builder Palettes.
 
-use urae_notebook::ui::{CommandPalette, Viewport3DState, ViewportModelPreset};
 use urae_notebook::UraeNotebookApp;
+use urae_notebook::ui::{CommandPalette, Viewport3DState, ViewportModelPreset};
 
 #[test]
 fn test_command_palette_command_filtering() {

@@ -29,7 +29,9 @@ impl CodeGenerator {
                 algebra_core::Number::BigInteger(b) => Ok(format!("{b}.0")),
                 algebra_core::Number::Float(bits) => Ok(format!("{}", f64::from_bits(*bits))),
                 algebra_core::Number::Rational(num, den) => Ok(format!("({num}.0 / {den}.0)")),
-                algebra_core::Number::BigRational(r) => Ok(format!("({}.0 / {}.0)", r.numer(), r.denom())),
+                algebra_core::Number::BigRational(r) => {
+                    Ok(format!("({}.0 / {}.0)", r.numer(), r.denom()))
+                }
                 algebra_core::Number::Scientific { mantissa, exponent } => {
                     Ok(format!("({mantissa}.0 * 10.0f64.powi({exponent}))"))
                 }

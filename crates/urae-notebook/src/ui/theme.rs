@@ -57,7 +57,10 @@ impl ThemeKind {
 
     /// Check if the theme is dark.
     pub fn is_dark(&self) -> bool {
-        !matches!(self, Self::Light | Self::SolarizedLight | Self::HighContrastLight)
+        !matches!(
+            self,
+            Self::Light | Self::SolarizedLight | Self::HighContrastLight
+        )
     }
 }
 
@@ -655,4 +658,3 @@ impl ThemePalette {
         ui.fonts_mut(|f| f.layout_job(job))
     }
 }
-

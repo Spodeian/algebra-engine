@@ -3,9 +3,9 @@ use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
 use num::{
+    BigInt, Integer, Num, One, Zero,
     bigint::ParseBigIntError,
     traits::{ConstOne, ConstZero, Signed},
-    BigInt, Integer, Num, One, Zero,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

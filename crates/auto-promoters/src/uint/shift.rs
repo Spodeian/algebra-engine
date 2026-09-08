@@ -1,6 +1,6 @@
 use super::Uint;
 
-use std::ops::{Shl, Shr, ShlAssign, ShrAssign};
+use std::ops::{Shl, ShlAssign, Shr, ShrAssign};
 
 use num::{BigUint, ToPrimitive, traits::ConstZero};
 

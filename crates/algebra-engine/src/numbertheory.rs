@@ -7,10 +7,10 @@
 //! - Legendre and Jacobi Symbols $(a/p)$
 //! - Modular Exponentiation & Inverses
 
+use algebra_core::traits::ValuationProvider;
 use num_bigint::BigUint;
 use num_traits::One;
 use std::collections::BTreeMap;
-use algebra_core::traits::ValuationProvider;
 
 /// A global valuation profile over $\mathbb{Q}$, storing all non-zero $p$-adic valuations and the Archimedean absolute value.
 #[derive(Debug, Clone, PartialEq)]
@@ -148,11 +148,7 @@ pub fn legendre_symbol(mut a: i64, p: u64) -> i32 {
     }
     let exp = (p - 1) / 2;
     let pow_mod = BigUint::from(a as u64).modpow(&BigUint::from(exp), &BigUint::from(p));
-    if pow_mod == BigUint::one() {
-        1
-    } else {
-        -1
-    }
+    if pow_mod == BigUint::one() { 1 } else { -1 }
 }
 
 /// Detailed classification of algebraic and number-theoretic primes across all number systems.
@@ -194,31 +190,80 @@ impl std::fmt::Display for PrimeClassification {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EvenPrime => write!(f, "Even prime (only even prime; ramifies in ℤ[i] and ℤ[ω])"),
-            Self::GaussianSplit { u, v } => write!(f, "Pythagorean / Gaussian-split prime (p ≡ 1 mod 4; {}² + {}² = p; splits in ℤ[i])", u, v),
-            Self::GaussianInert => write!(f, "Gaussian-inert prime (p ≡ 3 mod 4; remains prime in ℤ[i])"),
-            Self::EisensteinSplit { u, v } => write!(f, "Eisenstein-split prime (p ≡ 1 mod 3; {}² - {}·{} + {}² = p; splits in ℤ[ω])", u, u, v, v),
-            Self::EisensteinInert => write!(f, "Eisenstein-inert prime (p ≡ 2 mod 3; remains prime in ℤ[ω])"),
-            Self::EisensteinRamified => write!(f, "Eisenstein-ramified prime (p = 3; ramifies as -ω²(1-ω)²)"),
+            Self::GaussianSplit { u, v } => write!(
+                f,
+                "Pythagorean / Gaussian-split prime (p ≡ 1 mod 4; {}² + {}² = p; splits in ℤ[i])",
+                u, v
+            ),
+            Self::GaussianInert => write!(
+                f,
+                "Gaussian-inert prime (p ≡ 3 mod 4; remains prime in ℤ[i])"
+            ),
+            Self::EisensteinSplit { u, v } => write!(
+                f,
+                "Eisenstein-split prime (p ≡ 1 mod 3; {}² - {}·{} + {}² = p; splits in ℤ[ω])",
+                u, u, v, v
+            ),
+            Self::EisensteinInert => write!(
+                f,
+                "Eisenstein-inert prime (p ≡ 2 mod 3; remains prime in ℤ[ω])"
+            ),
+            Self::EisensteinRamified => write!(
+                f,
+                "Eisenstein-ramified prime (p = 3; ramifies as -ω²(1-ω)²)"
+            ),
             Self::Mersenne { k } => write!(f, "Mersenne prime (2^{} - 1)", k),
             Self::Fermat { k } => write!(f, "Fermat prime (2^(2^{}) + 1)", k),
             Self::SophieGermain => write!(f, "Sophie Germain prime (2p + 1 is prime)"),
             Self::SafePrime => write!(f, "Safe prime ((p - 1)/2 is prime)"),
             Self::TwinPrime { paired } => write!(f, "Twin prime (paired with {})", paired),
-            Self::GaussianRamifiedPrime => write!(f, "Gaussian-ramified prime (associate of 1 + i; norm 2)"),
-            Self::GaussianSplitPrime => write!(f, "Gaussian-split prime (norm is rational prime p ≡ 1 mod 4)"),
-            Self::GaussianInertPrime => write!(f, "Gaussian-inert prime (rational prime q ≡ 3 mod 4; norm q²)"),
-            Self::EisensteinRamifiedPrime => write!(f, "Eisenstein-ramified prime (associate of 1 - ω; norm 3)"),
-            Self::EisensteinSplitPrime => write!(f, "Eisenstein-split prime (norm is rational prime p ≡ 1 mod 3)"),
-            Self::EisensteinInertPrime => write!(f, "Eisenstein-inert prime (rational prime q ≡ 2 mod 3; norm q²)"),
-            Self::ModularUnit { order } => write!(f, "Modular unit (invertible residue with multiplicative order {})", order),
-            Self::ModularZeroDivisor { gcd } => write!(f, "Modular zero divisor (gcd(x, n) = {})", gcd),
-            Self::ModularNilpotent { index } => write!(f, "Modular nilpotent element (x^{} ≡ 0 mod n)", index),
+            Self::GaussianRamifiedPrime => {
+                write!(f, "Gaussian-ramified prime (associate of 1 + i; norm 2)")
+            }
+            Self::GaussianSplitPrime => write!(
+                f,
+                "Gaussian-split prime (norm is rational prime p ≡ 1 mod 4)"
+            ),
+            Self::GaussianInertPrime => write!(
+                f,
+                "Gaussian-inert prime (rational prime q ≡ 3 mod 4; norm q²)"
+            ),
+            Self::EisensteinRamifiedPrime => {
+                write!(f, "Eisenstein-ramified prime (associate of 1 - ω; norm 3)")
+            }
+            Self::EisensteinSplitPrime => write!(
+                f,
+                "Eisenstein-split prime (norm is rational prime p ≡ 1 mod 3)"
+            ),
+            Self::EisensteinInertPrime => write!(
+                f,
+                "Eisenstein-inert prime (rational prime q ≡ 2 mod 3; norm q²)"
+            ),
+            Self::ModularUnit { order } => write!(
+                f,
+                "Modular unit (invertible residue with multiplicative order {})",
+                order
+            ),
+            Self::ModularZeroDivisor { gcd } => {
+                write!(f, "Modular zero divisor (gcd(x, n) = {})", gcd)
+            }
+            Self::ModularNilpotent { index } => {
+                write!(f, "Modular nilpotent element (x^{} ≡ 0 mod n)", index)
+            }
             Self::ModularIdempotent => write!(f, "Modular idempotent element (x² ≡ x mod n)"),
             Self::ModularPrimeIdeal => write!(f, "Modular prime/maximal ideal generator"),
-            Self::PadicUniformizer { valuation } => write!(f, "p-adic uniformizer prime (valuation v_p = {})", valuation),
+            Self::PadicUniformizer { valuation } => write!(
+                f,
+                "p-adic uniformizer prime (valuation v_p = {})",
+                valuation
+            ),
             Self::PadicUnit => write!(f, "p-adic unit (|u|_p = 1)"),
-            Self::PadicFractionalPole { order } => write!(f, "p-adic fractional pole (order {})", order),
-            Self::GaloisGenerator { order } => write!(f, "Galois field primitive generator (order {})", order),
+            Self::PadicFractionalPole { order } => {
+                write!(f, "p-adic fractional pole (order {})", order)
+            }
+            Self::GaloisGenerator { order } => {
+                write!(f, "Galois field primitive generator (order {})", order)
+            }
             Self::GaloisSubfieldElement => write!(f, "Galois subfield element"),
             Self::RationalNumeratorPrime => write!(f, "Rational numerator prime factor"),
             Self::RationalDenominatorPrime => write!(f, "Rational denominator pole factor"),
@@ -380,9 +425,13 @@ pub fn classify_rational_prime(p: u64) -> Vec<PrimeClassification> {
 
     // Twin prime: p - 2 or p + 2 is prime
     if p > 2 && is_prime(p - 2) {
-        classes.push(PrimeClassification::TwinPrime { paired: (p - 2) as i64 });
+        classes.push(PrimeClassification::TwinPrime {
+            paired: (p - 2) as i64,
+        });
     } else if is_prime(p + 2) {
-        classes.push(PrimeClassification::TwinPrime { paired: (p + 2) as i64 });
+        classes.push(PrimeClassification::TwinPrime {
+            paired: (p + 2) as i64,
+        });
     }
 
     classes
@@ -536,8 +585,16 @@ pub fn decompose_rational(num: i64, den: i64) -> PrimeDecompositionResult {
         });
     }
 
-    let eq_rhs = if eq_parts.is_empty() { "1".to_string() } else { eq_parts.join(" * ") };
-    let latex_rhs = if latex_parts.is_empty() { "1".to_string() } else { latex_parts.join(" \\cdot ") };
+    let eq_rhs = if eq_parts.is_empty() {
+        "1".to_string()
+    } else {
+        eq_parts.join(" * ")
+    };
+    let latex_rhs = if latex_parts.is_empty() {
+        "1".to_string()
+    } else {
+        latex_parts.join(" \\cdot ")
+    };
 
     let formatted_equation = format!("{}/{} = {}", num, den, eq_rhs);
     let latex_equation = format!("\\frac{{{}}}{{{}}} = {}", num, den, latex_rhs);
@@ -625,7 +682,11 @@ pub fn decompose_gaussian(mut a: i64, mut b: i64) -> PrimeDecompositionResult {
             if count > 0 {
                 let classes = vec![PrimeClassification::GaussianRamifiedPrime];
                 summary.push(format!("(1 + i)^{}: {}", count, classes[0]));
-                factor_strs.push(if count == 1 { "(1 + i)".to_string() } else { format!("(1 + i)^{}", count) });
+                factor_strs.push(if count == 1 {
+                    "(1 + i)".to_string()
+                } else {
+                    format!("(1 + i)^{}", count)
+                });
                 factors.push(PrimeFactor {
                     factor_repr: "(1 + i)".to_string(),
                     exponent: count,
@@ -647,7 +708,11 @@ pub fn decompose_gaussian(mut a: i64, mut b: i64) -> PrimeDecompositionResult {
                     let classes = vec![PrimeClassification::GaussianSplitPrime];
                     let repr = format!("({} + {}i)", u, v);
                     summary.push(format!("{}^{}: {}", repr, count1, classes[0]));
-                    factor_strs.push(if count1 == 1 { repr.clone() } else { format!("{}^{}", repr, count1) });
+                    factor_strs.push(if count1 == 1 {
+                        repr.clone()
+                    } else {
+                        format!("{}^{}", repr, count1)
+                    });
                     factors.push(PrimeFactor {
                         factor_repr: repr,
                         exponent: count1,
@@ -667,7 +732,11 @@ pub fn decompose_gaussian(mut a: i64, mut b: i64) -> PrimeDecompositionResult {
                     let classes = vec![PrimeClassification::GaussianSplitPrime];
                     let repr = format!("({} - {}i)", u, v);
                     summary.push(format!("{}^{}: {}", repr, count2, classes[0]));
-                    factor_strs.push(if count2 == 1 { repr.clone() } else { format!("{}^{}", repr, count2) });
+                    factor_strs.push(if count2 == 1 {
+                        repr.clone()
+                    } else {
+                        format!("{}^{}", repr, count2)
+                    });
                     factors.push(PrimeFactor {
                         factor_repr: repr,
                         exponent: count2,
@@ -688,7 +757,11 @@ pub fn decompose_gaussian(mut a: i64, mut b: i64) -> PrimeDecompositionResult {
             if count > 0 {
                 let classes = vec![PrimeClassification::GaussianInertPrime];
                 summary.push(format!("{}^{}: {}", p, count, classes[0]));
-                factor_strs.push(if count == 1 { p.to_string() } else { format!("{}^{}", p, count) });
+                factor_strs.push(if count == 1 {
+                    p.to_string()
+                } else {
+                    format!("{}^{}", p, count)
+                });
                 factors.push(PrimeFactor {
                     factor_repr: p.to_string(),
                     exponent: count,
@@ -712,7 +785,11 @@ pub fn decompose_gaussian(mut a: i64, mut b: i64) -> PrimeDecompositionResult {
         all_factors_str.push(unit_part.to_string());
     }
     all_factors_str.extend(factor_strs);
-    let rhs = if all_factors_str.is_empty() { "1".to_string() } else { all_factors_str.join(" * ") };
+    let rhs = if all_factors_str.is_empty() {
+        "1".to_string()
+    } else {
+        all_factors_str.join(" * ")
+    };
     let formatted_equation = format!("{} = {}", original, rhs);
     let latex_equation = format!("{} = {}", original, rhs.replace('*', "\\cdot"));
 
@@ -792,7 +869,11 @@ pub fn decompose_eisenstein(mut a: i64, mut b: i64) -> PrimeDecompositionResult 
             if count > 0 {
                 let classes = vec![PrimeClassification::EisensteinRamifiedPrime];
                 summary.push(format!("(1 - ω)^{}: {}", count, classes[0]));
-                factor_strs.push(if count == 1 { "(1 - ω)".to_string() } else { format!("(1 - ω)^{}", count) });
+                factor_strs.push(if count == 1 {
+                    "(1 - ω)".to_string()
+                } else {
+                    format!("(1 - ω)^{}", count)
+                });
                 factors.push(PrimeFactor {
                     factor_repr: "(1 - ω)".to_string(),
                     exponent: count,
@@ -814,7 +895,11 @@ pub fn decompose_eisenstein(mut a: i64, mut b: i64) -> PrimeDecompositionResult 
                     let classes = vec![PrimeClassification::EisensteinSplitPrime];
                     let repr = format!("({} + {}ω)", u, v);
                     summary.push(format!("{}^{}: {}", repr, count1, classes[0]));
-                    factor_strs.push(if count1 == 1 { repr.clone() } else { format!("{}^{}", repr, count1) });
+                    factor_strs.push(if count1 == 1 {
+                        repr.clone()
+                    } else {
+                        format!("{}^{}", repr, count1)
+                    });
                     factors.push(PrimeFactor {
                         factor_repr: repr,
                         exponent: count1,
@@ -833,9 +918,17 @@ pub fn decompose_eisenstein(mut a: i64, mut b: i64) -> PrimeDecompositionResult 
                 }
                 if count2 > 0 {
                     let classes = vec![PrimeClassification::EisensteinSplitPrime];
-                    let repr = if cv >= 0 { format!("({} + {}ω)", cu, cv) } else { format!("({} - {}ω)", cu, -cv) };
+                    let repr = if cv >= 0 {
+                        format!("({} + {}ω)", cu, cv)
+                    } else {
+                        format!("({} - {}ω)", cu, -cv)
+                    };
                     summary.push(format!("{}^{}: {}", repr, count2, classes[0]));
-                    factor_strs.push(if count2 == 1 { repr.clone() } else { format!("{}^{}", repr, count2) });
+                    factor_strs.push(if count2 == 1 {
+                        repr.clone()
+                    } else {
+                        format!("{}^{}", repr, count2)
+                    });
                     factors.push(PrimeFactor {
                         factor_repr: repr,
                         exponent: count2,
@@ -856,7 +949,11 @@ pub fn decompose_eisenstein(mut a: i64, mut b: i64) -> PrimeDecompositionResult 
             if count > 0 {
                 let classes = vec![PrimeClassification::EisensteinInertPrime];
                 summary.push(format!("{}^{}: {}", p, count, classes[0]));
-                factor_strs.push(if count == 1 { p.to_string() } else { format!("{}^{}", p, count) });
+                factor_strs.push(if count == 1 {
+                    p.to_string()
+                } else {
+                    format!("{}^{}", p, count)
+                });
                 factors.push(PrimeFactor {
                     factor_repr: p.to_string(),
                     exponent: count,
@@ -888,7 +985,11 @@ pub fn decompose_eisenstein(mut a: i64, mut b: i64) -> PrimeDecompositionResult 
         all_factors_str.push(unit_part.to_string());
     }
     all_factors_str.extend(factor_strs);
-    let rhs = if all_factors_str.is_empty() { "1".to_string() } else { all_factors_str.join(" * ") };
+    let rhs = if all_factors_str.is_empty() {
+        "1".to_string()
+    } else {
+        all_factors_str.join(" * ")
+    };
     let formatted_equation = format!("{} = {}", original, rhs);
     let latex_equation = format!("{} = {}", original, rhs.replace('*', "\\cdot"));
 
@@ -953,7 +1054,10 @@ pub fn decompose_modulo(val: i64, n: u64) -> PrimeDecompositionResult {
     }
 
     let mut summary = Vec::new();
-    summary.push(format!("Ring CRT Primary Decomposition: ℤ/{}ℤ ≅ {}", mod_n, crt_desc));
+    summary.push(format!(
+        "Ring CRT Primary Decomposition: ℤ/{}ℤ ≅ {}",
+        mod_n, crt_desc
+    ));
     for c in &classes {
         summary.push(c.to_string());
     }
@@ -969,13 +1073,27 @@ pub fn decompose_modulo(val: i64, n: u64) -> PrimeDecompositionResult {
         });
     }
 
-    let status_str = if gcd_u == 1 { "Invertible Unit" } else { "Zero Divisor" };
-    let formatted_equation = format!("{} ≡ {} (mod {}): {} with gcd({}, {}) = {}", val, residue, mod_n, status_str, residue, mod_n, gcd_u);
-    let latex_equation = format!("{} \\equiv {} \\pmod{{{}}} \\quad [\\gcd={}, {}]", val, residue, mod_n, gcd_u, status_str);
+    let status_str = if gcd_u == 1 {
+        "Invertible Unit"
+    } else {
+        "Zero Divisor"
+    };
+    let formatted_equation = format!(
+        "{} ≡ {} (mod {}): {} with gcd({}, {}) = {}",
+        val, residue, mod_n, status_str, residue, mod_n, gcd_u
+    );
+    let latex_equation = format!(
+        "{} \\equiv {} \\pmod{{{}}} \\quad [\\gcd={}, {}]",
+        val, residue, mod_n, gcd_u, status_str
+    );
 
     PrimeDecompositionResult {
         number_system: format!("Modular Ring (ℤ/{}ℤ)", mod_n),
-        unit_part: if gcd_u == 1 { "Unit".to_string() } else { "Zero-Divisor".to_string() },
+        unit_part: if gcd_u == 1 {
+            "Unit".to_string()
+        } else {
+            "Zero-Divisor".to_string()
+        },
         factors,
         formatted_equation,
         latex_equation,
@@ -1013,8 +1131,17 @@ pub fn decompose_padic(val: i64, p: u32) -> PrimeDecompositionResult {
     let summary = vec![
         format!("p-adic Base Uniformizer Prime: {}", prime),
         format!("Valuation v_{}({}) = {}", prime, val, valuation),
-        format!("p-adic Norm |{}|_{} = p^(-{}) = {:.6}", val, prime, valuation, (prime as f64).powi(-valuation)),
-        format!("Decomposition: {} = {}^{} · ({}) [where |{}|_{} = 1]", val, prime, valuation, unit_val, unit_val, prime),
+        format!(
+            "p-adic Norm |{}|_{} = p^(-{}) = {:.6}",
+            val,
+            prime,
+            valuation,
+            (prime as f64).powi(-valuation)
+        ),
+        format!(
+            "Decomposition: {} = {}^{} · ({}) [where |{}|_{} = 1]",
+            val, prime, valuation, unit_val, unit_val, prime
+        ),
     ];
 
     let factor = PrimeFactor {
@@ -1024,8 +1151,14 @@ pub fn decompose_padic(val: i64, p: u32) -> PrimeDecompositionResult {
         classifications: classes,
     };
 
-    let formatted_equation = format!("{} = {}^{} · ({}) in ℚ_{}", val, prime, valuation, unit_val, prime);
-    let latex_equation = format!("{} = {}^{{{}}} \\cdot ({}) \\in \\mathbb{{Q}}_{{{}}}", val, prime, valuation, unit_val, prime);
+    let formatted_equation = format!(
+        "{} = {}^{} · ({}) in ℚ_{}",
+        val, prime, valuation, unit_val, prime
+    );
+    let latex_equation = format!(
+        "{} = {}^{{{}}} \\cdot ({}) \\in \\mathbb{{Q}}_{{{}}}",
+        val, prime, valuation, unit_val, prime
+    );
 
     PrimeDecompositionResult {
         number_system: format!("p-Adic Field (ℚ_{})", prime),
@@ -1090,7 +1223,10 @@ pub fn decompose_galois(val: u64, p: u64, power: u32) -> PrimeDecompositionResul
         format!("Characteristic Prime: {}", prime),
         format!("Field Order: q = {}^{} = {}", prime, pow, q),
         format!("Multiplicative Group Order: |GF(q)*| = {}", group_order),
-        format!("Element {} Multiplicative Order: ord({}) = {}", residue, residue, ord),
+        format!(
+            "Element {} Multiplicative Order: ord({}) = {}",
+            residue, residue, ord
+        ),
         if is_generator {
             format!("{} is a Primitive Generator of GF({}*)", residue, q)
         } else {
@@ -1098,8 +1234,14 @@ pub fn decompose_galois(val: u64, p: u64, power: u32) -> PrimeDecompositionResul
         },
     ];
 
-    let formatted_equation = format!("ord({}) = {} dividing (q - 1 = {}) in GF({}^{})", residue, ord, group_order, prime, pow);
-    let latex_equation = format!("\\mathrm{{ord}}({}) = {} \\mid (q - 1 = {}) \\in \\mathrm{{GF}}({}^{{{}}})", residue, ord, group_order, prime, pow);
+    let formatted_equation = format!(
+        "ord({}) = {} dividing (q - 1 = {}) in GF({}^{})",
+        residue, ord, group_order, prime, pow
+    );
+    let latex_equation = format!(
+        "\\mathrm{{ord}}({}) = {} \\mid (q - 1 = {}) \\in \\mathrm{{GF}}({}^{{{}}})",
+        residue, ord, group_order, prime, pow
+    );
 
     PrimeDecompositionResult {
         number_system: format!("Galois Field GF({}^{})", prime, pow),
@@ -1147,20 +1289,36 @@ pub fn parse_gaussian_str(s: &str) -> Option<(i64, i64)> {
         (Some(p), None) => {
             let re_str = &without_i[..p];
             let im_str = &without_i[p + 1..];
-            let re = if re_str.is_empty() { 0 } else { re_str.parse::<i64>().ok()? };
-            let im = if im_str.is_empty() { 1 } else { im_str.parse::<i64>().ok()? };
+            let re = if re_str.is_empty() {
+                0
+            } else {
+                re_str.parse::<i64>().ok()?
+            };
+            let im = if im_str.is_empty() {
+                1
+            } else {
+                im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (None, Some(0)) => {
             // Pure imaginary negative e.g. "-2i"
-            let im = if without_i == "-" { -1 } else { without_i.parse::<i64>().ok()? };
+            let im = if without_i == "-" {
+                -1
+            } else {
+                without_i.parse::<i64>().ok()?
+            };
             Some((0, im))
         }
         (None, Some(m)) => {
             let re_str = &without_i[..m];
             let im_str = &without_i[m + 1..];
             let re = re_str.parse::<i64>().ok()?;
-            let im = if im_str.is_empty() { -1 } else { -im_str.parse::<i64>().ok()? };
+            let im = if im_str.is_empty() {
+                -1
+            } else {
+                -im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (Some(p), Some(m)) => {
@@ -1172,7 +1330,13 @@ pub fn parse_gaussian_str(s: &str) -> Option<(i64, i64)> {
             let re_str = &without_i[..split_idx];
             let im_str = &without_i[split_idx..];
             let re = re_str.parse::<i64>().ok()?;
-            let im = if im_str == "+" { 1 } else if im_str == "-" { -1 } else { im_str.parse::<i64>().ok()? };
+            let im = if im_str == "+" {
+                1
+            } else if im_str == "-" {
+                -1
+            } else {
+                im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (None, None) => {
@@ -1216,8 +1380,16 @@ pub fn parse_eisenstein_str(s: &str) -> Option<(i64, i64)> {
         (Some(p), None) => {
             let re_str = &without_w[..p];
             let im_str = &without_w[p + 1..];
-            let re = if re_str.is_empty() { 0 } else { re_str.parse::<i64>().ok()? };
-            let im = if im_str.is_empty() { 1 } else { im_str.parse::<i64>().ok()? };
+            let re = if re_str.is_empty() {
+                0
+            } else {
+                re_str.parse::<i64>().ok()?
+            };
+            let im = if im_str.is_empty() {
+                1
+            } else {
+                im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (None, Some(0)) => {
@@ -1228,7 +1400,11 @@ pub fn parse_eisenstein_str(s: &str) -> Option<(i64, i64)> {
             let re_str = &without_w[..m];
             let im_str = &without_w[m + 1..];
             let re = re_str.parse::<i64>().ok()?;
-            let im = if im_str.is_empty() { -1 } else { -im_str.parse::<i64>().ok()? };
+            let im = if im_str.is_empty() {
+                -1
+            } else {
+                -im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (Some(p), Some(m)) => {
@@ -1240,7 +1416,13 @@ pub fn parse_eisenstein_str(s: &str) -> Option<(i64, i64)> {
             let re_str = &without_w[..split_idx];
             let im_str = &without_w[split_idx..];
             let re = re_str.parse::<i64>().ok()?;
-            let im = if im_str == "+" { 1 } else if im_str == "-" { -1 } else { im_str.parse::<i64>().ok()? };
+            let im = if im_str == "+" {
+                1
+            } else if im_str == "-" {
+                -1
+            } else {
+                im_str.parse::<i64>().ok()?
+            };
             Some((re, im))
         }
         (None, None) => {
@@ -1260,28 +1442,58 @@ pub fn decompose_universal(
 
     // 1. Explicit domain hint or domain keyword in hint
     if !hint_str.is_empty() {
-        if hint_str.starts_with("Gaussian") || hint_str.starts_with("ℤ[i]") || hint_str.starts_with("Z[i]") {
-            let (a, b) = parse_gaussian_str(clean_expr).ok_or_else(|| format!("Could not parse '{}' as Gaussian integer a + bi", clean_expr))?;
+        if hint_str.starts_with("Gaussian")
+            || hint_str.starts_with("ℤ[i]")
+            || hint_str.starts_with("Z[i]")
+        {
+            let (a, b) = parse_gaussian_str(clean_expr).ok_or_else(|| {
+                format!(
+                    "Could not parse '{}' as Gaussian integer a + bi",
+                    clean_expr
+                )
+            })?;
             return Ok(decompose_gaussian(a, b));
         }
-        if hint_str.starts_with("Eisenstein") || hint_str.starts_with("ℤ[ω]") || hint_str.starts_with("Z[w]") || hint_str.starts_with("Z[omega]") {
-            let (a, b) = parse_eisenstein_str(clean_expr).ok_or_else(|| format!("Could not parse '{}' as Eisenstein integer a + bω", clean_expr))?;
+        if hint_str.starts_with("Eisenstein")
+            || hint_str.starts_with("ℤ[ω]")
+            || hint_str.starts_with("Z[w]")
+            || hint_str.starts_with("Z[omega]")
+        {
+            let (a, b) = parse_eisenstein_str(clean_expr).ok_or_else(|| {
+                format!(
+                    "Could not parse '{}' as Eisenstein integer a + bω",
+                    clean_expr
+                )
+            })?;
             return Ok(decompose_eisenstein(a, b));
         }
-        if hint_str.starts_with("Modulo") || hint_str.starts_with("ℤ/") || hint_str.starts_with("Z/") {
+        if hint_str.starts_with("Modulo")
+            || hint_str.starts_with("ℤ/")
+            || hint_str.starts_with("Z/")
+        {
             let n = if let Some(open) = hint_str.find('(') {
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
                 let num_str = inner.split('=').last().unwrap_or("2").trim();
                 num_str.parse::<u64>().unwrap_or(2)
             } else if let Some((_, n_s)) = hint_str.split_once('/') {
-                n_s.trim_end_matches('Z').trim_end_matches('ℤ').trim().parse::<u64>().unwrap_or(2)
+                n_s.trim_end_matches('Z')
+                    .trim_end_matches('ℤ')
+                    .trim()
+                    .parse::<u64>()
+                    .unwrap_or(2)
             } else {
                 2
             };
-            let val = clean_expr.parse::<i64>().map_err(|e| format!("Invalid integer residue for Modulo: {}", e))?;
+            let val = clean_expr
+                .parse::<i64>()
+                .map_err(|e| format!("Invalid integer residue for Modulo: {}", e))?;
             return Ok(decompose_modulo(val, n));
         }
-        if hint_str.starts_with("PAdics") || hint_str.starts_with("Padics") || hint_str.starts_with("ℚ_") || hint_str.starts_with("Q_") {
+        if hint_str.starts_with("PAdics")
+            || hint_str.starts_with("Padics")
+            || hint_str.starts_with("ℚ_")
+            || hint_str.starts_with("Q_")
+        {
             let p = if let Some(open) = hint_str.find('(') {
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
                 let p_s = inner.split('=').last().unwrap_or("2").trim();
@@ -1291,29 +1503,55 @@ pub fn decompose_universal(
             } else {
                 2
             };
-            let val = clean_expr.parse::<i64>().map_err(|e| format!("Invalid value for p-adic decomposition: {}", e))?;
+            let val = clean_expr
+                .parse::<i64>()
+                .map_err(|e| format!("Invalid value for p-adic decomposition: {}", e))?;
             return Ok(decompose_padic(val, p));
         }
-        if hint_str.starts_with("GaloisField") || hint_str.starts_with("GF") || hint_str.starts_with("𝔽") {
+        if hint_str.starts_with("GaloisField")
+            || hint_str.starts_with("GF")
+            || hint_str.starts_with("𝔽")
+        {
             let (p, power) = if let Some(open) = hint_str.find('(') {
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
                 let parts: Vec<&str> = inner.split(',').collect();
-                let p_val = parts.get(0).and_then(|s| s.split('=').last()).and_then(|s| s.trim().parse::<u64>().ok()).unwrap_or(2);
-                let pow_val = parts.get(1).and_then(|s| s.split('=').last()).and_then(|s| s.trim().parse::<u32>().ok()).unwrap_or(1);
+                let p_val = parts
+                    .get(0)
+                    .and_then(|s| s.split('=').last())
+                    .and_then(|s| s.trim().parse::<u64>().ok())
+                    .unwrap_or(2);
+                let pow_val = parts
+                    .get(1)
+                    .and_then(|s| s.split('=').last())
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                    .unwrap_or(1);
                 (p_val, pow_val)
             } else {
                 (2, 1)
             };
-            let val = clean_expr.parse::<u64>().map_err(|e| format!("Invalid value for Galois field decomposition: {}", e))?;
+            let val = clean_expr
+                .parse::<u64>()
+                .map_err(|e| format!("Invalid value for Galois field decomposition: {}", e))?;
             return Ok(decompose_galois(val, p, power));
         }
-        if hint_str.starts_with("Rationals") || hint_str.starts_with("ℚ") || hint_str.starts_with("Q") {
+        if hint_str.starts_with("Rationals")
+            || hint_str.starts_with("ℚ")
+            || hint_str.starts_with("Q")
+        {
             if let Some((n_s, d_s)) = clean_expr.split_once('/') {
-                let num = n_s.trim().parse::<i64>().map_err(|e| format!("Invalid rational numerator: {}", e))?;
-                let den = d_s.trim().parse::<i64>().map_err(|e| format!("Invalid rational denominator: {}", e))?;
+                let num = n_s
+                    .trim()
+                    .parse::<i64>()
+                    .map_err(|e| format!("Invalid rational numerator: {}", e))?;
+                let den = d_s
+                    .trim()
+                    .parse::<i64>()
+                    .map_err(|e| format!("Invalid rational denominator: {}", e))?;
                 return Ok(decompose_rational(num, den));
             } else {
-                let num = clean_expr.parse::<i64>().map_err(|e| format!("Invalid rational integer: {}", e))?;
+                let num = clean_expr
+                    .parse::<i64>()
+                    .map_err(|e| format!("Invalid rational integer: {}", e))?;
                 return Ok(decompose_rational(num, 1));
             }
         }
@@ -1339,6 +1577,11 @@ pub fn decompose_universal(
     }
 
     // 3. Default to integers
-    let n = clean_expr.parse::<i64>().map_err(|_| format!("Could not parse '{}' as an integer or algebraic number for prime decomposition", clean_expr))?;
+    let n = clean_expr.parse::<i64>().map_err(|_| {
+        format!(
+            "Could not parse '{}' as an integer or algebraic number for prime decomposition",
+            clean_expr
+        )
+    })?;
     Ok(decompose_integer(n))
 }
