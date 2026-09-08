@@ -38,9 +38,8 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install wasm-pack
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install wasm-bindgen CLI
+        uses: taiki-e/install-action@wasm-bindgen-cli
 
       - name: Cache wasm-opt Binary (Binaryen)
         id: cache-wasm-opt
@@ -64,9 +63,8 @@ jobs:
 
       - name: Build Web Application
         run: |
-          cd crates/urae-wasm
-          wasm-pack --verbose build --target web --out-dir public/pkg --release
-          cd ../..
+          cargo build -p urae-wasm --target wasm32-unknown-unknown --release -vv
+          wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
               echo "Optimizing $wasm_file with wasm-opt"
