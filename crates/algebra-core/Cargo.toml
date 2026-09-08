@@ -19,7 +19,6 @@ num-bigint = { workspace = true, features = ["serde"] }
 num-rational = { workspace = true, features = ["serde"] }
 num-traits.workspace = true
 dashmap.workspace = true
-rayon.workspace = true
 parking_lot.workspace = true
 smallvec.workspace = true
 ahash.workspace = true
@@ -28,6 +27,9 @@ serde = { workspace = true, optional = true }
 serde_json.workspace = true
 tracing.workspace = true
 nom.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon.workspace = true
 
 [features]
 default = ["serde"]

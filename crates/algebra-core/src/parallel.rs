@@ -3,6 +3,7 @@
 use crate::expr::ExprNode;
 use crate::graph::ExprGraph;
 use crate::id::ExprId;
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 
 impl ExprGraph {
@@ -12,7 +13,8 @@ impl ExprGraph {
         F: Fn(&ExprNode) -> bool + Sync + Send,
     {
         let len = self.len();
-        if cfg!(target_arch = "wasm32") {
+        #[cfg(target_arch = "wasm32")]
+        {
             (0..len)
                 .filter_map(|i| {
                     let id = ExprId::new(i as u32);
@@ -24,7 +26,9 @@ impl ExprGraph {
                     }
                 })
                 .collect()
-        } else {
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             (0..len)
                 .into_par_iter()
                 .filter_map(|i| {
@@ -48,9 +52,12 @@ impl ExprGraph {
         let node = self.get(id);
         let children = node.children();
         let children_vec: Vec<ExprId> = children.into_iter().collect();
-        if cfg!(target_arch = "wasm32") {
+        #[cfg(target_arch = "wasm32")]
+        {
             children_vec.into_iter().map(map_fn).collect()
-        } else {
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             children_vec.into_par_iter().map(map_fn).collect()
         }
     }
@@ -67,11 +74,14 @@ impl ExprGraph {
 
         let children = root_node.children();
         let children_vec: Vec<ExprId> = children.into_iter().collect();
-        if cfg!(target_arch = "wasm32") {
+        #[cfg(target_arch = "wasm32")]
+        {
             children_vec
                 .into_iter()
                 .any(|child_id| self.contains_matching(child_id, predicate))
-        } else {
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             children_vec
                 .into_par_iter()
                 .any(|child_id| self.contains_matching(child_id, predicate))
