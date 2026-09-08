@@ -64,6 +64,7 @@ jobs:
 
       - name: Build Web Application
         run: |
+          cargo build -p urae-wasm --target wasm32-unknown-unknown --release
           cd crates/urae-wasm
           wasm-pack --verbose build --target web --out-dir public/pkg --release
           cd ../..

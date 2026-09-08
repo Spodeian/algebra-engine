@@ -211,7 +211,7 @@ impl AlgebraAgentInterface {
             ));
         }
 
-        #[cfg(feature = "reqwest")]
+        #[cfg(all(feature = "agent", not(target_arch = "wasm32")))]
         {
             if let Ok(response) = self.dispatch_http_query(config, prompt) {
                 return Ok(response);
@@ -228,7 +228,7 @@ impl AlgebraAgentInterface {
         ))
     }
 
-    #[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "agent", not(target_arch = "wasm32")))]
     fn dispatch_http_query(&self, config: &AiConfig, prompt: &str) -> Result<String, String> {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -312,7 +312,7 @@ impl AlgebraAgentInterface {
         ))
     }
 
-    #[cfg(all(feature = "reqwest", target_arch = "wasm32"))]
+    #[cfg(all(feature = "agent", target_arch = "wasm32"))]
     fn dispatch_http_query(&self, config: &AiConfig, _prompt: &str) -> Result<String, String> {
         Err(format!(
             "Synchronous HTTP query to {} is not available in WASM edge runtime.",

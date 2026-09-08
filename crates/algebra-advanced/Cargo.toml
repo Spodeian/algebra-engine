@@ -32,13 +32,15 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
-reqwest = { workspace = true, optional = true }
 dashu.workspace = true
+ 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true, optional = true }
 
 [features]
 default = ["agent"]
-agent = ["dep:reqwest", "reqwest"]
-reqwest = ["dep:reqwest"]
+agent = ["dep:reqwest"]
+
 
 [dev-dependencies]
 criterion.workspace = true
