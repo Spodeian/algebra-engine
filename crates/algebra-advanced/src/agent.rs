@@ -312,6 +312,7 @@ impl AlgebraAgentInterface {
         ))
     }
 
+    #[allow(dead_code)]
     #[cfg(all(feature = "agent", target_arch = "wasm32"))]
     fn dispatch_http_query(&self, config: &AiConfig, _prompt: &str) -> Result<String, String> {
         Err(format!(

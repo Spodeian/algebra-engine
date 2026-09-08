@@ -22,7 +22,6 @@ workspace = true
 [dependencies]
 urae = { workspace = true, features = ["full", "cli"] }
 egui.workspace = true
-eframe.workspace = true
 egui_plot.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -47,4 +46,8 @@ wasm-opt = false
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 mimalloc.workspace = true
+eframe = { workspace = true, features = ["x11", "wayland"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+eframe = { workspace = true }
 
