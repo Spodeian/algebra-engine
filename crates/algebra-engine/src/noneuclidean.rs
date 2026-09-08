@@ -259,13 +259,18 @@ impl HyperbolicTessellation {
     /// $$\cosh(r) = \frac{\cos(\pi/q)}{\sin(\pi/p)}$$
     /// In the Poincaré disk model, Euclidean radius $R = \tanh(r/2)$.
     pub fn fundamental_domain_radius(p: usize, q: usize) -> Option<f64> {
+        if p < 3 || q < 3 || (p - 2) * (q - 2) <= 4 {
+            // Not a hyperbolic tessellation (spherical or Euclidean: (p-2)*(q-2) <= 4)
+            return None;
+        }
+
         let pi = std::f64::consts::PI;
         let num = (pi / (q as f64)).cos();
         let den = (pi / (p as f64)).sin();
 
         let cosh_r = num / den;
         if cosh_r <= 1.0 {
-            // Not a hyperbolic tessellation (spherical or Euclidean)
+            // Fallback sanity guard against degenerate floating-point inputs
             return None;
         }
 
