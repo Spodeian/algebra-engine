@@ -65,7 +65,7 @@ jobs:
       - name: Build Web Application
         run: |
           cd crates/urae-wasm
-          wasm-pack build --target web --out-dir public/pkg --release
+          wasm-pack --verbose build --target web --out-dir public/pkg --release
           cd ../..
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
             if [ -f "$wasm_file" ]; then
