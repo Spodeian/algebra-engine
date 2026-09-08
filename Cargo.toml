@@ -54,7 +54,7 @@ urae-ffi = { path = "crates/urae-ffi" }
 
 # GUI & Graphic dependencies
 egui = "0.36"
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu", "persistence"] }
 egui_plot = "0.37"
 
 # Numerics & High-Precision CAS
