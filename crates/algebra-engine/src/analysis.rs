@@ -191,18 +191,16 @@ impl FunctionAnalyzer {
         for &x0 in search_points {
             if let Ok(sol) =
                 NumericalSystemSolver::solve_newton_raphson(graph, &[df], &[var], &[x0], &config)
+                && !sol.is_empty()
             {
-                if !sol.is_empty() {
-                    let root_x = sol[0];
-                    let mut ctx = EvalContext::new(20);
-                    ctx.bindings.insert(var_name.clone(), root_x);
-                    if let Ok(df_v) = graph.evalf(df, &ctx) {
-                        if df_v.to_f64().abs() < 1e-4
-                            && !found_x.iter().any(|&x| (x - root_x).abs() < 1e-4)
-                        {
-                            found_x.push(root_x);
-                        }
-                    }
+                let root_x = sol[0];
+                let mut ctx = EvalContext::new(20);
+                ctx.bindings.insert(var_name.clone(), root_x);
+                if let Ok(df_v) = graph.evalf(df, &ctx)
+                    && df_v.to_f64().abs() < 1e-4
+                    && !found_x.iter().any(|&x| (x - root_x).abs() < 1e-4)
+                {
+                    found_x.push(root_x);
                 }
             }
         }
@@ -250,21 +248,19 @@ impl FunctionAnalyzer {
         for &x0 in search_points {
             if let Ok(sol) =
                 NumericalSystemSolver::solve_newton_raphson(graph, &[d2f], &[var], &[x0], &config)
+                && !sol.is_empty()
             {
-                if !sol.is_empty() {
-                    let root_x = sol[0];
-                    let mut ctx = EvalContext::new(20);
-                    ctx.bindings.insert(var_name.clone(), root_x);
-                    if let Ok(d2f_v) = graph.evalf(d2f, &ctx) {
-                        if d2f_v.to_f64().abs() < 1e-4
-                            && !found_x.iter().any(|&x| (x - root_x).abs() < 1e-4)
-                            && !found_inflection_x
-                                .iter()
-                                .any(|&x| (x - root_x).abs() < 1e-4)
-                        {
-                            found_inflection_x.push(root_x);
-                        }
-                    }
+                let root_x = sol[0];
+                let mut ctx = EvalContext::new(20);
+                ctx.bindings.insert(var_name.clone(), root_x);
+                if let Ok(d2f_v) = graph.evalf(d2f, &ctx)
+                    && d2f_v.to_f64().abs() < 1e-4
+                    && !found_x.iter().any(|&x| (x - root_x).abs() < 1e-4)
+                    && !found_inflection_x
+                        .iter()
+                        .any(|&x| (x - root_x).abs() < 1e-4)
+                {
+                    found_inflection_x.push(root_x);
                 }
             }
         }

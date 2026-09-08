@@ -300,7 +300,7 @@ pub fn integer_prime_factors(mut n: u64) -> Vec<(u64, u32)> {
         return factors;
     }
     let mut count = 0;
-    while n % 2 == 0 {
+    while n.is_multiple_of(2) {
         count += 1;
         n /= 2;
     }
@@ -311,7 +311,7 @@ pub fn integer_prime_factors(mut n: u64) -> Vec<(u64, u32)> {
     let mut d = 3;
     while d * d <= n {
         let mut d_count = 0;
-        while n % d == 0 {
+        while n.is_multiple_of(d) {
             d_count += 1;
             n /= d;
         }
@@ -359,11 +359,9 @@ pub fn find_eisenstein_prime_coords(p: u64) -> Option<(i64, i64)> {
     for y in 1..=max_y {
         let rem = target - 3 * y * y;
         let x = (rem as f64).sqrt() as u64;
-        if x * x == rem {
-            if x % 2 == y % 2 {
-                let u = ((x + y) / 2) as i64;
-                return Some((u, y as i64));
-            }
+        if x * x == rem && x % 2 == y % 2 {
+            let u = ((x + y) / 2) as i64;
+            return Some((u, y as i64));
         }
     }
     None
@@ -419,7 +417,7 @@ pub fn classify_rational_prime(p: u64) -> Vec<PrimeClassification> {
     }
 
     // Safe prime: (p - 1)/2 is prime
-    if p > 2 && (p - 1) % 2 == 0 && is_prime((p - 1) / 2) {
+    if p > 2 && (p - 1).is_multiple_of(2) && is_prime((p - 1) / 2) {
         classes.push(PrimeClassification::SafePrime);
     }
 
@@ -1031,11 +1029,11 @@ pub fn decompose_modulo(val: i64, n: u64) -> PrimeDecompositionResult {
         classes.push(PrimeClassification::ModularZeroDivisor { gcd: gcd_u });
 
         // Check nilpotent: every prime dividing n must divide residue
-        let is_nilpotent = crt_primes.iter().all(|(p, _)| residue % p == 0);
+        let is_nilpotent = crt_primes.iter().all(|(p, _)| residue.is_multiple_of(*p));
         if is_nilpotent {
             let mut idx = 1;
             let mut pow_val = residue;
-            while pow_val % mod_n != 0 && idx < 32 {
+            while !pow_val.is_multiple_of(mod_n) && idx < 32 {
                 pow_val = ((pow_val as u128 * residue as u128) % mod_n as u128) as u64;
                 idx += 1;
             }
@@ -1115,9 +1113,9 @@ pub fn decompose_padic(val: i64, p: u32) -> PrimeDecompositionResult {
         };
     }
 
-    let mut temp = val.abs() as u64;
+    let mut temp = val.unsigned_abs();
     let mut valuation = 0i32;
-    while temp % prime == 0 {
+    while temp.is_multiple_of(prime) {
         valuation += 1;
         temp /= prime;
     }
@@ -1473,7 +1471,7 @@ pub fn decompose_universal(
         {
             let n = if let Some(open) = hint_str.find('(') {
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
-                let num_str = inner.split('=').last().unwrap_or("2").trim();
+                let num_str = inner.split('=').next_back().unwrap_or("2").trim();
                 num_str.parse::<u64>().unwrap_or(2)
             } else if let Some((_, n_s)) = hint_str.split_once('/') {
                 n_s.trim_end_matches('Z')
@@ -1496,7 +1494,7 @@ pub fn decompose_universal(
         {
             let p = if let Some(open) = hint_str.find('(') {
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
-                let p_s = inner.split('=').last().unwrap_or("2").trim();
+                let p_s = inner.split('=').next_back().unwrap_or("2").trim();
                 p_s.parse::<u32>().unwrap_or(2)
             } else if let Some((_, p_s)) = hint_str.split_once('_') {
                 p_s.trim().parse::<u32>().unwrap_or(2)
@@ -1516,13 +1514,13 @@ pub fn decompose_universal(
                 let inner = &hint_str[open + 1..hint_str.find(')').unwrap_or(hint_str.len())];
                 let parts: Vec<&str> = inner.split(',').collect();
                 let p_val = parts
-                    .get(0)
-                    .and_then(|s| s.split('=').last())
+                    .first()
+                    .and_then(|s| s.split('=').next_back())
                     .and_then(|s| s.trim().parse::<u64>().ok())
                     .unwrap_or(2);
                 let pow_val = parts
                     .get(1)
-                    .and_then(|s| s.split('=').last())
+                    .and_then(|s| s.split('=').next_back())
                     .and_then(|s| s.trim().parse::<u32>().ok())
                     .unwrap_or(1);
                 (p_val, pow_val)
@@ -1558,22 +1556,21 @@ pub fn decompose_universal(
     }
 
     // 2. Automatic domain inference based on expression syntax
-    if clean_expr.contains('i') {
-        if let Some((a, b)) = parse_gaussian_str(clean_expr) {
-            return Ok(decompose_gaussian(a, b));
-        }
+    if clean_expr.contains('i')
+        && let Some((a, b)) = parse_gaussian_str(clean_expr)
+    {
+        return Ok(decompose_gaussian(a, b));
     }
-    if clean_expr.contains('w') || clean_expr.contains('ω') {
-        if let Some((a, b)) = parse_eisenstein_str(clean_expr) {
-            return Ok(decompose_eisenstein(a, b));
-        }
+    if (clean_expr.contains('w') || clean_expr.contains('ω'))
+        && let Some((a, b)) = parse_eisenstein_str(clean_expr)
+    {
+        return Ok(decompose_eisenstein(a, b));
     }
-    if clean_expr.contains('/') {
-        if let Some((n_s, d_s)) = clean_expr.split_once('/') {
-            if let (Ok(num), Ok(den)) = (n_s.trim().parse::<i64>(), d_s.trim().parse::<i64>()) {
-                return Ok(decompose_rational(num, den));
-            }
-        }
+    if clean_expr.contains('/')
+        && let Some((n_s, d_s)) = clean_expr.split_once('/')
+        && let (Ok(num), Ok(den)) = (n_s.trim().parse::<i64>(), d_s.trim().parse::<i64>())
+    {
+        return Ok(decompose_rational(num, den));
     }
 
     // 3. Default to integers

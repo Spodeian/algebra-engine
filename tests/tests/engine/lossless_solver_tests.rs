@@ -190,10 +190,9 @@ fn test_solveset_hybrid_factored_polynomial() {
     assert_eq!(roots.len(), 3, "Factored polynomial must yield 3 roots");
 
     // Verify one root is exactly Rational(1, 3)
-    let has_exact_third = roots.iter().any(|&r| match &graph.get(r).kind {
-        ExprKind::Number(Number::Rational(1, 3)) => true,
-        _ => false,
-    });
+    let has_exact_third = roots
+        .iter()
+        .any(|&r| matches!(&graph.get(r).kind, ExprKind::Number(Number::Rational(1, 3))));
     assert!(
         has_exact_third,
         "Expected exact root 1/3 in solveset output"

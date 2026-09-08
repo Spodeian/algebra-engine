@@ -69,10 +69,10 @@ impl LimitEngine {
         }
 
         // 2. Multi-Order L'Hôpital rule for rational fractions f(x)/g(x)
-        if let ExprKind::Div(num, den) = graph.get(expr).kind {
-            if let Some(res) = Self::eval_lhopital(graph, num, den, wrt, point, 10)? {
-                return Ok(res);
-            }
+        if let ExprKind::Div(num, den) = graph.get(expr).kind
+            && let Some(res) = Self::eval_lhopital(graph, num, den, wrt, point, 10)?
+        {
+            return Ok(res);
         }
 
         // 3. Gruntz MRV heuristic for exponential / logarithmic limits at infinity
@@ -162,10 +162,10 @@ impl LimitEngine {
                             _ => {}
                         }
                     }
-                    if let ExprKind::Number(Number::Integer(1)) = graph.get(arg_sim).kind {
-                        if fn_name == "ln" {
-                            return graph.integer(0);
-                        }
+                    if let ExprKind::Number(Number::Integer(1)) = graph.get(arg_sim).kind
+                        && fn_name == "ln"
+                    {
+                        return graph.integer(0);
                     }
                     return graph.function(&fn_name, [arg_sim]);
                 }
@@ -244,13 +244,12 @@ impl LimitEngine {
                     ExprKind::Number(Number::Integer(ia)),
                     ExprKind::Number(Number::Integer(ib)),
                 ) = (&graph.get(sa).kind, &graph.get(sb).kind)
+                    && *ib != 0
                 {
-                    if *ib != 0 {
-                        if ia % ib == 0 {
-                            return graph.integer(ia / ib);
-                        } else {
-                            return graph.rational(*ia, *ib);
-                        }
+                    if ia % ib == 0 {
+                        return graph.integer(ia / ib);
+                    } else {
+                        return graph.rational(*ia, *ib);
                     }
                 }
                 graph.div(sa, sb)
@@ -264,14 +263,11 @@ impl LimitEngine {
                 if let ExprKind::Number(Number::Integer(1)) = graph.get(s_exp).kind {
                     return s_base;
                 }
-                if let (
-                    ExprKind::Number(Number::Integer(b)),
-                    ExprKind::Number(Number::Integer(e)),
-                ) = (&graph.get(s_base).kind, &graph.get(s_exp).kind)
+                if let (ExprKind::Number(Number::Integer(b)), ExprKind::Number(Number::Integer(e))) =
+                    (&graph.get(s_base).kind, &graph.get(s_exp).kind)
+                    && *e >= 0
                 {
-                    if *e >= 0 {
-                        return graph.integer(b.pow(*e as u32));
-                    }
+                    return graph.integer(b.pow(*e as u32));
                 }
                 graph.pow(s_base, s_exp)
             }
@@ -318,12 +314,12 @@ impl LimitEngine {
             }
 
             // Check exponential dominant scale: e.g. x^k / exp(x) -> 0
-            if graph.has_symbol(num, wrt) {
-                if let ExprKind::Function { name, args } = graph.get(den).kind {
-                    let fn_name = graph.symbols.resolve(name).unwrap_or_default();
-                    if fn_name == "exp" && args.contains(&x) {
-                        return Ok(graph.integer(0));
-                    }
+            if graph.has_symbol(num, wrt)
+                && let ExprKind::Function { name, args } = graph.get(den).kind
+            {
+                let fn_name = graph.symbols.resolve(name).unwrap_or_default();
+                if fn_name == "exp" && args.contains(&x) {
+                    return Ok(graph.integer(0));
                 }
             }
         }
@@ -404,10 +400,10 @@ impl LimitEngine {
         let node = graph.get(id);
         match &node.kind {
             ExprKind::Pow(base, exp) if *base == x => {
-                if let ExprKind::Number(Number::Integer(p)) = graph.get(*exp).kind {
-                    if p == target_deg {
-                        return graph.integer(1);
-                    }
+                if let ExprKind::Number(Number::Integer(p)) = graph.get(*exp).kind
+                    && p == target_deg
+                {
+                    return graph.integer(1);
                 }
             }
             ExprKind::Mul(factors) => {

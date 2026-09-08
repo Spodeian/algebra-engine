@@ -1,4 +1,4 @@
-use algebra_engine::uint::Uint;
+use auto_promoters::uint::Uint;
 use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
 use num::{BigUint, One};
 
@@ -8,7 +8,7 @@ fn bench_addition_matrix(c: &mut Criterion) {
     // We use a value safely within Machine limits but high enough to be "realistic"
     let m_val = usize::MAX - 100;
     let uint_m = Uint::Machine(m_val); // Fixed: previously m_m was out of scope
-    let big_m = BigUint::from(m_val);
+    let _big_m = BigUint::from(m_val);
 
     // 1. Machine vs Raw usize (Overhead of the Enum Branch)
     group.bench_function("Machine_vs_usize/Primitive", |b| {

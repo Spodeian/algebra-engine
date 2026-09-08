@@ -471,13 +471,12 @@ impl FeaEngine {
                 group_name,
                 force_vector,
             } = bc
+                && let Some(nodes) = mesh.boundary_groups.get(group_name)
             {
-                if let Some(nodes) = mesh.boundary_groups.get(group_name) {
-                    let f_split = 1.0 / (nodes.len() as f64).max(1.0);
-                    for &node_idx in nodes {
-                        for (d, &val) in force_vector.iter().enumerate().take(dof_per_node) {
-                            f_global[node_idx * dof_per_node + d] += val * f_split;
-                        }
+                let f_split = 1.0 / (nodes.len() as f64).max(1.0);
+                for &node_idx in nodes {
+                    for (d, &val) in force_vector.iter().enumerate().take(dof_per_node) {
+                        f_global[node_idx * dof_per_node + d] += val * f_split;
                     }
                 }
             }
@@ -491,14 +490,13 @@ impl FeaEngine {
                 dof_index,
                 value,
             } = bc
+                && let Some(nodes) = mesh.boundary_groups.get(group_name)
             {
-                if let Some(nodes) = mesh.boundary_groups.get(group_name) {
-                    for &node_idx in nodes {
-                        let global_dof = node_idx * dof_per_node + dof_index;
-                        if global_dof < total_dof {
-                            k_global[global_dof][global_dof] += penalty;
-                            f_global[global_dof] += penalty * value;
-                        }
+                for &node_idx in nodes {
+                    let global_dof = node_idx * dof_per_node + dof_index;
+                    if global_dof < total_dof {
+                        k_global[global_dof][global_dof] += penalty;
+                        f_global[global_dof] += penalty * value;
                     }
                 }
             }

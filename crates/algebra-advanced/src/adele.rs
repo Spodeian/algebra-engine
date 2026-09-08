@@ -166,7 +166,7 @@ impl AdeleEmbedding for ArtinProduct {
         let archimedean = profile.num as f64 / profile.den as f64;
         let mut finite_places = Vec::with_capacity(profile.finite_places.len());
 
-        for (&p, _) in &profile.finite_places {
+        for &p in profile.finite_places.keys() {
             let padic = PadicNumber::from_rational(profile.num, profile.den, p, precision)?;
             finite_places.push((p, padic));
         }

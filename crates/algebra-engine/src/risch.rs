@@ -240,42 +240,42 @@ impl RischIntegrator {
         }
 
         // Case 3: Constant * f'(x) / f(x)
-        if let ExprKind::Mul(factors) = graph.get(num).kind {
-            if factors.contains(&d_den) {
-                let other_factors: Vec<ExprId> =
-                    factors.iter().copied().filter(|&f| f != d_den).collect();
-                let c = graph.mul(other_factors);
-                let log_den = graph.function("ln", [den]);
-                return Ok(graph.mul([c, log_den]));
-            }
+        if let ExprKind::Mul(factors) = graph.get(num).kind
+            && factors.contains(&d_den)
+        {
+            let other_factors: Vec<ExprId> =
+                factors.iter().copied().filter(|&f| f != d_den).collect();
+            let c = graph.mul(other_factors);
+            let log_den = graph.function("ln", [den]);
+            return Ok(graph.mul([c, log_den]));
         }
 
         // Case 4: Quadratic denominator 1 / (x^2 + a^2) -> (1/a) * arctan(x/a)
-        if !graph.has_symbol(num, wrt) {
-            if let ExprKind::Add(terms) = graph.get(den).kind {
-                if terms.len() == 2 {
-                    let mut x_sq_opt = None;
-                    let mut a_sq_opt = None;
-                    for &t in &terms {
-                        if let ExprKind::Pow(b, p) = graph.get(t).kind {
-                            if b == x && p == graph.integer(2) {
-                                x_sq_opt = Some(t);
-                                continue;
-                            }
-                        }
-                        if !graph.has_symbol(t, wrt) {
-                            a_sq_opt = Some(t);
-                        }
-                    }
-
-                    if let (Some(_x_sq), Some(a_sq)) = (x_sq_opt, a_sq_opt) {
-                        let a = graph.function("sqrt", [a_sq]);
-                        let inv_a = graph.div(num, a);
-                        let x_over_a = graph.div(x, a);
-                        let arctan_term = graph.function("arctan", [x_over_a]);
-                        return Ok(graph.mul([inv_a, arctan_term]));
-                    }
+        if !graph.has_symbol(num, wrt)
+            && let ExprKind::Add(terms) = graph.get(den).kind
+            && terms.len() == 2
+        {
+            let mut x_sq_opt = None;
+            let mut a_sq_opt = None;
+            for &t in &terms {
+                if let ExprKind::Pow(b, p) = graph.get(t).kind
+                    && b == x
+                    && p == graph.integer(2)
+                {
+                    x_sq_opt = Some(t);
+                    continue;
                 }
+                if !graph.has_symbol(t, wrt) {
+                    a_sq_opt = Some(t);
+                }
+            }
+
+            if let (Some(_x_sq), Some(a_sq)) = (x_sq_opt, a_sq_opt) {
+                let a = graph.function("sqrt", [a_sq]);
+                let inv_a = graph.div(num, a);
+                let x_over_a = graph.div(x, a);
+                let arctan_term = graph.function("arctan", [x_over_a]);
+                return Ok(graph.mul([inv_a, arctan_term]));
             }
         }
 
@@ -342,18 +342,18 @@ impl RischIntegrator {
             }
         } else {
             // Non-elementary integration check (e.g. exp(-x^2) -> sqrt(pi)/2 * erf(x))
-            if fn_name == "exp" {
-                if let ExprKind::Neg(inner) = graph.get(arg).kind {
-                    let wrt_name = graph.symbols.resolve(wrt).unwrap_or_default();
-                    let x = graph.symbol(&wrt_name);
-                    if inner == graph.pow(x, graph.integer(2)) {
-                        // Gaussian integral: int exp(-x^2) dx = (sqrt(pi)/2) * erf(x)
-                        let pi = graph.constant(algebra_core::Constant::Pi);
-                        let sqrt_pi = graph.function("sqrt", [pi]);
-                        let sqrt_pi_over_2 = graph.div(sqrt_pi, graph.integer(2));
-                        let erf_x = graph.function("erf", [x]);
-                        return Ok(graph.mul([sqrt_pi_over_2, erf_x]));
-                    }
+            if fn_name == "exp"
+                && let ExprKind::Neg(inner) = graph.get(arg).kind
+            {
+                let wrt_name = graph.symbols.resolve(wrt).unwrap_or_default();
+                let x = graph.symbol(&wrt_name);
+                if inner == graph.pow(x, graph.integer(2)) {
+                    // Gaussian integral: int exp(-x^2) dx = (sqrt(pi)/2) * erf(x)
+                    let pi = graph.constant(algebra_core::Constant::Pi);
+                    let sqrt_pi = graph.function("sqrt", [pi]);
+                    let sqrt_pi_over_2 = graph.div(sqrt_pi, graph.integer(2));
+                    let erf_x = graph.function("erf", [x]);
+                    return Ok(graph.mul([sqrt_pi_over_2, erf_x]));
                 }
             }
             Err(AlgebraError::EvaluationError(

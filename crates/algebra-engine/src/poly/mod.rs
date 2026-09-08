@@ -146,17 +146,17 @@ impl Polynomial {
     pub fn derivative(&self, var: SymbolId) -> Polynomial {
         let mut res = BTreeMap::new();
         for (mono, coeff) in &self.terms {
-            if let Some(&exp) = mono.exps.get(&var) {
-                if exp > 0 {
-                    let mut new_mono = mono.clone();
-                    if exp == 1 {
-                        new_mono.exps.remove(&var);
-                    } else {
-                        new_mono.exps.insert(var, exp - 1);
-                    }
-                    let new_coeff = coeff * BigRational::from_integer((exp as i64).into());
-                    res.insert(new_mono, new_coeff);
+            if let Some(&exp) = mono.exps.get(&var)
+                && exp > 0
+            {
+                let mut new_mono = mono.clone();
+                if exp == 1 {
+                    new_mono.exps.remove(&var);
+                } else {
+                    new_mono.exps.insert(var, exp - 1);
                 }
+                let new_coeff = coeff * BigRational::from_integer((exp as i64).into());
+                res.insert(new_mono, new_coeff);
             }
         }
         Polynomial { terms: res }

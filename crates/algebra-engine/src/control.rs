@@ -9,21 +9,18 @@
 //! - State-Feedback Pole Placement (Ackermann formula)
 //! - Frequency Response & Bode Plot Computation
 
+#![allow(clippy::needless_range_loop)]
+
 use serde::{Deserialize, Serialize};
 
 /// Time domain specification for a dynamic control system.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TimeDomain {
     /// Continuous-time system: dx/dt = A x + B u
+    #[default]
     Continuous,
     /// Discrete-time system: x[k+1] = A x[k] + B u[k] with sampling period Ts
     Discrete { sample_time: f64 },
-}
-
-impl Default for TimeDomain {
-    fn default() -> Self {
-        TimeDomain::Continuous
-    }
 }
 
 /// Linear Time-Invariant (LTI) State-Space System (SISO & MIMO, Continuous & Discrete).
@@ -303,7 +300,7 @@ impl StateSpaceSystem {
 
         // [0 1] * C^(-1)
         // C^(-1) = 1/det * [c11 -c01; -c10 c00]
-        let q_row = vec![-c_mat[1][0] / det_c, c_mat[0][0] / det_c];
+        let q_row = [-c_mat[1][0] / det_c, c_mat[0][0] / det_c];
 
         // K = q_row * Phi(A)
         let k0 = q_row[0] * phi_a[0][0] + q_row[1] * phi_a[1][0];

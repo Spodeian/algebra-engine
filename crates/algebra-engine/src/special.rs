@@ -56,15 +56,14 @@ impl SpecialFunctions for ExprGraph {
                 let arg_node = self.get(args[0]);
                 if let algebra_core::ExprKind::Number(algebra_core::Number::Integer(n)) =
                     arg_node.kind
+                    && n > 0
                 {
-                    if n > 0 {
-                        // Gamma(n) = (n - 1)!
-                        let mut fact = 1i64;
-                        for i in 1..n {
-                            fact *= i;
-                        }
-                        return Ok(self.integer(fact));
+                    // Gamma(n) = (n - 1)!
+                    let mut fact = 1i64;
+                    for i in 1..n {
+                        fact *= i;
                     }
+                    return Ok(self.integer(fact));
                 }
             } else if fn_name == "zeta" && args.len() == 1 {
                 let arg_node = self.get(args[0]);

@@ -18,12 +18,11 @@ where
 
     fn mul(self, rhs: U) -> Self {
         // We check to_usize on a reference to avoid moving rhs early
-        if let Uint::Machine(a) = self {
-            if let Some(b) = rhs.to_usize() {
-                if let Some(result) = a.checked_mul(b) {
-                    return Uint::Machine(result);
-                }
-            }
+        if let Uint::Machine(a) = self
+            && let Some(b) = rhs.to_usize()
+            && let Some(result) = a.checked_mul(b)
+        {
+            return Uint::Machine(result);
         }
 
         // If machine math is impossible or overflows,

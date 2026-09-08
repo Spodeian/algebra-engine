@@ -249,11 +249,11 @@ impl<'a> VmCompiler<'a> {
                 self.compile_expr(*base)?;
                 // Check if integer power
                 let exp_node = self.graph.get(*exp);
-                if let ExprKind::Number(Number::Integer(i)) = exp_node.kind {
-                    if (-100..=100).contains(&i) {
-                        self.instructions.push(Instruction::PowInt(i as i32));
-                        return Ok(());
-                    }
+                if let ExprKind::Number(Number::Integer(i)) = exp_node.kind
+                    && (-100..=100).contains(&i)
+                {
+                    self.instructions.push(Instruction::PowInt(i as i32));
+                    return Ok(());
                 }
                 self.compile_expr(*exp)?;
                 self.instructions.push(Instruction::Pow);

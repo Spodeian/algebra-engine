@@ -120,23 +120,22 @@ impl RetractionCleaner {
         // 1 / (s - a) -> exp(a * t)
         // 1 / (s^2 + w^2) -> sin(w * t) / w
         // s / (s^2 + w^2) -> cos(w * t)
-        if let ExprKind::Div(num, den) = &graph.get(expr_s).kind {
-            if *num == graph.integer(1) {
-                if let ExprKind::Sub(s_term, a_term) = &graph.get(*den).kind {
-                    if *s_term == graph.symbol("s") && !graph.has_symbol(*a_term, s_sym_id) {
-                        let at = graph.mul([*a_term, t_node]);
-                        return graph.function("exp", [at]);
-                    }
-                } else if let ExprKind::Add(terms) = &graph.get(*den).kind {
-                    if terms.len() == 2
-                        && terms[0] == graph.symbol("s")
-                        && !graph.has_symbol(terms[1], s_sym_id)
-                    {
-                        let neg_a = graph.neg(terms[1]);
-                        let at = graph.mul([neg_a, t_node]);
-                        return graph.function("exp", [at]);
-                    }
+        if let ExprKind::Div(num, den) = &graph.get(expr_s).kind
+            && *num == graph.integer(1)
+        {
+            if let ExprKind::Sub(s_term, a_term) = &graph.get(*den).kind {
+                if *s_term == graph.symbol("s") && !graph.has_symbol(*a_term, s_sym_id) {
+                    let at = graph.mul([*a_term, t_node]);
+                    return graph.function("exp", [at]);
                 }
+            } else if let ExprKind::Add(terms) = &graph.get(*den).kind
+                && terms.len() == 2
+                && terms[0] == graph.symbol("s")
+                && !graph.has_symbol(terms[1], s_sym_id)
+            {
+                let neg_a = graph.neg(terms[1]);
+                let at = graph.mul([neg_a, t_node]);
+                return graph.function("exp", [at]);
             }
         }
 

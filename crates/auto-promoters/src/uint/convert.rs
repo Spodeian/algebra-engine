@@ -9,7 +9,7 @@ impl FromPrimitive for Uint {
         if value >= 0 {
             value
                 .to_usize()
-                .and_then(|v| Some(Uint::Machine(v)))
+                .map(Uint::Machine)
                 .or_else(|| BigUint::from_i64(value).map(Uint::Promoted))
         } else {
             None
@@ -19,7 +19,7 @@ impl FromPrimitive for Uint {
     fn from_u64(value: u64) -> Option<Self> {
         value
             .to_usize()
-            .and_then(|v| Some(Uint::Machine(v)))
+            .map(Uint::Machine)
             .or_else(|| BigUint::from_u64(value).map(Uint::Promoted))
     }
 }
@@ -50,7 +50,7 @@ impl From<BigUint> for Uint {
     fn from(value: BigUint) -> Self {
         value
             .to_usize()
-            .and_then(|v| Some(Uint::Machine(v)))
+            .map(Uint::Machine)
             .unwrap_or(Uint::Promoted(value))
     }
 }

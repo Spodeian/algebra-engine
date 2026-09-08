@@ -114,48 +114,45 @@ impl PolynomialSystemSolver {
                 // Find polynomial with leading term in var_idx
                 let mut found_linear_sub = false;
                 for p in &gb.polynomials {
-                    if let Some(lm) = p.leading_monomial() {
-                        if lm.exponents[var_idx] == 1
-                            && lm.exponents[..var_idx].iter().all(|&e| e == 0)
-                        {
-                            // Substitute known values of variables (var_idx + 1 .. n)
-                            let mut val_sum_re = 0.0;
-                            let mut val_sum_im = 0.0;
-                            let mut lc = 1.0;
+                    if let Some(lm) = p.leading_monomial()
+                        && lm.exponents[var_idx] == 1
+                        && lm.exponents[..var_idx].iter().all(|&e| e == 0)
+                    {
+                        // Substitute known values of variables (var_idx + 1 .. n)
+                        let mut val_sum_re = 0.0;
+                        let mut val_sum_im = 0.0;
+                        let mut lc = 1.0;
 
-                            for t in &p.terms {
-                                if t.monomial.exponents[var_idx] == 1 {
-                                    lc = t.coeff;
-                                } else {
-                                    // Evaluate known terms
-                                    let mut term_val_re = t.coeff;
-                                    let mut term_val_im = 0.0;
-                                    for k in (var_idx + 1)..num_vars {
-                                        let exp_k = t.monomial.exponents[k];
-                                        if exp_k > 0 {
-                                            for _ in 0..exp_k {
-                                                let r_re = current_tuple[k].re;
-                                                let r_im = current_tuple[k].im;
-                                                let new_re =
-                                                    term_val_re * r_re - term_val_im * r_im;
-                                                let new_im =
-                                                    term_val_re * r_im + term_val_im * r_re;
-                                                term_val_re = new_re;
-                                                term_val_im = new_im;
-                                            }
+                        for t in &p.terms {
+                            if t.monomial.exponents[var_idx] == 1 {
+                                lc = t.coeff;
+                            } else {
+                                // Evaluate known terms
+                                let mut term_val_re = t.coeff;
+                                let mut term_val_im = 0.0;
+                                for k in (var_idx + 1)..num_vars {
+                                    let exp_k = t.monomial.exponents[k];
+                                    if exp_k > 0 {
+                                        for _ in 0..exp_k {
+                                            let r_re = current_tuple[k].re;
+                                            let r_im = current_tuple[k].im;
+                                            let new_re = term_val_re * r_re - term_val_im * r_im;
+                                            let new_im = term_val_re * r_im + term_val_im * r_re;
+                                            term_val_re = new_re;
+                                            term_val_im = new_im;
                                         }
                                     }
-                                    val_sum_re += term_val_re;
-                                    val_sum_im += term_val_im;
                                 }
+                                val_sum_re += term_val_re;
+                                val_sum_im += term_val_im;
                             }
-
-                            let sol_re = -val_sum_re / lc;
-                            let sol_im = -val_sum_im / lc;
-                            current_tuple[var_idx] = ComplexRoot::complex(sol_re, sol_im);
-                            found_linear_sub = true;
-                            break;
                         }
+
+                        let sol_re = -val_sum_re / lc;
+                        let sol_im = -val_sum_im / lc;
+                        current_tuple[var_idx] = ComplexRoot::complex(sol_re, sol_im);
+                        found_linear_sub = true;
+                        break;
                     }
                 }
 

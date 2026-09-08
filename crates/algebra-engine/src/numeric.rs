@@ -326,7 +326,7 @@ pub fn eval_bessel_j(n: i64, x: f64) -> f64 {
     term /= fact_n;
     let mut sum = term;
     for m in 1..40 {
-        term *= -1.0 * (half_x * half_x) / (m as f64 * (m + n_abs) as f64);
+        term *= -(half_x * half_x) / (m as f64 * (m + n_abs) as f64);
         sum += term;
         if term.abs() < 1e-15 * sum.abs().max(1e-15) {
             break;

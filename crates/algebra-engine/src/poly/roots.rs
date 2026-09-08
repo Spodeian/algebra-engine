@@ -472,7 +472,7 @@ impl NewtonPolygon {
             };
         }
 
-        points.sort_by(|a, b| a.0.cmp(&b.0));
+        points.sort_by_key(|a| a.0);
 
         // Lower convex hull
         let mut hull: Vec<(usize, f64)> = Vec::new();

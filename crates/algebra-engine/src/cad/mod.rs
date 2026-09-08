@@ -445,11 +445,11 @@ impl QuantifierEliminator {
         if cell.children.is_empty() {
             let mut satisfies = true;
             for &(poly_idx, rel_op) in conditions {
-                if let Some(&sign) = cell.signs.get(poly_idx) {
-                    if !rel_op.satisfies(sign) {
-                        satisfies = false;
-                        break;
-                    }
+                if let Some(&sign) = cell.signs.get(poly_idx)
+                    && !rel_op.satisfies(sign)
+                {
+                    satisfies = false;
+                    break;
                 }
             }
             new_cell.truth_value = satisfies;

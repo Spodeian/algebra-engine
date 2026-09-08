@@ -1,3 +1,5 @@
+#![allow(unsafe_code)]
+
 use std::ffi::{CStr, CString};
 use urae_ffi::{
     urae_differentiate_and_format_latex, urae_free_string, urae_graph_create, urae_graph_free,

@@ -57,16 +57,16 @@ impl AlgebraicTransformations {
                 if let ExprKind::Number(algebra_core::Number::Integer(2)) = exp_node.kind {
                     let expanded_base = Self::expand(graph, *base);
                     let base_node = graph.get(expanded_base);
-                    if let ExprKind::Add(terms) = &base_node.kind {
-                        if terms.len() == 2 {
-                            let a = terms[0];
-                            let b = terms[1];
-                            let two = graph.integer(2);
-                            let a_sq = graph.pow(a, two);
-                            let two_ab = graph.mul([two, a, b]);
-                            let b_sq = graph.pow(b, two);
-                            return graph.add([a_sq, two_ab, b_sq]);
-                        }
+                    if let ExprKind::Add(terms) = &base_node.kind
+                        && terms.len() == 2
+                    {
+                        let a = terms[0];
+                        let b = terms[1];
+                        let two = graph.integer(2);
+                        let a_sq = graph.pow(a, two);
+                        let two_ab = graph.mul([two, a, b]);
+                        let b_sq = graph.pow(b, two);
+                        return graph.add([a_sq, two_ab, b_sq]);
                     }
                 }
                 expr

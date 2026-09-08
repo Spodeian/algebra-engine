@@ -534,8 +534,8 @@ impl CliffordMultivector {
             match mask.0 {
                 // Identity
                 0 => {
-                    for i in 0..4 {
-                        mat[i][i].0 += c;
+                    for (i, row) in mat.iter_mut().enumerate() {
+                        row[i].0 += c;
                     }
                 }
                 // e0 = gamma^0 = diag(1, 1, -1, -1)

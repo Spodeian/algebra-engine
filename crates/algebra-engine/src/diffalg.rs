@@ -157,12 +157,11 @@ pub struct RittWuReducer;
 impl RittWuReducer {
     /// Check if polynomial $f$ is reduced with respect to $g$ (i.e. $\deg(f, \operatorname{ld}(g)) < \deg(g, \operatorname{ld}(g))$).
     pub fn is_reduced(f: &DiffPolynomial, g: &DiffPolynomial) -> bool {
-        if let Some(ld_g) = g.leader() {
-            if let Some(ld_f) = f.leader() {
-                if ld_f == ld_g {
-                    return f.leader_degree() < g.leader_degree();
-                }
-            }
+        if let Some(ld_g) = g.leader()
+            && let Some(ld_f) = f.leader()
+            && ld_f == ld_g
+        {
+            return f.leader_degree() < g.leader_degree();
         }
         true
     }

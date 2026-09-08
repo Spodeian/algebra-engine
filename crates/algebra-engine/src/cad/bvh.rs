@@ -262,11 +262,12 @@ impl BvhTree {
                 let v1 = self.vertices[t[1]];
                 let v2 = self.vertices[t[2]];
 
-                if let Some(hit) = Self::ray_triangle_intersect(ray, &v0, &v1, &v2, tri_idx) {
-                    if hit.distance < *max_dist && hit.distance > 1e-9 {
-                        *max_dist = hit.distance;
-                        *closest = Some(hit);
-                    }
+                if let Some(hit) = Self::ray_triangle_intersect(ray, &v0, &v1, &v2, tri_idx)
+                    && hit.distance < *max_dist
+                    && hit.distance > 1e-9
+                {
+                    *max_dist = hit.distance;
+                    *closest = Some(hit);
                 }
             }
         } else {

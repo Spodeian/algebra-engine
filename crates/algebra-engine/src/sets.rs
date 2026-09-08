@@ -134,10 +134,10 @@ impl Iterator for IntSetIterator {
     type Item = i64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(limit) = self.end {
-            if self.current > limit {
-                return None;
-            }
+        if let Some(limit) = self.end
+            && self.current > limit
+        {
+            return None;
         }
         let val = self.current;
         self.current += 1;

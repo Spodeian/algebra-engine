@@ -28,7 +28,15 @@ homepage = "https://github.com/Spodeian/algebra-engine"
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
-all = "warn"
+all = { level = "warn", priority = -1 }
+collapsible_if = "allow"
+needless_range_loop = "allow"
+too_many_arguments = "allow"
+needless_borrow = "allow"
+nonminimal_bool = "allow"
+get_first = "allow"
+approx_constant = "allow"
+match_like_matches_macro = "allow"
 
 [workspace.dependencies]
 # Internal workspace crates

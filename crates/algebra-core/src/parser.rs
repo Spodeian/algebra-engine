@@ -102,14 +102,14 @@ pub fn normalize_latex_input(input: &str) -> String {
     // Replace LaTeX fraction: \frac{a}{b} -> ((a) / (b)) using balanced brace parsing
     while let Some(idx) = s.find("\\frac") {
         let after_frac = &s[idx + 5..];
-        if let Some((num_str, rest_after_num)) = extract_braced_block(after_frac) {
-            if let Some((den_str, rest_after_den)) = extract_braced_block(rest_after_num) {
-                let consumed_len = 5 + (after_frac.len() - rest_after_den.len());
-                let replacement = format!("(({}) / ({}))", num_str, den_str);
-                let full_frac_str = &s[idx..idx + consumed_len];
-                s = s.replace(full_frac_str, &replacement);
-                continue;
-            }
+        if let Some((num_str, rest_after_num)) = extract_braced_block(after_frac)
+            && let Some((den_str, rest_after_den)) = extract_braced_block(rest_after_num)
+        {
+            let consumed_len = 5 + (after_frac.len() - rest_after_den.len());
+            let replacement = format!("(({}) / ({}))", num_str, den_str);
+            let full_frac_str = &s[idx..idx + consumed_len];
+            s = s.replace(full_frac_str, &replacement);
+            continue;
         }
         break;
     }
@@ -314,11 +314,11 @@ impl<'a> ExprParser<'a> {
                 has_exp = true;
                 end_idx = i + c.len_utf8();
                 chars.next();
-                if let Some(&(si, sc)) = chars.peek() {
-                    if sc == '+' || sc == '-' {
-                        end_idx = si + sc.len_utf8();
-                        chars.next();
-                    }
+                if let Some(&(si, sc)) = chars.peek()
+                    && (sc == '+' || sc == '-')
+                {
+                    end_idx = si + sc.len_utf8();
+                    chars.next();
                 }
             } else {
                 break;
@@ -600,19 +600,17 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
             || trimmed.contains(" is in ")
             || trimmed.contains(" ∈ ")
             || (trimmed.contains(" in ") && !trimmed.contains('{') && !trimmed.contains('|')))
-    {
-        if let Some((var_part, dom_part)) = trimmed
+        && let Some((var_part, dom_part)) = trimmed
             .split_once(" is in the set of ")
             .or_else(|| trimmed.split_once(" is in "))
             .or_else(|| trimmed.split_once(" is a "))
             .or_else(|| trimmed.split_once(" ∈ "))
             .or_else(|| trimmed.split_once(" in "))
-        {
-            return Some(PermissiveIntent::DomainDeclaration {
-                name: var_part.trim().to_string(),
-                domain_desc: dom_part.trim().to_string(),
-            });
-        }
+    {
+        return Some(PermissiveIntent::DomainDeclaration {
+            name: var_part.trim().to_string(),
+            domain_desc: dom_part.trim().to_string(),
+        });
     }
 
     // 2. Solve commands e.g. `solve g(x) = 3, x`, `given g(x) = 3 find x`, `find x where g(x) = 3`
@@ -654,13 +652,13 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
         });
     }
 
-    if let Some(rest) = trimmed.strip_prefix("given ") {
-        if let Some((eq_part, find_part)) = rest.split_once(" find ") {
-            return Some(PermissiveIntent::Solve {
-                equation: eq_part.trim().to_string(),
-                variable: find_part.trim().to_string(),
-            });
-        }
+    if let Some(rest) = trimmed.strip_prefix("given ")
+        && let Some((eq_part, find_part)) = rest.split_once(" find ")
+    {
+        return Some(PermissiveIntent::Solve {
+            equation: eq_part.trim().to_string(),
+            variable: find_part.trim().to_string(),
+        });
     }
 
     if let Some(rest) = trimmed.strip_prefix("find ") {
@@ -707,20 +705,20 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
                     point: val_part.trim().to_string(),
                 });
             }
-        } else if clean.starts_with("_(") {
-            if let Some(close_idx) = clean.find(')') {
-                let bound_part = &clean[3..close_idx];
-                let expr_part = &clean[close_idx + 1..];
-                if let Some((var_part, val_part)) = bound_part
-                    .split_once("->")
-                    .or_else(|| bound_part.split_once('='))
-                {
-                    return Some(PermissiveIntent::Limit {
-                        expression: expr_part.trim().to_string(),
-                        variable: var_part.trim().to_string(),
-                        point: val_part.trim().to_string(),
-                    });
-                }
+        } else if clean.starts_with("_(")
+            && let Some(close_idx) = clean.find(')')
+        {
+            let bound_part = &clean[3..close_idx];
+            let expr_part = &clean[close_idx + 1..];
+            if let Some((var_part, val_part)) = bound_part
+                .split_once("->")
+                .or_else(|| bound_part.split_once('='))
+            {
+                return Some(PermissiveIntent::Limit {
+                    expression: expr_part.trim().to_string(),
+                    variable: var_part.trim().to_string(),
+                    point: val_part.trim().to_string(),
+                });
             }
         }
     }
@@ -737,55 +735,56 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
 
         if let Some((expr_part, range_part)) = clean.split_once(" from ") {
             let expr = expr_part.trim().to_string();
-            if let Some((start_part, upper_part)) = range_part.trim().split_once(" to ") {
-                if let Some((var_part, lower_part)) = start_part.trim().split_once('=') {
-                    return Some(PermissiveIntent::Sum {
-                        expression: expr,
-                        variable: var_part.trim().to_string(),
-                        lower: lower_part.trim().to_string(),
-                        upper: upper_part.trim().to_string(),
-                    });
-                }
+            if let Some((start_part, upper_part)) = range_part.trim().split_once(" to ")
+                && let Some((var_part, lower_part)) = start_part.trim().split_once('=')
+            {
+                return Some(PermissiveIntent::Sum {
+                    expression: expr,
+                    variable: var_part.trim().to_string(),
+                    lower: lower_part.trim().to_string(),
+                    upper: upper_part.trim().to_string(),
+                });
             }
-        } else if clean.contains("_{") && clean.contains("}^{") {
-            if let Some(lower_start) = clean.find("_{") {
-                if let Some(lower_end) = clean[lower_start..].find('}') {
-                    let l_str = &clean[lower_start + 2..lower_start + lower_end];
-                    let rest = &clean[lower_start + lower_end + 1..];
-                    if let Some(upper_start) = rest.find("^{") {
-                        if let Some(upper_end) = rest[upper_start..].find('}') {
-                            let u_str = &rest[upper_start + 2..upper_start + upper_end];
-                            let expr_part = &rest[upper_start + upper_end + 1..];
-                            if let Some((var_part, lower_val)) = l_str.split_once('=') {
-                                return Some(PermissiveIntent::Sum {
-                                    expression: expr_part.trim().to_string(),
-                                    variable: var_part.trim().to_string(),
-                                    lower: lower_val.trim().to_string(),
-                                    upper: u_str.trim().to_string(),
-                                });
-                            }
-                        }
-                    }
+        } else if clean.contains("_{")
+            && clean.contains("}^{")
+            && let Some(lower_start) = clean.find("_{")
+            && let Some(lower_end) = clean[lower_start..].find('}')
+        {
+            let l_str = &clean[lower_start + 2..lower_start + lower_end];
+            let rest = &clean[lower_start + lower_end + 1..];
+            if let Some(upper_start) = rest.find("^{")
+                && let Some(upper_end) = rest[upper_start..].find('}')
+            {
+                let u_str = &rest[upper_start + 2..upper_start + upper_end];
+                let expr_part = &rest[upper_start + upper_end + 1..];
+                if let Some((var_part, lower_val)) = l_str.split_once('=') {
+                    return Some(PermissiveIntent::Sum {
+                        expression: expr_part.trim().to_string(),
+                        variable: var_part.trim().to_string(),
+                        lower: lower_val.trim().to_string(),
+                        upper: u_str.trim().to_string(),
+                    });
                 }
             }
         }
     }
 
     // 3. Differentiation commands e.g. `d f(x, q) / dx`, `derivative of f(x, q)`, `partial derivative of f(x, q) by x`
-    if trimmed.starts_with("d ") && trimmed.contains('/') {
-        if let Some((top_part, bot_part)) = trimmed.split_once('/') {
-            let expr_part = top_part.strip_prefix("d ").unwrap_or(top_part).trim();
-            let var_part = bot_part.trim().strip_prefix('d').unwrap_or(bot_part).trim();
-            return Some(PermissiveIntent::Differentiate {
-                expression: expr_part.to_string(),
-                variable: if var_part.is_empty() {
-                    None
-                } else {
-                    Some(var_part.to_string())
-                },
-                is_total: false,
-            });
-        }
+    if trimmed.starts_with("d ")
+        && trimmed.contains('/')
+        && let Some((top_part, bot_part)) = trimmed.split_once('/')
+    {
+        let expr_part = top_part.strip_prefix("d ").unwrap_or(top_part).trim();
+        let var_part = bot_part.trim().strip_prefix('d').unwrap_or(bot_part).trim();
+        return Some(PermissiveIntent::Differentiate {
+            expression: expr_part.to_string(),
+            variable: if var_part.is_empty() {
+                None
+            } else {
+                Some(var_part.to_string())
+            },
+            is_total: false,
+        });
     }
 
     if trimmed.contains("derivative")
@@ -855,24 +854,24 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
                 upper = Some(u.trim().to_string());
             }
             clean_body = clean_body[..idx].trim().to_string();
-        } else if clean_body.contains("_{") && clean_body.contains("}^{") {
-            if let Some(lower_start) = clean_body.find("_{") {
-                if let Some(lower_end) = clean_body[lower_start..].find('}') {
-                    let l_str = &clean_body[lower_start + 2..lower_start + lower_end];
-                    lower = Some(l_str.trim().to_string());
-                    let rest = &clean_body[lower_start + lower_end + 1..];
-                    if let Some(upper_start) = rest.find("^{") {
-                        if let Some(upper_end) = rest[upper_start..].find('}') {
-                            let u_str = &rest[upper_start + 2..upper_start + upper_end];
-                            upper = Some(u_str.trim().to_string());
-                            clean_body = format!(
-                                "{} {}",
-                                &clean_body[..lower_start],
-                                &rest[upper_start + upper_end + 1..]
-                            );
-                        }
-                    }
-                }
+        } else if clean_body.contains("_{")
+            && clean_body.contains("}^{")
+            && let Some(lower_start) = clean_body.find("_{")
+            && let Some(lower_end) = clean_body[lower_start..].find('}')
+        {
+            let l_str = &clean_body[lower_start + 2..lower_start + lower_end];
+            lower = Some(l_str.trim().to_string());
+            let rest = &clean_body[lower_start + lower_end + 1..];
+            if let Some(upper_start) = rest.find("^{")
+                && let Some(upper_end) = rest[upper_start..].find('}')
+            {
+                let u_str = &rest[upper_start + 2..upper_start + upper_end];
+                upper = Some(u_str.trim().to_string());
+                clean_body = format!(
+                    "{} {}",
+                    &clean_body[..lower_start],
+                    &rest[upper_start + upper_end + 1..]
+                );
             }
         }
 
@@ -969,51 +968,45 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
     if let Some(rest) = trimmed
         .strip_prefix("substitute ")
         .or_else(|| trimmed.strip_prefix("replace "))
+        && let Some((sub_part, expr_part)) = rest.split_once(" in ")
+        && let Some((var_part, val_part)) = sub_part
+            .split_once('=')
+            .or_else(|| sub_part.split_once(" with "))
     {
-        if let Some((sub_part, expr_part)) = rest.split_once(" in ") {
-            if let Some((var_part, val_part)) = sub_part
-                .split_once('=')
-                .or_else(|| sub_part.split_once(" with "))
-            {
-                return Some(PermissiveIntent::Substitute {
-                    expression: expr_part.trim().to_string(),
-                    variable: var_part.trim().to_string(),
-                    value: val_part.trim().to_string(),
-                });
-            }
-        }
+        return Some(PermissiveIntent::Substitute {
+            expression: expr_part.trim().to_string(),
+            variable: var_part.trim().to_string(),
+            value: val_part.trim().to_string(),
+        });
     }
 
-    if let Some(rest) = trimmed.strip_prefix("evaluate ") {
-        if let Some((expr_part, at_part)) = rest.split_once(" at ") {
-            if let Some((var_part, val_part)) = at_part.split_once('=') {
-                return Some(PermissiveIntent::Substitute {
-                    expression: expr_part.trim().to_string(),
-                    variable: var_part.trim().to_string(),
-                    value: val_part.trim().to_string(),
-                });
-            }
-        }
+    if let Some(rest) = trimmed.strip_prefix("evaluate ")
+        && let Some((expr_part, at_part)) = rest.split_once(" at ")
+        && let Some((var_part, val_part)) = at_part.split_once('=')
+    {
+        return Some(PermissiveIntent::Substitute {
+            expression: expr_part.trim().to_string(),
+            variable: var_part.trim().to_string(),
+            value: val_part.trim().to_string(),
+        });
     }
 
     // 7. Distributions e.g. `X ~ Normal(0, 1)`
-    if trimmed.contains('~') {
-        if let Some((var_part, dist_part)) = trimmed.split_once('~') {
-            if let Some(open_p) = dist_part.find('(') {
-                if let Some(close_p) = dist_part.find(')') {
-                    let d_type = dist_part[..open_p].trim().to_string();
-                    let params = dist_part[open_p + 1..close_p]
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .collect();
-                    return Some(PermissiveIntent::Distribution {
-                        name: var_part.trim().to_string(),
-                        dist_type: d_type,
-                        params,
-                    });
-                }
-            }
-        }
+    if trimmed.contains('~')
+        && let Some((var_part, dist_part)) = trimmed.split_once('~')
+        && let Some(open_p) = dist_part.find('(')
+        && let Some(close_p) = dist_part.find(')')
+    {
+        let d_type = dist_part[..open_p].trim().to_string();
+        let params = dist_part[open_p + 1..close_p]
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+        return Some(PermissiveIntent::Distribution {
+            name: var_part.trim().to_string(),
+            dist_type: d_type,
+            params,
+        });
     }
 
     // 8. Comparisons / Equivalence e.g. `are f(x) and g(x) equal?`
@@ -1061,23 +1054,22 @@ pub fn parse_permissive_intent(input: &str) -> Option<PermissiveIntent> {
         .or_else(|| def_clean.split_once('='))
     {
         let lhs_trim = lhs.trim();
-        if let Some(open_p) = lhs_trim.find('(') {
-            if let Some(close_p) = lhs_trim.find(')') {
-                if close_p > open_p {
-                    let fn_name = lhs_trim[..open_p].trim().to_string();
-                    let args = lhs_trim[open_p + 1..close_p]
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                    if !fn_name.is_empty() {
-                        return Some(PermissiveIntent::Define {
-                            name: fn_name,
-                            args,
-                            body: rhs.trim().to_string(),
-                        });
-                    }
-                }
+        if let Some(open_p) = lhs_trim.find('(')
+            && let Some(close_p) = lhs_trim.find(')')
+            && close_p > open_p
+        {
+            let fn_name = lhs_trim[..open_p].trim().to_string();
+            let args = lhs_trim[open_p + 1..close_p]
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !fn_name.is_empty() {
+                return Some(PermissiveIntent::Define {
+                    name: fn_name,
+                    args,
+                    body: rhs.trim().to_string(),
+                });
             }
         }
     }
@@ -1202,31 +1194,30 @@ pub fn parse_domain_declaration(line: &str) -> Option<DomainBound> {
     }
 
     // Check for bracket interval `[min, max]` or `(min, max)`
-    if let Some(bracket_start) = rest_trimmed.find(['[', '(']) {
-        if let Some(bracket_end) = rest_trimmed.rfind([']', ')']) {
-            if bracket_end > bracket_start {
-                inclusive_min = &rest_trimmed[bracket_start..=bracket_start] == "[";
-                inclusive_max = &rest_trimmed[bracket_end..=bracket_end] == "]";
-                let inner = &rest_trimmed[bracket_start + 1..bracket_end];
-                if let Some((min_s, max_s)) = inner.split_once(',') {
-                    let parse_bound = |s: &str| -> Option<f64> {
-                        let s = s.trim();
-                        if s == "-infinity" || s == "-inf" {
-                            Some(-1e6)
-                        } else if s == "infinity" || s == "inf" {
-                            Some(1e6)
-                        } else if s == "2*pi" || s == "2pi" {
-                            Some(std::f64::consts::TAU)
-                        } else if s == "pi" {
-                            Some(std::f64::consts::PI)
-                        } else {
-                            s.parse::<f64>().ok()
-                        }
-                    };
-                    min_val = parse_bound(min_s);
-                    max_val = parse_bound(max_s);
+    if let Some(bracket_start) = rest_trimmed.find(['[', '('])
+        && let Some(bracket_end) = rest_trimmed.rfind([']', ')'])
+        && bracket_end > bracket_start
+    {
+        inclusive_min = &rest_trimmed[bracket_start..=bracket_start] == "[";
+        inclusive_max = &rest_trimmed[bracket_end..=bracket_end] == "]";
+        let inner = &rest_trimmed[bracket_start + 1..bracket_end];
+        if let Some((min_s, max_s)) = inner.split_once(',') {
+            let parse_bound = |s: &str| -> Option<f64> {
+                let s = s.trim();
+                if s == "-infinity" || s == "-inf" {
+                    Some(-1e6)
+                } else if s == "infinity" || s == "inf" {
+                    Some(1e6)
+                } else if s == "2*pi" || s == "2pi" {
+                    Some(std::f64::consts::TAU)
+                } else if s == "pi" {
+                    Some(std::f64::consts::PI)
+                } else {
+                    s.parse::<f64>().ok()
                 }
-            }
+            };
+            min_val = parse_bound(min_s);
+            max_val = parse_bound(max_s);
         }
     }
 
@@ -1285,13 +1276,13 @@ pub fn parse_operation(input: &str) -> MathOperation {
     }
 
     // 2. Set Context Key-Value
-    if let Some(set_body) = input.strip_prefix("set ") {
-        if let Some((k, v)) = set_body.trim().split_once(' ') {
-            return MathOperation::SetContext {
-                key: k.trim().to_string(),
-                value: v.trim().to_string(),
-            };
-        }
+    if let Some(set_body) = input.strip_prefix("set ")
+        && let Some((k, v)) = set_body.trim().split_once(' ')
+    {
+        return MathOperation::SetContext {
+            key: k.trim().to_string(),
+            value: v.trim().to_string(),
+        };
     }
 
     // 3. AI Copilot Query
@@ -1333,10 +1324,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("tet "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::HyperOp(HyperOpKind::Tetration { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::HyperOp(HyperOpKind::Tetration { a, b });
         }
     }
     if let Some(body) = input
@@ -1344,10 +1335,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("pent "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::HyperOp(HyperOpKind::Pentation { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::HyperOp(HyperOpKind::Pentation { a, b });
         }
     }
     if let Some(body) = input
@@ -1355,14 +1346,14 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("uparrow "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 3 {
-            if let (Ok(a), Ok(arrows), Ok(b)) = (
+        if parts.len() >= 3
+            && let (Ok(a), Ok(arrows), Ok(b)) = (
                 parts[0].parse::<u64>(),
                 parts[1].parse::<usize>(),
                 parts[2].parse::<u64>(),
-            ) {
-                return MathOperation::HyperOp(HyperOpKind::KnuthUpArrow { a, arrows, b });
-            }
+            )
+        {
+            return MathOperation::HyperOp(HyperOpKind::KnuthUpArrow { a, arrows, b });
         }
     }
     if let Some(body) = input
@@ -1370,10 +1361,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("ack "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(m), Ok(n)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::HyperOp(HyperOpKind::Ackermann { m, n });
-            }
+        if parts.len() >= 2
+            && let (Ok(m), Ok(n)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::HyperOp(HyperOpKind::Ackermann { m, n });
         }
     }
     if let Some(body) = input
@@ -1381,56 +1372,56 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("superlog "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(base), Ok(val)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                return MathOperation::HyperOp(HyperOpKind::SuperLog { base, val });
-            }
+        if parts.len() >= 2
+            && let (Ok(base), Ok(val)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            return MathOperation::HyperOp(HyperOpKind::SuperLog { base, val });
         }
     }
     if let Some(body) = input.strip_prefix("hyperop ") {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 3 {
-            if let (Ok(n), Ok(a), Ok(b)) = (
+        if parts.len() >= 3
+            && let (Ok(n), Ok(a), Ok(b)) = (
                 parts[0].parse::<usize>(),
                 parts[1].parse::<u64>(),
                 parts[2].parse::<u64>(),
-            ) {
-                return MathOperation::HyperOp(HyperOpKind::General { n, a, b });
-            }
+            )
+        {
+            return MathOperation::HyperOp(HyperOpKind::General { n, a, b });
         }
     }
 
     // 6. Tropical Semirings
     if let Some(body) = input.strip_prefix("maxplus_add ") {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                return MathOperation::Tropical(TropicalOpKind::MaxPlusAdd { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            return MathOperation::Tropical(TropicalOpKind::MaxPlusAdd { a, b });
         }
     }
     if let Some(body) = input.strip_prefix("maxplus_mul ") {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                return MathOperation::Tropical(TropicalOpKind::MaxPlusMul { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            return MathOperation::Tropical(TropicalOpKind::MaxPlusMul { a, b });
         }
     }
     if let Some(body) = input.strip_prefix("minplus_add ") {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                return MathOperation::Tropical(TropicalOpKind::MinPlusAdd { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            return MathOperation::Tropical(TropicalOpKind::MinPlusAdd { a, b });
         }
     }
     if let Some(body) = input.strip_prefix("minplus_mul ") {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                return MathOperation::Tropical(TropicalOpKind::MinPlusMul { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            return MathOperation::Tropical(TropicalOpKind::MinPlusMul { a, b });
         }
     }
     if let Some(body) = input
@@ -1438,15 +1429,15 @@ pub fn parse_operation(input: &str) -> MathOperation {
         .or_else(|| input.strip_prefix("lse "))
     {
         let parts: Vec<&str> = body.split_whitespace().collect();
-        if parts.len() >= 2 {
-            if let (Ok(x), Ok(y)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                let eps = if parts.len() >= 3 {
-                    parts[2].parse::<f64>().unwrap_or(0.01)
-                } else {
-                    0.01
-                };
-                return MathOperation::Tropical(TropicalOpKind::LogSumExp { x, y, epsilon: eps });
-            }
+        if parts.len() >= 2
+            && let (Ok(x), Ok(y)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>())
+        {
+            let eps = if parts.len() >= 3 {
+                parts[2].parse::<f64>().unwrap_or(0.01)
+            } else {
+                0.01
+            };
+            return MathOperation::Tropical(TropicalOpKind::LogSumExp { x, y, epsilon: eps });
         }
     }
 
@@ -1487,10 +1478,9 @@ pub fn parse_operation(input: &str) -> MathOperation {
     if let Some(body) = input
         .strip_prefix("is_prime ")
         .or_else(|| input.strip_prefix("prime "))
+        && let Ok(n) = body.trim().parse::<u64>()
     {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::NumberTheory(NumberTheoryOpKind::IsPrime { n });
-        }
+        return MathOperation::NumberTheory(NumberTheoryOpKind::IsPrime { n });
     }
     if let Some(body) = input
         .strip_prefix("gcd ")
@@ -1502,10 +1492,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         } else {
             body.split_whitespace().collect()
         };
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(b)) = (parts[0].parse::<i64>(), parts[1].parse::<i64>()) {
-                return MathOperation::NumberTheory(NumberTheoryOpKind::ExtendedGcd { a, b });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(b)) = (parts[0].parse::<i64>(), parts[1].parse::<i64>())
+        {
+            return MathOperation::NumberTheory(NumberTheoryOpKind::ExtendedGcd { a, b });
         }
     }
     if let Some(body) = input.strip_prefix("legendre ") {
@@ -1514,10 +1504,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         } else {
             body.split_whitespace().collect()
         };
-        if parts.len() >= 2 {
-            if let (Ok(a), Ok(p)) = (parts[0].parse::<i64>(), parts[1].parse::<u64>()) {
-                return MathOperation::NumberTheory(NumberTheoryOpKind::Legendre { a, p });
-            }
+        if parts.len() >= 2
+            && let (Ok(a), Ok(p)) = (parts[0].parse::<i64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::NumberTheory(NumberTheoryOpKind::Legendre { a, p });
         }
     }
 
@@ -1562,10 +1552,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
             });
         }
     }
-    if let Some(body) = input.strip_prefix("galois ") {
-        if let Ok(d) = body.trim().parse::<i64>() {
-            return MathOperation::Galois(GaloisOpKind::QuadraticExtension { d });
-        }
+    if let Some(body) = input.strip_prefix("galois ")
+        && let Ok(d) = body.trim().parse::<i64>()
+    {
+        return MathOperation::Galois(GaloisOpKind::QuadraticExtension { d });
     }
 
     // 9. Algebraic Transformations
@@ -1663,7 +1653,7 @@ pub fn parse_operation(input: &str) -> MathOperation {
             } else {
                 wave_args.split_whitespace().collect()
             };
-            let speed = parts.get(0).copied().unwrap_or("c").to_string();
+            let speed = parts.first().copied().unwrap_or("c").to_string();
             let x_var = parts.get(1).copied().unwrap_or("x").to_string();
             let t_var = parts.get(2).copied().unwrap_or("t").to_string();
             let initial_pos = parts.get(3).copied().map(|s| s.to_string());
@@ -1682,7 +1672,7 @@ pub fn parse_operation(input: &str) -> MathOperation {
             } else {
                 heat_args.split_whitespace().collect()
             };
-            let alpha = parts.get(0).copied().unwrap_or("alpha").to_string();
+            let alpha = parts.first().copied().unwrap_or("alpha").to_string();
             let x_var = parts.get(1).copied().unwrap_or("x").to_string();
             let t_var = parts.get(2).copied().unwrap_or("t").to_string();
             let length = parts.get(3).copied().map(|s| s.to_string());
@@ -1699,7 +1689,7 @@ pub fn parse_operation(input: &str) -> MathOperation {
             } else {
                 laplace_args.split_whitespace().collect()
             };
-            let x_var = parts.get(0).copied().unwrap_or("x").to_string();
+            let x_var = parts.first().copied().unwrap_or("x").to_string();
             let y_var = parts.get(1).copied().unwrap_or("y").to_string();
             let a_bound = parts.get(2).copied().map(|s| s.to_string());
             let b_bound = parts.get(3).copied().map(|s| s.to_string());
@@ -1719,7 +1709,7 @@ pub fn parse_operation(input: &str) -> MathOperation {
             } else {
                 trans_args.split_whitespace().collect()
             };
-            let speed = parts.get(0).copied().unwrap_or("c").to_string();
+            let speed = parts.first().copied().unwrap_or("c").to_string();
             let x_var = parts.get(1).copied().unwrap_or("x").to_string();
             let t_var = parts.get(2).copied().unwrap_or("t").to_string();
             let initial_state = parts.get(3).copied().map(|s| s.to_string());
@@ -1736,7 +1726,7 @@ pub fn parse_operation(input: &str) -> MathOperation {
             } else {
                 bessel_args.split_whitespace().collect()
             };
-            let wave_num = parts.get(0).copied().unwrap_or("k").to_string();
+            let wave_num = parts.first().copied().unwrap_or("k").to_string();
             let r_var = parts.get(1).copied().unwrap_or("r").to_string();
             let order = parts
                 .get(2)
@@ -1765,53 +1755,51 @@ pub fn parse_operation(input: &str) -> MathOperation {
     }
     if (input.starts_with("N(") || input.starts_with("evalf(") || input.starts_with("approx("))
         && input.ends_with(')')
+        && let Some(open) = input.find('(')
     {
-        if let Some(open) = input.find('(') {
-            let inner = &input[open + 1..input.len() - 1];
-            return MathOperation::Evaluate {
-                expression: inner.trim().to_string(),
-                precision_digits: None,
-                bindings: HashMap::new(),
-            };
-        }
+        let inner = &input[open + 1..input.len() - 1];
+        return MathOperation::Evaluate {
+            expression: inner.trim().to_string(),
+            precision_digits: None,
+            bindings: HashMap::new(),
+        };
     }
 
     // 11. Symbol Declarations (Notebook style e.g. `a: Parameter = 2.0 [m]`, `x: Variable`, `a = 5.0 [kg]`)
     if input.contains(':')
         && (input.contains("Variable") || input.contains("Parameter") || input.contains("Constant"))
+        && let Some((name_part, rest)) = input.split_once(':')
     {
-        if let Some((name_part, rest)) = input.split_once(':') {
-            let name = name_part.trim().to_string();
-            let role = if rest.contains("Parameter") {
-                SymbolRoleKind::Parameter
-            } else if rest.contains("Constant") {
-                SymbolRoleKind::Constant
-            } else {
-                SymbolRoleKind::Variable
-            };
+        let name = name_part.trim().to_string();
+        let role = if rest.contains("Parameter") {
+            SymbolRoleKind::Parameter
+        } else if rest.contains("Constant") {
+            SymbolRoleKind::Constant
+        } else {
+            SymbolRoleKind::Variable
+        };
 
-            let mut value = None;
-            let mut unit = None;
-            if let Some((_, val_part)) = rest.split_once('=') {
-                let val_str = val_part.trim();
-                let (num_str, unit_str) = if let Some(bracket_idx) = val_str.find('[') {
-                    let u = val_str[bracket_idx..]
-                        .trim_matches(|c| c == '[' || c == ']')
-                        .trim();
-                    (&val_str[..bracket_idx], Some(u.to_string()))
-                } else {
-                    (val_str, None)
-                };
-                value = num_str.trim().parse::<f64>().ok();
-                unit = unit_str;
-            }
-            return MathOperation::Declaration {
-                name,
-                role,
-                value,
-                unit,
+        let mut value = None;
+        let mut unit = None;
+        if let Some((_, val_part)) = rest.split_once('=') {
+            let val_str = val_part.trim();
+            let (num_str, unit_str) = if let Some(bracket_idx) = val_str.find('[') {
+                let u = val_str[bracket_idx..]
+                    .trim_matches(|c| c == '[' || c == ']')
+                    .trim();
+                (&val_str[..bracket_idx], Some(u.to_string()))
+            } else {
+                (val_str, None)
             };
+            value = num_str.trim().parse::<f64>().ok();
+            unit = unit_str;
         }
+        return MathOperation::Declaration {
+            name,
+            role,
+            value,
+            unit,
+        };
     }
 
     // 12. Set-Builder Domain Declarations e.g. `{ x in Reals | -5 <= x <= 5 }` or `x in Reals | x >= 0`
@@ -1878,10 +1866,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
     }
 
     // 15. Discrete Combinatorics Commands
-    if let Some(body) = input.strip_prefix("factorial ") {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::Combinatorics(CombinatoricsOpKind::Factorial { n });
-        }
+    if let Some(body) = input.strip_prefix("factorial ")
+        && let Ok(n) = body.trim().parse::<u64>()
+    {
+        return MathOperation::Combinatorics(CombinatoricsOpKind::Factorial { n });
     }
     if let Some(body) = input
         .strip_prefix("combinations ")
@@ -1893,10 +1881,10 @@ pub fn parse_operation(input: &str) -> MathOperation {
         } else {
             body.split_whitespace().collect()
         };
-        if parts.len() >= 2 {
-            if let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::Combinatorics(CombinatoricsOpKind::Combinations { n, k });
-            }
+        if parts.len() >= 2
+            && let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::Combinatorics(CombinatoricsOpKind::Combinations { n, k });
         }
     }
     if let Some(body) = input
@@ -1908,26 +1896,26 @@ pub fn parse_operation(input: &str) -> MathOperation {
         } else {
             body.split_whitespace().collect()
         };
-        if parts.len() >= 2 {
-            if let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::Combinatorics(CombinatoricsOpKind::Permutations { n, k });
-            }
+        if parts.len() >= 2
+            && let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::Combinatorics(CombinatoricsOpKind::Permutations { n, k });
         }
     }
-    if let Some(body) = input.strip_prefix("derangements ") {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::Combinatorics(CombinatoricsOpKind::Derangements { n });
-        }
+    if let Some(body) = input.strip_prefix("derangements ")
+        && let Ok(n) = body.trim().parse::<u64>()
+    {
+        return MathOperation::Combinatorics(CombinatoricsOpKind::Derangements { n });
     }
-    if let Some(body) = input.strip_prefix("catalan ") {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::Combinatorics(CombinatoricsOpKind::Catalan { n });
-        }
+    if let Some(body) = input.strip_prefix("catalan ")
+        && let Ok(n) = body.trim().parse::<u64>()
+    {
+        return MathOperation::Combinatorics(CombinatoricsOpKind::Catalan { n });
     }
-    if let Some(body) = input.strip_prefix("bell ") {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::Combinatorics(CombinatoricsOpKind::Bell { n });
-        }
+    if let Some(body) = input.strip_prefix("bell ")
+        && let Ok(n) = body.trim().parse::<u64>()
+    {
+        return MathOperation::Combinatorics(CombinatoricsOpKind::Bell { n });
     }
     if let Some(body) = input.strip_prefix("stirling2 ") {
         let parts: Vec<&str> = if body.contains(',') {
@@ -1935,16 +1923,16 @@ pub fn parse_operation(input: &str) -> MathOperation {
         } else {
             body.split_whitespace().collect()
         };
-        if parts.len() >= 2 {
-            if let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
-                return MathOperation::Combinatorics(CombinatoricsOpKind::Stirling2 { n, k });
-            }
+        if parts.len() >= 2
+            && let (Ok(n), Ok(k)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>())
+        {
+            return MathOperation::Combinatorics(CombinatoricsOpKind::Stirling2 { n, k });
         }
     }
-    if let Some(body) = input.strip_prefix("partitions ") {
-        if let Ok(n) = body.trim().parse::<u64>() {
-            return MathOperation::Combinatorics(CombinatoricsOpKind::Partitions { n });
-        }
+    if let Some(body) = input.strip_prefix("partitions ")
+        && let Ok(n) = body.trim().parse::<u64>()
+    {
+        return MathOperation::Combinatorics(CombinatoricsOpKind::Partitions { n });
     }
 
     // 16. Integral Transforms
@@ -2043,43 +2031,43 @@ pub fn parse_operation(input: &str) -> MathOperation {
             });
         }
     }
-    if let Some(body) = input.strip_prefix("poly_gcd ") {
-        if let Some((p1, p2)) = body.split_once(',') {
-            return MathOperation::Polynomial(PolynomialOpKind::Gcd {
-                poly1_str: p1.trim().to_string(),
-                poly2_str: p2.trim().to_string(),
-            });
-        }
+    if let Some(body) = input.strip_prefix("poly_gcd ")
+        && let Some((p1, p2)) = body.split_once(',')
+    {
+        return MathOperation::Polynomial(PolynomialOpKind::Gcd {
+            poly1_str: p1.trim().to_string(),
+            poly2_str: p2.trim().to_string(),
+        });
     }
 
     // 18. Physics & Dimensions
-    if let Some(body) = input.strip_prefix("convert ") {
-        if let Some((from_part, to_part)) = body.split_once(" to ") {
-            let from_trimmed = from_part.trim();
-            let to_unit = to_part
-                .trim()
+    if let Some(body) = input.strip_prefix("convert ")
+        && let Some((from_part, to_part)) = body.split_once(" to ")
+    {
+        let from_trimmed = from_part.trim();
+        let to_unit = to_part
+            .trim()
+            .trim_matches(|c| c == '[' || c == ']')
+            .to_string();
+        let (num_str, from_unit) = if let Some(bracket_idx) = from_trimmed.find('[') {
+            let u = from_trimmed[bracket_idx..]
                 .trim_matches(|c| c == '[' || c == ']')
-                .to_string();
-            let (num_str, from_unit) = if let Some(bracket_idx) = from_trimmed.find('[') {
-                let u = from_trimmed[bracket_idx..]
-                    .trim_matches(|c| c == '[' || c == ']')
-                    .trim();
-                (&from_trimmed[..bracket_idx], u.to_string())
+                .trim();
+            (&from_trimmed[..bracket_idx], u.to_string())
+        } else {
+            let parts: Vec<&str> = from_trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                (parts[0], parts[1].to_string())
             } else {
-                let parts: Vec<&str> = from_trimmed.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    (parts[0], parts[1].to_string())
-                } else {
-                    (from_trimmed, "m".to_string())
-                }
-            };
-            if let Ok(val) = num_str.trim().parse::<f64>() {
-                return MathOperation::Physics(PhysicsOpKind::Convert {
-                    val,
-                    from_unit,
-                    to_unit,
-                });
+                (from_trimmed, "m".to_string())
             }
+        };
+        if let Ok(val) = num_str.trim().parse::<f64>() {
+            return MathOperation::Physics(PhysicsOpKind::Convert {
+                val,
+                from_unit,
+                to_unit,
+            });
         }
     }
 
@@ -2129,19 +2117,19 @@ pub fn parse_operation(input: &str) -> MathOperation {
             None
         }
     }) {
-        if let Some((expr_part, bounds_part)) = int_body.split_once(" from ") {
-            if let Some((lower_p, upper_p)) = bounds_part.split_once(" to ") {
-                let (expr, var) = expr_part
-                    .split_once(',')
-                    .map(|(e, v)| (e.trim().to_string(), Some(v.trim().to_string())))
-                    .unwrap_or((expr_part.trim().to_string(), None));
-                return MathOperation::Integrate {
-                    expression: expr,
-                    variable: var,
-                    lower: Some(lower_p.trim().to_string()),
-                    upper: Some(upper_p.trim().to_string()),
-                };
-            }
+        if let Some((expr_part, bounds_part)) = int_body.split_once(" from ")
+            && let Some((lower_p, upper_p)) = bounds_part.split_once(" to ")
+        {
+            let (expr, var) = expr_part
+                .split_once(',')
+                .map(|(e, v)| (e.trim().to_string(), Some(v.trim().to_string())))
+                .unwrap_or((expr_part.trim().to_string(), None));
+            return MathOperation::Integrate {
+                expression: expr,
+                variable: var,
+                lower: Some(lower_p.trim().to_string()),
+                upper: Some(upper_p.trim().to_string()),
+            };
         }
         let parts: Vec<&str> = int_body.split(',').map(|s| s.trim()).collect();
         let expr = parts[0].to_string();

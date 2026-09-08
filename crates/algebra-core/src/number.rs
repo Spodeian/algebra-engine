@@ -139,11 +139,9 @@ impl Number {
         if num == 0 {
             return Self::Integer(0);
         }
-        if den < 0 {
-            if num != i64::MIN && den != i64::MIN {
-                num = -num;
-                den = -den;
-            }
+        if den < 0 && num != i64::MIN && den != i64::MIN {
+            num = -num;
+            den = -den;
         }
         let g = gcd_i64(num, den);
         if g > 1 {
@@ -170,12 +168,12 @@ impl Number {
             return Self::Integer(mantissa);
         }
         if exponent > 0 && exponent <= 18 {
-            if let Some(pow10) = 10i64.checked_pow(exponent as u32) {
-                if let Some(val) = mantissa.checked_mul(pow10) {
-                    return Self::Integer(val);
-                }
+            if let Some(pow10) = 10i64.checked_pow(exponent as u32)
+                && let Some(val) = mantissa.checked_mul(pow10)
+            {
+                return Self::Integer(val);
             }
-        } else if exponent < 0 && exponent >= -18 {
+        } else if (-18..0).contains(&exponent) {
             let neg_exp = (-exponent) as u32;
             if let Some(pow10) = 10i64.checked_pow(neg_exp) {
                 return Self::rational(mantissa, pow10);
@@ -216,7 +214,7 @@ impl Number {
         }
 
         // 1. Check scientific notation e.g. "1.5e-3", "2E6"
-        if let Some(e_idx) = trimmed.find(|c| c == 'e' || c == 'E') {
+        if let Some(e_idx) = trimmed.find(['e', 'E']) {
             let base_str = &trimmed[..e_idx];
             let exp_str = &trimmed[e_idx + 1..];
             let exp_val: i32 = exp_str.parse().ok()?;
@@ -402,20 +400,19 @@ impl Number {
                     n1.checked_mul(*d2),
                     n2.checked_mul(*d1),
                     d1.checked_mul(*d2),
-                ) {
-                    if let Some(num) = t1.checked_add(t2) {
-                        return Some(Self::rational(num, d));
-                    }
+                ) && let Some(num) = t1.checked_add(t2)
+                {
+                    return Some(Self::rational(num, d));
                 }
                 let r1 = BigRational::new(BigInt::from(*n1), BigInt::from(*d1));
                 let r2 = BigRational::new(BigInt::from(*n2), BigInt::from(*d2));
                 Some(Self::BigRational(Box::new(r1 + r2)))
             }
             (Self::Integer(a), Self::Rational(n, d)) | (Self::Rational(n, d), Self::Integer(a)) => {
-                if let Some(ad) = a.checked_mul(*d) {
-                    if let Some(num) = ad.checked_add(*n) {
-                        return Some(Self::rational(num, *d));
-                    }
+                if let Some(ad) = a.checked_mul(*d)
+                    && let Some(num) = ad.checked_add(*n)
+                {
+                    return Some(Self::rational(num, *d));
                 }
                 let r1 = BigRational::from(BigInt::from(*a));
                 let r2 = BigRational::new(BigInt::from(*n), BigInt::from(*d));

@@ -111,10 +111,10 @@ impl TensorSumBridge {
         let node = graph.get(sum_expr);
         if let algebra_core::ExprKind::Sum { body, var, .. } = node.kind {
             let body_node = graph.get(body);
-            if let algebra_core::ExprKind::Mul(factors) = &body_node.kind {
-                if factors.len() == 2 {
-                    return graph.tensor_contraction(factors[0], factors[1], vec![(var, var)]);
-                }
+            if let algebra_core::ExprKind::Mul(factors) = &body_node.kind
+                && factors.len() == 2
+            {
+                return graph.tensor_contraction(factors[0], factors[1], vec![(var, var)]);
             }
         }
         sum_expr

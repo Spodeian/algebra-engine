@@ -12,10 +12,10 @@ where
 {
     type Output = Self;
     fn bitand(self, rhs: U) -> Self {
-        if let Uint::Machine(a) = self {
-            if let Some(b) = rhs.to_usize() {
-                return Uint::Machine(a & b);
-            }
+        if let Uint::Machine(a) = self
+            && let Some(b) = rhs.to_usize()
+        {
+            return Uint::Machine(a & b);
         }
         Uint::from(BigUint::from(self) & rhs.into())
     }
@@ -27,10 +27,10 @@ where
 {
     type Output = Self;
     fn bitor(self, rhs: U) -> Self {
-        if let Uint::Machine(a) = self {
-            if let Some(b) = rhs.to_usize() {
-                return Uint::Machine(a | b);
-            }
+        if let Uint::Machine(a) = self
+            && let Some(b) = rhs.to_usize()
+        {
+            return Uint::Machine(a | b);
         }
         Uint::from(BigUint::from(self) | rhs.into())
     }
@@ -42,10 +42,10 @@ where
 {
     type Output = Self;
     fn bitxor(self, rhs: U) -> Self {
-        if let Uint::Machine(a) = self {
-            if let Some(b) = rhs.to_usize() {
-                return Uint::Machine(a ^ b);
-            }
+        if let Uint::Machine(a) = self
+            && let Some(b) = rhs.to_usize()
+        {
+            return Uint::Machine(a ^ b);
         }
         Uint::from(BigUint::from(self) ^ rhs.into())
     }

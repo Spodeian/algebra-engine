@@ -229,15 +229,15 @@ impl ExprGraph {
             non_zero.push(t);
         }
 
-        if let Some(acc) = const_acc {
-            if !acc.is_zero() {
-                let domain = match &acc {
-                    Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
-                    _ => Domain::Rationals,
-                };
-                let acc_id = self.intern(ExprNode::new(domain, ExprKind::Number(acc)));
-                non_zero.push(acc_id);
-            }
+        if let Some(acc) = const_acc
+            && !acc.is_zero()
+        {
+            let domain = match &acc {
+                Number::Integer(_) | Number::BigInteger(_) => Domain::Integers,
+                _ => Domain::Rationals,
+            };
+            let acc_id = self.intern(ExprNode::new(domain, ExprKind::Number(acc)));
+            non_zero.push(acc_id);
         }
 
         if non_zero.is_empty() {
@@ -314,17 +314,16 @@ impl ExprGraph {
     pub fn div(&self, num: ExprId, den: ExprId) -> ExprId {
         let n_node = self.get(num);
         let den_node = self.get(den);
-        if let ExprKind::Number(n) = &den_node.kind {
-            if n.is_one() {
-                return num;
-            }
+        if let ExprKind::Number(n) = &den_node.kind
+            && n.is_one()
+        {
+            return num;
         }
         if let (ExprKind::Number(Number::Integer(n)), ExprKind::Number(Number::Integer(d))) =
             (&n_node.kind, &den_node.kind)
+            && *d != 0
         {
-            if *d != 0 {
-                return self.rational(*n, *d);
-            }
+            return self.rational(*n, *d);
         }
         self.intern(ExprNode::new(n_node.domain, ExprKind::Div(num, den)))
     }

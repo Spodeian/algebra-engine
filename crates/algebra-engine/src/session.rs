@@ -194,10 +194,10 @@ impl UraeSession {
 
                 if let Ok(f) = num_str.trim().parse::<f64>() {
                     self.set_binding(name, f);
-                    if let Some(u) = unit_opt {
-                        if let Some(meta) = self.symbol_metadata.get_mut(name) {
-                            meta.unit_str = Some(u);
-                        }
+                    if let Some(u) = unit_opt
+                        && let Some(meta) = self.symbol_metadata.get_mut(name)
+                    {
+                        meta.unit_str = Some(u);
                     }
                     let meta = self.symbol_metadata.get(name).unwrap();
                     let unit_suffix = meta
@@ -214,22 +214,21 @@ impl UraeSession {
         // Check for function definition e.g. `f(x) = x^2 + 1`
         if let Some((lhs, rhs)) = trimmed.split_once('=') {
             let lhs = lhs.trim();
-            if let Some(open_p) = lhs.find('(') {
-                if let Some(close_p) = lhs.find(')') {
-                    if close_p > open_p {
-                        let fn_name = lhs[..open_p].trim().to_string();
-                        let args: Vec<String> = lhs[open_p + 1..close_p]
-                            .split(',')
-                            .map(|s| s.trim().to_string())
-                            .filter(|s| !s.is_empty())
-                            .collect();
-                        if !fn_name.is_empty() {
-                            self.user_functions
-                                .insert(fn_name.clone(), (args.clone(), rhs.trim().to_string()));
-                            let out = format!("{}({}) = {}", fn_name, args.join(", "), rhs.trim());
-                            return OperationResult::success(out.clone(), out.clone(), out);
-                        }
-                    }
+            if let Some(open_p) = lhs.find('(')
+                && let Some(close_p) = lhs.find(')')
+                && close_p > open_p
+            {
+                let fn_name = lhs[..open_p].trim().to_string();
+                let args: Vec<String> = lhs[open_p + 1..close_p]
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !fn_name.is_empty() {
+                    self.user_functions
+                        .insert(fn_name.clone(), (args.clone(), rhs.trim().to_string()));
+                    let out = format!("{}({}) = {}", fn_name, args.join(", "), rhs.trim());
+                    return OperationResult::success(out.clone(), out.clone(), out);
                 }
             }
         }
@@ -246,22 +245,21 @@ impl UraeSession {
                     !prev.is_alphanumeric() && prev != '_'
                 };
 
-                if is_word_boundary {
-                    if let Some(close) = expanded_input[pos..].find(')') {
-                        if args.len() == 1 {
-                            let actual_arg = &expanded_input[pos + p_start.len()..pos + close];
-                            let replaced_body = body.replace(&args[0], actual_arg);
-                            let replacement = format!("({})", replaced_body);
-                            expanded_input = format!(
-                                "{}{}{}",
-                                &expanded_input[..pos],
-                                replacement,
-                                &expanded_input[pos + close + 1..]
-                            );
-                            search_idx = pos + replacement.len();
-                            continue;
-                        }
-                    }
+                if is_word_boundary
+                    && let Some(close) = expanded_input[pos..].find(')')
+                    && args.len() == 1
+                {
+                    let actual_arg = &expanded_input[pos + p_start.len()..pos + close];
+                    let replaced_body = body.replace(&args[0], actual_arg);
+                    let replacement = format!("({})", replaced_body);
+                    expanded_input = format!(
+                        "{}{}{}",
+                        &expanded_input[..pos],
+                        replacement,
+                        &expanded_input[pos + close + 1..]
+                    );
+                    search_idx = pos + replacement.len();
+                    continue;
                 }
                 search_idx = pos + p_start.len();
             }

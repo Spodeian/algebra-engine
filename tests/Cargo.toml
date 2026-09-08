@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
 algebra-core = { workspace = true }
 algebra-engine = { workspace = true }

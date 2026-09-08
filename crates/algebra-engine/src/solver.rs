@@ -723,11 +723,11 @@ impl SymbolicSolver for ExprGraph {
             for &cand in &test_candidates {
                 let cand_id = self.float(cand);
                 let sub_val = self.substitute(eq, target, cand_id);
-                if let Ok(eval_res) = self.evalf(sub_val, &ctx) {
-                    if eval_res.to_f64().abs() < 1e-11 {
-                        found_rational = Some(cand);
-                        break;
-                    }
+                if let Ok(eval_res) = self.evalf(sub_val, &ctx)
+                    && eval_res.to_f64().abs() < 1e-11
+                {
+                    found_rational = Some(cand);
+                    break;
                 }
             }
 
@@ -910,10 +910,11 @@ impl SymbolicSolver for ExprGraph {
                 ExprKind::Number(cand_num),
             ));
             let sub_val = self.substitute(eq, target, cand_id);
-            if let Ok(eval_res) = self.evalf(sub_val, &ctx) {
-                if eval_res.to_f64().abs() < 1e-11 && !rational_roots.contains(&cand_id) {
-                    rational_roots.push(cand_id);
-                }
+            if let Ok(eval_res) = self.evalf(sub_val, &ctx)
+                && eval_res.to_f64().abs() < 1e-11
+                && !rational_roots.contains(&cand_id)
+            {
+                rational_roots.push(cand_id);
             }
         }
 

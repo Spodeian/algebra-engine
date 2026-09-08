@@ -160,10 +160,10 @@ impl DiffEqClassifier {
                 if let Some(wrt_str) = graph.symbols.resolve(*wrt) {
                     indep.insert(wrt_str);
                 }
-                if let ExprKind::Symbol(s) = graph.get(*expr).kind {
-                    if let Some(s_name) = graph.symbols.resolve(s) {
-                        *dep_var = s_name;
-                    }
+                if let ExprKind::Symbol(s) = graph.get(*expr).kind
+                    && let Some(s_name) = graph.symbols.resolve(s)
+                {
+                    *dep_var = s_name;
                 }
                 *max_order = (*max_order).max(*order as usize);
                 Self::traverse_diffeq(graph, *expr, indep, max_order, has_nonlinear_dep, dep_var);
@@ -193,31 +193,29 @@ impl DiffEqClassifier {
             }
             ExprKind::Pow(base, exp) => {
                 // If dependent variable is raised to power != 1
-                if let ExprKind::Symbol(s) = graph.get(*base).kind {
-                    if let Some(s_name) = graph.symbols.resolve(s) {
-                        if s_name == *dep_var || s_name == "y" || s_name == "u" {
-                            if let ExprKind::Number(n) = graph.get(*exp).kind {
-                                if n.as_f64() != Some(1.0) {
-                                    *has_nonlinear_dep = true;
-                                }
-                            } else {
-                                *has_nonlinear_dep = true;
-                            }
+                if let ExprKind::Symbol(s) = graph.get(*base).kind
+                    && let Some(s_name) = graph.symbols.resolve(s)
+                    && (s_name == *dep_var || s_name == "y" || s_name == "u")
+                {
+                    if let ExprKind::Number(n) = graph.get(*exp).kind {
+                        if n.as_f64() != Some(1.0) {
+                            *has_nonlinear_dep = true;
                         }
+                    } else {
+                        *has_nonlinear_dep = true;
                     }
                 }
                 Self::traverse_diffeq(graph, *base, indep, max_order, has_nonlinear_dep, dep_var);
                 Self::traverse_diffeq(graph, *exp, indep, max_order, has_nonlinear_dep, dep_var);
             }
             ExprKind::Function { name, args } => {
-                if let Some(fn_name) = graph.symbols.resolve(*name) {
-                    if ["sin", "cos", "tan", "exp", "log", "sinh", "cosh"]
+                if let Some(fn_name) = graph.symbols.resolve(*name)
+                    && ["sin", "cos", "tan", "exp", "log", "sinh", "cosh"]
                         .contains(&fn_name.as_str())
-                    {
-                        for &arg in args {
-                            if Self::contains_non_constant_symbol(graph, arg) {
-                                *has_nonlinear_dep = true;
-                            }
+                {
+                    for &arg in args {
+                        if Self::contains_non_constant_symbol(graph, arg) {
+                            *has_nonlinear_dep = true;
                         }
                     }
                 }

@@ -617,7 +617,9 @@ fn test_numeric_literal_scrubbing_extraction() {
     let text2 = "f(x) = -3.1415 * x";
     let res2 = find_numeric_literal_at(text2, 9).expect("Should find -3.1415");
     assert_eq!(&text2[res2.0..res2.1], "-3.1415");
-    assert!((res2.2 - (-3.1415)).abs() < 1e-6);
+    #[allow(clippy::approx_constant)]
+    let expected_val = -3.1415;
+    assert!((res2.2 - expected_val).abs() < 1e-6);
     assert!(res2.3); // has decimal
     assert_eq!(res2.4, 4); // 4 decimal places
 

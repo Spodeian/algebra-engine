@@ -155,25 +155,25 @@ impl ResourceBudget {
 
     /// Apply environment variable overrides if present.
     pub fn apply_env_overrides(&mut self) {
-        if let Ok(val) = env::var("URAE_MAX_EGRAPH_NODES") {
-            if let Ok(n) = val.parse::<usize>() {
-                self.egraph_nodes = (n / 2, n);
-            }
+        if let Ok(val) = env::var("URAE_MAX_EGRAPH_NODES")
+            && let Ok(n) = val.parse::<usize>()
+        {
+            self.egraph_nodes = (n / 2, n);
         }
-        if let Ok(val) = env::var("URAE_MAX_SPAIRS") {
-            if let Ok(n) = val.parse::<usize>() {
-                self.grobner_spairs = (n / 2, n);
-            }
+        if let Ok(val) = env::var("URAE_MAX_SPAIRS")
+            && let Ok(n) = val.parse::<usize>()
+        {
+            self.grobner_spairs = (n / 2, n);
         }
-        if let Ok(val) = env::var("URAE_TIMEOUT_SECS") {
-            if let Ok(t) = val.parse::<f64>() {
-                self.timeout_secs = t;
-            }
+        if let Ok(val) = env::var("URAE_TIMEOUT_SECS")
+            && let Ok(t) = val.parse::<f64>()
+        {
+            self.timeout_secs = t;
         }
-        if let Ok(val) = env::var("URAE_MAX_MEMORY_MB") {
-            if let Ok(m) = val.parse::<usize>() {
-                self.max_memory_mb = m;
-            }
+        if let Ok(val) = env::var("URAE_MAX_MEMORY_MB")
+            && let Ok(m) = val.parse::<usize>()
+        {
+            self.max_memory_mb = m;
         }
     }
 }

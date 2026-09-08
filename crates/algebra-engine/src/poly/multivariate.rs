@@ -296,14 +296,14 @@ impl MultiPoly {
 
     /// Returns the monic polynomial with leading coefficient normalized to 1.
     pub fn to_monic(&self) -> Self {
-        if let Some(lc) = self.leading_coeff() {
-            if lc.abs() > 1e-12 {
-                let mut monic = self.clone();
-                for t in &mut monic.terms {
-                    t.coeff /= lc;
-                }
-                return monic;
+        if let Some(lc) = self.leading_coeff()
+            && lc.abs() > 1e-12
+        {
+            let mut monic = self.clone();
+            for t in &mut monic.terms {
+                t.coeff /= lc;
             }
+            return monic;
         }
         self.clone()
     }
@@ -525,14 +525,13 @@ impl MultiPoly {
                 )?;
                 if let ExprKind::Number(algebra_core::Number::Integer(exp_val)) =
                     graph.get(*exp).kind
+                    && exp_val >= 0
                 {
-                    if exp_val >= 0 {
-                        let mut res = Self::constant(1.0, num_vars, var_names.to_vec(), order);
-                        for _ in 0..exp_val {
-                            res = res.mul(&p_base);
-                        }
-                        return Ok(res);
+                    let mut res = Self::constant(1.0, num_vars, var_names.to_vec(), order);
+                    for _ in 0..exp_val {
+                        res = res.mul(&p_base);
                     }
+                    return Ok(res);
                 }
                 Err(AlgebraError::EvaluationError(
                     "Polynomial exponent must be a non-negative integer".into(),
