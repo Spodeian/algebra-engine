@@ -48,6 +48,7 @@ pub use json_api::{UraeJsonRequest, UraeJsonResponse, process_json_request, proc
 use std::collections::HashMap;
 
 /// Run the interactive CLI REPL session directly in the terminal.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run_repl() {
     let default_level = default_logging_level();
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
@@ -115,6 +116,7 @@ pub fn run_repl() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn default_logging_level() -> &'static str {
     if cfg!(test) {
         "warn"
