@@ -70,7 +70,13 @@ jobs:
         run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Build Web Application
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128,+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext -C link-arg=-zstack-size=2097152"
         run: |
+          cargo rustc -p urae-wasm --target wasm32-unknown-unknown --release -- \
+            -C link-arg=--error-limit=0 2>&1 | tee /tmp/link_err.txt || true
+          echo "=== LINKER ERROR (first 200 lines) ==="
+          head -200 /tmp/link_err.txt || true
           cargo build -p urae-wasm --target wasm32-unknown-unknown --release
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
           for wasm_file in crates/urae-wasm/public/pkg/*.wasm; do
