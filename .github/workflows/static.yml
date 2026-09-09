@@ -74,8 +74,15 @@ jobs:
           RUSTFLAGS: "-C target-feature=+simd128,+bulk-memory,+mutable-globals,+nontrapping-fptoint,+sign-ext -C link-arg=-zstack-size=2097152"
         run: |
           cargo build -p urae-wasm --target wasm32-unknown-unknown --release 2>/tmp/build_err.txt || {
-            echo "=== BUILD FAILED — Full stderr output ==="
-            cat /tmp/build_err.txt
+            echo "=== BUILD FAILED — Filtered stderr output ==="
+            python3 -c '
+with open("/tmp/build_err.txt") as f:
+    for line in f:
+        if len(line) > 500:
+            print(line[:200] + " ... [TRUNCATED LINKER COMMAND LINE] ...")
+        else:
+            print(line, end="")
+'
             exit 1
           }
           wasm-bindgen --target web --out-dir crates/urae-wasm/public/pkg target/wasm32-unknown-unknown/release/urae_wasm.wasm
