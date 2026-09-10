@@ -117,9 +117,6 @@ flowchart LR
 | Milestone | Target Scope | Key Deliverables | Status |
 | :--- | :--- | :--- | :--- |
 | **Phases 1–20** | **Complete Universal CAS, CAD, FEA, Quantum & Ecosystem Suite** | Fully unified symbolic algebra, calculus, ODE/PDE, Risch integration, multi-sheet notepad canvas, probabilistic heuristics, macros, CAD quantifier elimination, BVH spatial trees, parametric engineering machinery, Multiphysics FEA, cross-tooling pipeline, tensor curvature, differential algebra, WebGPU compute shaders, 3D visualizers, Python bindings, Jupyter kernel, Language Server Protocol, and Symplectic & Quantum mechanics. | **DONE (100%)** |
-| **Phase 18** | **Python Ecosystem & Interactive Jupyter Kernel (`urae-py` & `urae-kernel`)** | CPython PyO3 bindings (`PyExprGraph`, `py_diff`, `py_integrate`, `py_simplify`, `py_solve`, `PyInvoluteGear`, `PyQuantumCircuit`), and native zero-latency Jupyter Kernel (`UraeKernel`) with multi-MIME rich display (`text/latex` MathJax/KaTeX, `text/html` embedded Three.js 3D rotating CAD viewport). | **DONE (100%)** |
-| **Phase 19** | **Language Server Protocol & Mathematical IDE Tooling (`urae-lsp`)** | Dedicated LSP language server `UraeLanguageServer` for VS Code, Neovim, and Zed with real-time syntax/dimension `diagnostics`, intelligent `completions` (100+ functions, Greek symbols, CAD macros), LaTeX `hover` tooltips, and automated `code_actions` (E-Graph simplification). | **DONE (100%)** |
-| **Phase 20** | **Symplectic Geometric Mechanics & Quantum Circuits** | Symplectic energy-preserving Hamiltonian integrators `SymplecticIntegrator` (2nd-Order Verlet, 4th-Order Suzuki-Yoshida) preserving canonical 2-form $\omega$ over $10^7+$ steps with $O(h^4)$ bounded energy drift, and universal $N$-qubit quantum circuit simulator `QuantumCircuit` (Bell states, GHZ states, OpenQASM 2.0 export), with macros `symplectic_integrate!`, `quantum_bell_state!`, `quantum_ghz_state!`. | **DONE (100%)** |
 
 ---
 

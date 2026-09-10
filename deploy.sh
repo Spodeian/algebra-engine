@@ -287,50 +287,6 @@ if os.path.exists(html_path):
 import os, sys, gzip, glob
 
 dist_dir = sys.argv[1]
-target_files = []
-for ext in ("*.wasm", "*.js", "*.css", "*.html", "*.json", "*.svg"):
-    target_files.extend(glob.glob(os.path.join(dist_dir, ext)))
-    target_files.extend(glob.glob(os.path.join(dist_dir, "**", ext), recursive=True))
-
-# 1. Gzip Level 9
-for fpath in set(target_files):
-    gz_path = fpath + ".gz"
-    try:
-        with open(fpath, "rb") as f_in, gzip.open(gz_path, "wb", compresslevel=9) as f_out:
-            f_out.write(f_in.read())
-    except Exception as e:
-        print(f"  Gzip failed for {fpath}: {e}")
-
-# 2. Brotli Level 11 (if brotli module is available)
-try:
-    import brotli
-    for fpath in set(target_files):
-        br_path = fpath + ".br"
-        with open(fpath, "rb") as f_in:
-            data = f_in.read()
-        compressed = brotli.compress(data, quality=11, mode=brotli.MODE_GENERIC)
-        with open(br_path, "wb") as f_out:
-            f_out.write(compressed)
-    print("  Successfully pre-compressed assets with Brotli (q11) & Gzip (level 9)")
-except ImportError:
-    print("  Pre-compressed assets with Gzip (level 9). Brotli CLI check...")
-' "$DIST_DIR" || true
-        if command -v brotli &> /dev/null; then
-            for fpath in "$DIST_DIR"/*.{wasm,js,css,html,json,svg} "$DIST_DIR"/pkg/*.{wasm,js}; do
-                if [ -f "$fpath" ] && [ ! -f "${fpath}.br" ]; then
-                    brotli -f -k -q 11 "$fpath" 2>/dev/null || true
-                fi
-            done
-        fi
-    fi
-
-    # 8. High-Ratio Asset Pre-Compression (Brotli Level 11 + Gzip Level 9)
-    echo "=== Generating Pre-Compressed Brotli (.br) & Gzip (.gz) Assets ==="
-    if command -v python3 &> /dev/null; then
-        python3 -c '
-import os, sys, gzip, glob
-
-dist_dir = sys.argv[1]
 extensions = ("*.wasm", "*.js", "*.css", "*.html", "*.json", "*.svg")
 target_files = []
 for root, _, _ in os.walk(dist_dir):
@@ -367,7 +323,7 @@ except ImportError:
         fi
     fi
 
-    # 9. Configure Cloudflare Deployment Mode (Static-Only vs Full-Stack Edge Worker)
+    # 8. Configure Cloudflare Deployment Mode (Static-Only vs Full-Stack Edge Worker)
     cp -f crates/urae-wasm/public/_headers "$DIST_DIR/_headers" 2>/dev/null || true
     cp -f crates/urae-wasm/public/_redirects "$DIST_DIR/_redirects" 2>/dev/null || true
 
