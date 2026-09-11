@@ -1646,13 +1646,26 @@ impl eframe::App for UraeNotebookApp {
                     .open(&mut open)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("⚙ Parameters & Variables").strong());
+                            let avail_w = ui.available_width();
+                            let (dock_label, hide_label) = if avail_w >= 260.0 {
+                                ("⤓ Dock", "✕ Hide")
+                            } else {
+                                ("⤓", "✕")
+                            };
+                            let title_text = if avail_w >= 320.0 {
+                                "⚙ Parameters & Variables"
+                            } else if avail_w >= 230.0 {
+                                "⚙ Parameters"
+                            } else {
+                                "⚙ Params"
+                            };
+
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if ui
                                         .button(
-                                            egui::RichText::new("✕ Hide")
+                                            egui::RichText::new(hide_label)
                                                 .size(12.0)
                                                 .color(palette.text_muted),
                                         )
@@ -1663,7 +1676,7 @@ impl eframe::App for UraeNotebookApp {
                                     }
                                     if ui
                                         .button(
-                                            egui::RichText::new("⤓ Dock")
+                                            egui::RichText::new(dock_label)
                                                 .size(12.0)
                                                 .color(palette.text_muted),
                                         )
@@ -1672,6 +1685,19 @@ impl eframe::App for UraeNotebookApp {
                                     {
                                         self.left_panel_floating = false;
                                     }
+
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                egui::RichText::new(title_text)
+                                                    .strong()
+                                                    .size(14.0)
+                                                    .color(palette.text_primary),
+                                            )
+                                            .on_hover_text("Parameters & Variables (Symbol controls, sliders, and domains)");
+                                        },
+                                    );
                                 },
                             );
                         });
@@ -1690,17 +1716,30 @@ impl eframe::App for UraeNotebookApp {
             } else {
                 egui::Panel::left("sidebar_panel")
                     .resizable(true)
-                    .default_size(260.0)
+                    .default_size(280.0)
                     .show(ui, |ui| {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
-                            ui.subheading("⚙ Parameters & Variables");
+                            let avail_w = ui.available_width();
+                            let (float_label, hide_label) = if avail_w >= 260.0 {
+                                ("⤢ Float", "◀ Hide")
+                            } else {
+                                ("⤢", "◀")
+                            };
+                            let title_text = if avail_w >= 320.0 {
+                                "⚙ Parameters & Variables"
+                            } else if avail_w >= 230.0 {
+                                "⚙ Parameters"
+                            } else {
+                                "⚙ Params"
+                            };
+
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if ui
                                         .button(
-                                            egui::RichText::new("◀ Hide")
+                                            egui::RichText::new(hide_label)
                                                 .size(12.0)
                                                 .color(palette.text_muted),
                                         )
@@ -1711,7 +1750,7 @@ impl eframe::App for UraeNotebookApp {
                                     }
                                     if ui
                                         .button(
-                                            egui::RichText::new("⤢ Float")
+                                            egui::RichText::new(float_label)
                                                 .size(12.0)
                                                 .color(palette.text_muted),
                                         )
@@ -1720,6 +1759,19 @@ impl eframe::App for UraeNotebookApp {
                                     {
                                         self.left_panel_floating = true;
                                     }
+
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                egui::RichText::new(title_text)
+                                                    .strong()
+                                                    .size(14.0)
+                                                    .color(palette.text_primary),
+                                            )
+                                            .on_hover_text("Parameters & Variables (Symbol controls, sliders, and domains)");
+                                        },
+                                    );
                                 },
                             );
                         });
@@ -4362,18 +4414,39 @@ impl UraeNotebookApp {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
 
                                 ui.horizontal(|ui| {
-                                    ui.colored_label(palette.accent_secondary, "⚡ Results & 3D Surfaces");
-                                    if ui.small_button("⤢ Float").on_hover_text("Pop out results and graphs into floating window").clicked() {
-                                        self.right_panel_floating = !self.right_panel_floating;
-                                    }
+                                    let avail_w = ui.available_width();
+                                    let (float_label, hide_label) = if avail_w >= 260.0 {
+                                        ("⤢ Float", "Hide ▶")
+                                    } else {
+                                        ("⤢", "▶")
+                                    };
+                                    let title_text = if avail_w >= 300.0 {
+                                        "⚡ Results & 3D Surfaces"
+                                    } else if avail_w >= 220.0 {
+                                        "⚡ Results & 3D"
+                                    } else {
+                                        "⚡ Results"
+                                    };
+
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                         if ui
-                                            .button(egui::RichText::new("Hide ▶").size(12.0).color(palette.text_muted))
+                                            .button(egui::RichText::new(hide_label).size(12.0).color(palette.text_muted))
                                             .on_hover_text("Hide results stream (Ctrl+J)")
                                             .clicked()
                                         {
                                             self.show_right_sidebar = false;
                                         }
+                                        if ui
+                                            .button(egui::RichText::new(float_label).size(12.0).color(palette.text_muted))
+                                            .on_hover_text("Pop out results and graphs into floating window")
+                                            .clicked()
+                                        {
+                                            self.right_panel_floating = !self.right_panel_floating;
+                                        }
+
+                                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                            ui.colored_label(palette.accent_secondary, title_text);
+                                        });
                                     });
                                 });
                                 ui.separator();
