@@ -1647,14 +1647,14 @@ impl eframe::App for UraeNotebookApp {
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             let avail_w = ui.available_width();
-                            let (dock_label, hide_label) = if avail_w >= 260.0 {
+                            let (dock_label, hide_label) = if avail_w >= 300.0 {
                                 ("⤓ Dock", "✕ Hide")
                             } else {
                                 ("⤓", "✕")
                             };
-                            let title_text = if avail_w >= 320.0 {
+                            let title_text = if avail_w >= 380.0 {
                                 "⚙ Parameters & Variables"
-                            } else if avail_w >= 230.0 {
+                            } else if avail_w >= 180.0 {
                                 "⚙ Parameters"
                             } else {
                                 "⚙ Params"
@@ -1689,11 +1689,14 @@ impl eframe::App for UraeNotebookApp {
                                     ui.with_layout(
                                         egui::Layout::left_to_right(egui::Align::Center),
                                         |ui| {
-                                            ui.label(
-                                                egui::RichText::new(title_text)
-                                                    .strong()
-                                                    .size(14.0)
-                                                    .color(palette.text_primary),
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(title_text)
+                                                        .strong()
+                                                        .size(13.0)
+                                                        .color(palette.text_primary),
+                                                )
+                                                .truncate(),
                                             )
                                             .on_hover_text("Parameters & Variables (Symbol controls, sliders, and domains)");
                                         },
@@ -1721,14 +1724,14 @@ impl eframe::App for UraeNotebookApp {
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
                             let avail_w = ui.available_width();
-                            let (float_label, hide_label) = if avail_w >= 260.0 {
+                            let (float_label, hide_label) = if avail_w >= 300.0 {
                                 ("⤢ Float", "◀ Hide")
                             } else {
                                 ("⤢", "◀")
                             };
-                            let title_text = if avail_w >= 320.0 {
+                            let title_text = if avail_w >= 380.0 {
                                 "⚙ Parameters & Variables"
-                            } else if avail_w >= 230.0 {
+                            } else if avail_w >= 180.0 {
                                 "⚙ Parameters"
                             } else {
                                 "⚙ Params"
@@ -1763,11 +1766,14 @@ impl eframe::App for UraeNotebookApp {
                                     ui.with_layout(
                                         egui::Layout::left_to_right(egui::Align::Center),
                                         |ui| {
-                                            ui.label(
-                                                egui::RichText::new(title_text)
-                                                    .strong()
-                                                    .size(14.0)
-                                                    .color(palette.text_primary),
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(title_text)
+                                                        .strong()
+                                                        .size(13.0)
+                                                        .color(palette.text_primary),
+                                                )
+                                                .truncate(),
                                             )
                                             .on_hover_text("Parameters & Variables (Symbol controls, sliders, and domains)");
                                         },
@@ -4260,14 +4266,20 @@ impl UraeNotebookApp {
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
                                 ui.horizontal(|ui| {
-                                    ui.weak("📝 Editor");
-                                    if ui.small_button("⤢ Float").on_hover_text("Pop out text editor into floating window").clicked() {
-                                        self.editor_floating = true;
-                                    }
-                                    if ui.small_button("✕").on_hover_text("Hide text editor (Ctrl+E)").clicked() {
-                                        self.show_editor = false;
-                                        self.state.session.settings.show_editor = false;
-                                    }
+                                    let avail_w = ui.available_width();
+                                    let float_label = if avail_w >= 240.0 { "⤢ Float" } else { "⤢" };
+                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui.small_button("✕").on_hover_text("Hide text editor (Ctrl+E)").clicked() {
+                                            self.show_editor = false;
+                                            self.state.session.settings.show_editor = false;
+                                        }
+                                        if ui.small_button(float_label).on_hover_text("Pop out text editor into floating window").clicked() {
+                                            self.editor_floating = true;
+                                        }
+                                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                            ui.add(egui::Label::new(egui::RichText::new("📝 Editor").weak()).truncate());
+                                        });
+                                    });
                                 });
 
                                 let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
@@ -4415,12 +4427,12 @@ impl UraeNotebookApp {
 
                                 ui.horizontal(|ui| {
                                     let avail_w = ui.available_width();
-                                    let (float_label, hide_label) = if avail_w >= 260.0 {
+                                    let (float_label, hide_label) = if avail_w >= 300.0 {
                                         ("⤢ Float", "Hide ▶")
                                     } else {
                                         ("⤢", "▶")
                                     };
-                                    let title_text = if avail_w >= 300.0 {
+                                    let title_text = if avail_w >= 380.0 {
                                         "⚡ Results & 3D Surfaces"
                                     } else if avail_w >= 220.0 {
                                         "⚡ Results & 3D"
@@ -4445,7 +4457,14 @@ impl UraeNotebookApp {
                                         }
 
                                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                                            ui.colored_label(palette.accent_secondary, title_text);
+                                            ui.add(
+                                                egui::Label::new(
+                                                    egui::RichText::new(title_text)
+                                                        .size(13.0)
+                                                        .color(palette.accent_secondary),
+                                                )
+                                                .truncate(),
+                                            );
                                         });
                                     });
                                 });
