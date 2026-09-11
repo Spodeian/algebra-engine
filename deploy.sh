@@ -205,6 +205,13 @@ if [ -d "$DIST_DIR" ]; then
                 npx --yes esbuild "$js_file" --minify --allow-overwrite --outfile="$js_file" 2>/dev/null || true
             fi
         done
+        for scss_file in "$DIST_DIR"/*.scss; do
+            if [ -f "$scss_file" ]; then
+                css_file="${scss_file%.scss}.css"
+                echo "  Compiling SCSS: $scss_file -> $css_file"
+                npx --yes sass "$scss_file" "$css_file" --no-source-map 2>/dev/null || true
+            fi
+        done
         for css_file in "$DIST_DIR"/*.css; do
             if [ -f "$css_file" ]; then
                 echo "  Minifying CSS: $css_file"
