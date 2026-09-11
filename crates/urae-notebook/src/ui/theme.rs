@@ -445,7 +445,10 @@ impl ThemeKind {
 
         // Modern spacing & padding metrics (WCAG 2.5.5 / 2.5.8 compliant touch targets)
         style.spacing.item_spacing = Vec2::new(8.0, 8.0);
-        style.spacing.interact_size = if matches!(self, ThemeKind::HighContrastDark | ThemeKind::HighContrastLight) {
+        style.spacing.interact_size = if matches!(
+            self,
+            ThemeKind::HighContrastDark | ThemeKind::HighContrastLight
+        ) {
             Vec2::new(44.0, 44.0)
         } else {
             Vec2::new(36.0, 32.0)
