@@ -2109,9 +2109,17 @@ impl UraeNotebookApp {
                 ui.horizontal(|ui| {
                     ui.weak("Palette Swatch:");
                     for color in &palette.plot_palette {
-                        let (rect, _) =
+                        let (rect, resp) =
                             ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 3.0, *color);
+                        let c = *color;
+                        resp.widget_info(move || {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Other,
+                                true,
+                                format!("Color swatch rgb({}, {}, {})", c.r(), c.g(), c.b()),
+                            )
+                        });
                     }
                 });
 
@@ -3260,6 +3268,52 @@ impl UraeNotebookApp {
                                     }
                                 });
 
+                            let expr_label = expr_key.to_string();
+                            plot_response.response.widget_info(move || {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Other,
+                                    true,
+                                    format!(
+                                        "Mathematical function plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                        expr_label, min_r, max_r
+                                    ),
+                                )
+                            });
+
+                            let pts_summary = self.state.cached_evaluate_plot_points(
+                                expr_key, "x", min_r, max_r, 80,
+                            );
+                            if !pts_summary.is_empty() {
+                                let valid_pts: Vec<[f64; 2]> = pts_summary.into_iter().filter(|p| p[0].is_finite() && p[1].is_finite()).collect();
+                                if !valid_pts.is_empty() {
+                                    let min_y = valid_pts.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+                                    let max_y = valid_pts.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+
+                                    let mut roots = Vec::new();
+                                    for i in 1..valid_pts.len() {
+                                        let y0 = valid_pts[i-1][1];
+                                        let y1 = valid_pts[i][1];
+                                        if y0 * y1 <= 0.0 && (y1 - y0).abs() < (max_y - min_y).abs() * 0.5 {
+                                            let x_mid = (valid_pts[i-1][0] + valid_pts[i][0]) * 0.5;
+                                            roots.push(format!("{:.2}", x_mid));
+                                            if roots.len() >= 4 { break; }
+                                        }
+                                    }
+                                    let root_summary = if roots.is_empty() {
+                                        "none in interval".to_string()
+                                    } else {
+                                        roots.join(", ")
+                                    };
+
+                                    ui.collapsing("📊 Plot Data Summary (Screen Reader & Accessible)", |ui| {
+                                        ui.small(format!("Function: {}", expr_key));
+                                        ui.small(format!("Domain X: [{:.2}, {:.2}]", min_r, max_r));
+                                        ui.small(format!("Range Y: [{:.2}, {:.2}]", min_y, max_y));
+                                        ui.small(format!("Approx. roots: {}", root_summary));
+                                    });
+                                }
+                            }
+
                             if plot_response.response.dragged() || plot_response.response.hovered()
                             {
                                 ui.ctx().request_repaint();
@@ -3588,6 +3642,18 @@ impl UraeNotebookApp {
                                                 }
                                             });
 
+                                    let expr_label = expr_key.to_string();
+                                    plot_response.response.widget_info(move || {
+                                        egui::WidgetInfo::labeled(
+                                            egui::WidgetType::Other,
+                                            true,
+                                            format!(
+                                                "Standalone window plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                                expr_label, local_min_r, local_max_r
+                                            ),
+                                        )
+                                    });
+
                                     if plot_response.response.dragged()
                                         || plot_response.response.hovered()
                                     {
@@ -3714,6 +3780,18 @@ impl UraeNotebookApp {
                                                 }
                                             }
                                         });
+
+                                let expr_label = expr_key.to_string();
+                                plot_response.response.widget_info(move || {
+                                    egui::WidgetInfo::labeled(
+                                        egui::WidgetType::Other,
+                                        true,
+                                        format!(
+                                            "Floating window plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                            expr_label, local_min_r, local_max_r
+                                        ),
+                                    )
+                                });
 
                                 if plot_response.response.dragged()
                                     || plot_response.response.hovered()
@@ -4035,6 +4113,14 @@ impl UraeNotebookApp {
 
                                         if is_new_logical_line {
                                             logical_line_idx += 1;
+                                            let line_no = logical_line_idx;
+                                            resp.widget_info(move || {
+                                                egui::WidgetInfo::labeled(
+                                                    egui::WidgetType::Button,
+                                                    true,
+                                                    format!("Line number {}", line_no),
+                                                )
+                                            });
                                             let is_dep_highlighted = dep_highlighted_lines.contains(&(logical_line_idx - 1));
                                             if is_dep_highlighted {
                                                 ui.painter().rect_filled(
@@ -4260,6 +4346,13 @@ impl UraeNotebookApp {
                         } else {
                             ui.painter().rect_filled(res_rect, 0.0, palette.border);
                         }
+                        res_resp.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Other,
+                                true,
+                                "Sidebar resize handle",
+                            )
+                        });
                         let _ = res_resp.on_hover_text("Drag to resize results column");
 
                         ui.allocate_ui_with_layout(
@@ -4640,6 +4733,17 @@ impl UraeNotebookApp {
                                                                     });
 
                                                                 let mut resp = plot_resp.response;
+                                                                let token_label = line_token.to_string();
+                                                                resp.widget_info(move || {
+                                                                    egui::WidgetInfo::labeled(
+                                                                        egui::WidgetType::Other,
+                                                                        true,
+                                                                        format!(
+                                                                            "Side stream plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                                                            token_label, min_r, max_r
+                                                                        ),
+                                                                    )
+                                                                });
                                                                 if resp.hovered() {
                                                                     new_hovered_line = Some(line_idx);
                                                                 }
