@@ -443,9 +443,14 @@ impl ThemeKind {
             ..Default::default()
         };
 
-        // Modern spacing & padding metrics
+        // Modern spacing & padding metrics (WCAG 2.5.5 / 2.5.8 compliant touch targets)
         style.spacing.item_spacing = Vec2::new(8.0, 8.0);
-        style.spacing.button_padding = Vec2::new(10.0, 6.0);
+        style.spacing.interact_size = if matches!(self, ThemeKind::HighContrastDark | ThemeKind::HighContrastLight) {
+            Vec2::new(44.0, 44.0)
+        } else {
+            Vec2::new(36.0, 32.0)
+        };
+        style.spacing.button_padding = Vec2::new(12.0, 8.0);
         style.spacing.window_margin = Margin::same(12);
         style.spacing.menu_margin = Margin::same(8);
         style.spacing.indent = 16.0;
