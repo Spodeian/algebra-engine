@@ -785,7 +785,8 @@ impl UraeNotebookApp {
             let is_quota = self.quota_exceeded;
 
             let show_combined = is_ephemeral && is_quota && !self.dismissed_combined_warning;
-            let show_ephemeral = is_ephemeral && !show_combined && !self.dismissed_ephemeral_warning;
+            let show_ephemeral =
+                is_ephemeral && !show_combined && !self.dismissed_ephemeral_warning;
             let show_quota = is_quota && !show_combined && !self.dismissed_quota_warning;
 
             if show_combined || show_ephemeral || show_quota {
@@ -1124,12 +1125,20 @@ pub fn render_column_header(
     ui.horizontal(|ui| {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let hide_clicked = ui
-                .button(egui::RichText::new(hide_label).size(12.0).color(palette.text_muted))
+                .button(
+                    egui::RichText::new(hide_label)
+                        .size(12.0)
+                        .color(palette.text_muted),
+                )
                 .on_hover_text(config.hide_tooltip)
                 .clicked();
 
             let float_clicked = ui
-                .button(egui::RichText::new(float_label).size(12.0).color(palette.text_muted))
+                .button(
+                    egui::RichText::new(float_label)
+                        .size(12.0)
+                        .color(palette.text_muted),
+                )
                 .on_hover_text(config.float_tooltip)
                 .clicked();
 
@@ -1808,19 +1817,17 @@ impl eframe::App for UraeNotebookApp {
         }
 
         // Main Central View (Unified Continuous Mathematical Notepad)
-        egui::CentralPanel::default().show(ui, |ui| {
-            match self.view_mode {
-                ViewMode::SmartStream | ViewMode::FocusEditor => {
-                    if self.render_smart_stream_view(ui, &ctx) {
-                        state_changed = true;
-                    }
+        egui::CentralPanel::default().show(ui, |ui| match self.view_mode {
+            ViewMode::SmartStream | ViewMode::FocusEditor => {
+                if self.render_smart_stream_view(ui, &ctx) {
+                    state_changed = true;
                 }
-                ViewMode::DependencyGraph => {
-                    self.render_dependency_graph_view(ui, &ctx);
-                }
-                ViewMode::PresentationReport => {
-                    self.render_presentation_report_view(ui, &ctx);
-                }
+            }
+            ViewMode::DependencyGraph => {
+                self.render_dependency_graph_view(ui, &ctx);
+            }
+            ViewMode::PresentationReport => {
+                self.render_presentation_report_view(ui, &ctx);
             }
         });
 
