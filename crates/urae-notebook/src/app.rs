@@ -790,85 +790,65 @@ impl UraeNotebookApp {
             let show_quota = is_quota && !show_combined && !self.dismissed_quota_warning;
 
             if show_combined || show_ephemeral || show_quota {
+                let (msg, fill_color, stroke_color, text_color) = if show_combined {
+                    (
+                        "Storage Warning: Running in ephemeral storage and quota is full.",
+                        egui::Color32::from_rgba_premultiplied(35, 20, 20, 245),
+                        egui::Color32::from_rgb(240, 80, 80),
+                        egui::Color32::from_rgb(255, 120, 120),
+                    )
+                } else if show_ephemeral {
+                    (
+                        "Ephemeral Storage: Browser may clear local notebooks under storage pressure.",
+                        egui::Color32::from_rgba_premultiplied(35, 28, 15, 245),
+                        egui::Color32::from_rgb(220, 160, 30),
+                        egui::Color32::from_rgb(255, 200, 80),
+                    )
+                } else {
+                    (
+                        "Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.",
+                        egui::Color32::from_rgba_premultiplied(35, 28, 15, 245),
+                        egui::Color32::from_rgb(220, 160, 30),
+                        egui::Color32::from_rgb(255, 200, 80),
+                    )
+                };
+
                 egui::Area::new(egui::Id::new("storage_warning_banner_area"))
                     .order(egui::Order::Foreground)
                     .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
                     .show(ctx, |ui| {
-                        if show_combined {
-                            egui::Frame::NONE
-                                .fill(egui::Color32::from_rgba_premultiplied(35, 20, 20, 245))
-                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
-                                .corner_radius(8)
-                                .inner_margin(egui::Margin::symmetric(14, 8))
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(
-                                                "Storage Warning: Running in ephemeral storage and quota is full.",
-                                            )
-                                            .strong()
-                                            .color(egui::Color32::from_rgb(255, 120, 120)),
-                                        );
-                                        ui.add_space(8.0);
-                                        if ui.button("Backup .bson").clicked() {
-                                            self.download_bson_backup();
-                                        }
-                                        if ui.button("Request Persistence").clicked() {
-                                            self.request_persistence();
-                                        }
-                                        if ui.button("Dismiss").clicked() {
-                                            self.dismissed_combined_warning = true;
-                                        }
-                                    });
+                        egui::Frame::NONE
+                            .fill(fill_color)
+                            .stroke(egui::Stroke::new(1.0_f32, stroke_color))
+                            .corner_radius(8)
+                            .inner_margin(egui::Margin::symmetric(16, 10))
+                            .show(ui, |ui| {
+                                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                                    ui.label(egui::RichText::new(msg).strong().color(text_color));
+                                    ui.add_space(6.0);
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center)
+                                            .with_main_align(egui::Align::Center),
+                                        |ui| {
+                                            if ui.button("Backup .bson").clicked() {
+                                                self.download_bson_backup();
+                                            }
+                                            if ui.button("Request Persistence").clicked() {
+                                                self.request_persistence();
+                                            }
+                                            if ui.button("Dismiss").clicked() {
+                                                if show_combined {
+                                                    self.dismissed_combined_warning = true;
+                                                } else if show_ephemeral {
+                                                    self.dismissed_ephemeral_warning = true;
+                                                } else {
+                                                    self.dismissed_quota_warning = true;
+                                                }
+                                            }
+                                        },
+                                    );
                                 });
-                        } else if show_ephemeral {
-                            egui::Frame::NONE
-                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
-                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                                .corner_radius(8)
-                                .inner_margin(egui::Margin::symmetric(14, 8))
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.")
-                                                .strong()
-                                                .color(egui::Color32::from_rgb(255, 200, 80)),
-                                        );
-                                        ui.add_space(8.0);
-                                        if ui.button("Backup .bson").clicked() {
-                                            self.download_bson_backup();
-                                        }
-                                        if ui.button("Request Persistence").clicked() {
-                                            self.request_persistence();
-                                        }
-                                        if ui.button("Dismiss").clicked() {
-                                            self.dismissed_ephemeral_warning = true;
-                                        }
-                                    });
-                                });
-                        } else if show_quota {
-                            egui::Frame::NONE
-                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
-                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                                .corner_radius(8)
-                                .inner_margin(egui::Margin::symmetric(14, 8))
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.")
-                                                .strong()
-                                                .color(egui::Color32::from_rgb(255, 200, 80)),
-                                        );
-                                        ui.add_space(8.0);
-                                        if ui.button("Save .bson Backup").clicked() {
-                                            self.download_bson_backup();
-                                        }
-                                        if ui.button("Dismiss").clicked() {
-                                            self.dismissed_quota_warning = true;
-                                        }
-                                    });
-                                });
-                        }
+                            });
                     });
             }
         }
