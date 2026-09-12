@@ -773,7 +773,7 @@ impl UraeNotebookApp {
     }
 
     /// Render Ephemeral Storage, Quota Exceeded, and Combined Warning Banners
-    pub fn render_warning_banners(&mut self, #[allow(unused_variables)] ui: &mut egui::Ui) {
+    pub fn render_warning_banners(&mut self, #[allow(unused_variables)] ctx: &egui::Context) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Desktop builds run on the local filesystem with full persistence; no browser quota/eviction banners needed.
@@ -784,79 +784,91 @@ impl UraeNotebookApp {
             let is_ephemeral = self.is_persisted == Some(false);
             let is_quota = self.quota_exceeded;
 
-            // Combined Alert
-            if is_ephemeral && is_quota && !self.dismissed_combined_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 40, 40, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(
-                                    egui::RichText::new(
-                                        "Storage Warning: Running in ephemeral storage and quota is full.",
-                                    )
-                                    .strong()
-                                    .color(egui::Color32::from_rgb(255, 120, 120)),
-                                );
-                                if ui.button("Backup .bson").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Request Persistence").clicked() {
-                                    self.request_persistence();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_combined_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
-            } else if is_ephemeral && !self.dismissed_ephemeral_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                                if ui.button("Backup .bson").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Request Persistence").clicked() {
-                                    self.request_persistence();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_ephemeral_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
-            } else if is_quota && !self.dismissed_quota_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                                if ui.button("Save .bson Backup").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_quota_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
+            let show_combined = is_ephemeral && is_quota && !self.dismissed_combined_warning;
+            let show_ephemeral = is_ephemeral && !show_combined && !self.dismissed_ephemeral_warning;
+            let show_quota = is_quota && !show_combined && !self.dismissed_quota_warning;
+
+            if show_combined || show_ephemeral || show_quota {
+                egui::Area::new(egui::Id::new("storage_warning_banner_area"))
+                    .order(egui::Order::Foreground)
+                    .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
+                    .show(ctx, |ui| {
+                        if show_combined {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 20, 20, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(
+                                                "Storage Warning: Running in ephemeral storage and quota is full.",
+                                            )
+                                            .strong()
+                                            .color(egui::Color32::from_rgb(255, 120, 120)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Backup .bson").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Request Persistence").clicked() {
+                                            self.request_persistence();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_combined_warning = true;
+                                        }
+                                    });
+                                });
+                        } else if show_ephemeral {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.")
+                                                .strong()
+                                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Backup .bson").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Request Persistence").clicked() {
+                                            self.request_persistence();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_ephemeral_warning = true;
+                                        }
+                                    });
+                                });
+                        } else if show_quota {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.")
+                                                .strong()
+                                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Save .bson Backup").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_quota_warning = true;
+                                        }
+                                    });
+                                });
+                        }
+                    });
             }
         }
     }
@@ -1797,7 +1809,6 @@ impl eframe::App for UraeNotebookApp {
 
         // Main Central View (Unified Continuous Mathematical Notepad)
         egui::CentralPanel::default().show(ui, |ui| {
-            self.render_warning_banners(ui);
             match self.view_mode {
                 ViewMode::SmartStream | ViewMode::FocusEditor => {
                     if self.render_smart_stream_view(ui, &ctx) {
@@ -1945,6 +1956,9 @@ impl eframe::App for UraeNotebookApp {
                 self.export_notice = Some(format!("Exported 3D model to '{}'", req.filename));
             }
         }
+
+        // Render Ephemeral Storage & Quota Warning Banner in foreground anchored bottom-center
+        self.render_warning_banners(&ctx);
 
         if state_changed {
             self.state.evaluate_all();
