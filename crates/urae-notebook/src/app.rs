@@ -773,7 +773,7 @@ impl UraeNotebookApp {
     }
 
     /// Render Ephemeral Storage, Quota Exceeded, and Combined Warning Banners
-    pub fn render_warning_banners(&mut self, #[allow(unused_variables)] ui: &mut egui::Ui) {
+    pub fn render_warning_banners(&mut self, #[allow(unused_variables)] ctx: &egui::Context) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Desktop builds run on the local filesystem with full persistence; no browser quota/eviction banners needed.
@@ -784,79 +784,92 @@ impl UraeNotebookApp {
             let is_ephemeral = self.is_persisted == Some(false);
             let is_quota = self.quota_exceeded;
 
-            // Combined Alert
-            if is_ephemeral && is_quota && !self.dismissed_combined_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 40, 40, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(
-                                    egui::RichText::new(
-                                        "Storage Warning: Running in ephemeral storage and quota is full.",
-                                    )
-                                    .strong()
-                                    .color(egui::Color32::from_rgb(255, 120, 120)),
-                                );
-                                if ui.button("Backup .bson").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Request Persistence").clicked() {
-                                    self.request_persistence();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_combined_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
-            } else if is_ephemeral && !self.dismissed_ephemeral_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                                if ui.button("Backup .bson").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Request Persistence").clicked() {
-                                    self.request_persistence();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_ephemeral_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
-            } else if is_quota && !self.dismissed_quota_warning {
-                ui.scope(|ui| {
-                    egui::Frame::NONE
-                        .fill(egui::Color32::from_rgba_premultiplied(160, 110, 20, 45))
-                        .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
-                        .corner_radius(6)
-                        .inner_margin(8)
-                        .show(ui, |ui| {
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label(egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.").strong().color(egui::Color32::from_rgb(255, 200, 80)));
-                                if ui.button("Save .bson Backup").clicked() {
-                                    self.download_bson_backup();
-                                }
-                                if ui.button("Dismiss").clicked() {
-                                    self.dismissed_quota_warning = true;
-                                }
-                            });
-                        });
-                });
-                ui.add_space(4.0);
+            let show_combined = is_ephemeral && is_quota && !self.dismissed_combined_warning;
+            let show_ephemeral =
+                is_ephemeral && !show_combined && !self.dismissed_ephemeral_warning;
+            let show_quota = is_quota && !show_combined && !self.dismissed_quota_warning;
+
+            if show_combined || show_ephemeral || show_quota {
+                egui::Area::new(egui::Id::new("storage_warning_banner_area"))
+                    .order(egui::Order::Foreground)
+                    .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
+                    .show(ctx, |ui| {
+                        if show_combined {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 20, 20, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(240, 80, 80)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(
+                                                "Storage Warning: Running in ephemeral storage and quota is full.",
+                                            )
+                                            .strong()
+                                            .color(egui::Color32::from_rgb(255, 120, 120)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Backup .bson").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Request Persistence").clicked() {
+                                            self.request_persistence();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_combined_warning = true;
+                                        }
+                                    });
+                                });
+                        } else if show_ephemeral {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("Ephemeral Storage: Browser may clear local notebooks under storage pressure.")
+                                                .strong()
+                                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Backup .bson").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Request Persistence").clicked() {
+                                            self.request_persistence();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_ephemeral_warning = true;
+                                        }
+                                    });
+                                });
+                        } else if show_quota {
+                            egui::Frame::NONE
+                                .fill(egui::Color32::from_rgba_premultiplied(35, 28, 15, 245))
+                                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(220, 160, 30)))
+                                .corner_radius(8)
+                                .inner_margin(egui::Margin::symmetric(14, 8))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new("Quota Exceeded: Local storage is full. Notebook migrated to IndexedDB fallback.")
+                                                .strong()
+                                                .color(egui::Color32::from_rgb(255, 200, 80)),
+                                        );
+                                        ui.add_space(8.0);
+                                        if ui.button("Save .bson Backup").clicked() {
+                                            self.download_bson_backup();
+                                        }
+                                        if ui.button("Dismiss").clicked() {
+                                            self.dismissed_quota_warning = true;
+                                        }
+                                    });
+                                });
+                        }
+                    });
             }
         }
     }
@@ -1063,6 +1076,90 @@ impl UraeNotebookApp {
             }
         }
     }
+}
+
+/// Configuration for consistently formatted column/panel headers across docked and floating windows.
+pub struct ColumnHeaderConfig<'a> {
+    pub title_full: &'a str,
+    pub title_standard: &'a str,
+    pub title_short: &'a str,
+    pub title_tooltip: &'a str,
+    pub float_icon: &'a str,
+    pub float_full: &'a str,
+    pub float_tooltip: &'a str,
+    pub hide_icon: &'a str,
+    pub hide_full: &'a str,
+    pub hide_tooltip: &'a str,
+}
+
+/// Render a consistently formatted column/panel header with dynamic symbol-only button fallback
+/// when columns are shrunk to prevent squishing or overlapping with the title.
+pub fn render_column_header(
+    ui: &mut egui::Ui,
+    palette: &crate::ui::ThemePalette,
+    config: &ColumnHeaderConfig<'_>,
+) -> (bool, bool) {
+    let avail_w = ui.available_width();
+    // When columns are shrunk such that buttons would squish or overlap the header text,
+    // buttons drop their textual label and become just symbols.
+    let use_symbol_buttons = avail_w < 320.0;
+    let float_label = if use_symbol_buttons {
+        config.float_icon
+    } else {
+        config.float_full
+    };
+    let hide_label = if use_symbol_buttons {
+        config.hide_icon
+    } else {
+        config.hide_full
+    };
+
+    let title_text = if avail_w >= 380.0 {
+        config.title_full
+    } else if avail_w >= 200.0 || (use_symbol_buttons && avail_w >= 160.0) {
+        config.title_standard
+    } else {
+        config.title_short
+    };
+
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let hide_clicked = ui
+                .button(
+                    egui::RichText::new(hide_label)
+                        .size(12.0)
+                        .color(palette.text_muted),
+                )
+                .on_hover_text(config.hide_tooltip)
+                .clicked();
+
+            let float_clicked = ui
+                .button(
+                    egui::RichText::new(float_label)
+                        .size(12.0)
+                        .color(palette.text_muted),
+                )
+                .on_hover_text(config.float_tooltip)
+                .clicked();
+
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(title_text)
+                            .strong()
+                            .size(13.0)
+                            .color(palette.text_primary),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(config.title_tooltip);
+            });
+
+            (float_clicked, hide_clicked)
+        })
+        .inner
+    })
+    .inner
 }
 
 impl eframe::App for UraeNotebookApp {
@@ -1645,36 +1742,28 @@ impl eframe::App for UraeNotebookApp {
                     .resizable(true)
                     .open(&mut open)
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("⚙ Parameters & Variables").strong());
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui
-                                        .button(
-                                            egui::RichText::new("✕ Hide")
-                                                .size(12.0)
-                                                .color(palette.text_muted),
-                                        )
-                                        .on_hover_text("Hide parameters sidebar (Ctrl+B)")
-                                        .clicked()
-                                    {
-                                        self.show_left_sidebar = false;
-                                    }
-                                    if ui
-                                        .button(
-                                            egui::RichText::new("⤓ Dock")
-                                                .size(12.0)
-                                                .color(palette.text_muted),
-                                        )
-                                        .on_hover_text("Dock parameters sidebar to left")
-                                        .clicked()
-                                    {
-                                        self.left_panel_floating = false;
-                                    }
-                                },
-                            );
-                        });
+                        let (dock_clicked, hide_clicked) = render_column_header(
+                            ui,
+                            &palette,
+                            &ColumnHeaderConfig {
+                                title_full: "⚙ Parameters & Variables",
+                                title_standard: "⚙ Parameters",
+                                title_short: "⚙ Params",
+                                title_tooltip: "Parameters & Variables (Symbol controls, sliders, and domains)",
+                                float_icon: "⤓",
+                                float_full: "⤓ Dock",
+                                float_tooltip: "Dock parameters sidebar to left",
+                                hide_icon: "✕",
+                                hide_full: "✕ Hide",
+                                hide_tooltip: "Hide parameters sidebar (Ctrl+B)",
+                            },
+                        );
+                        if dock_clicked {
+                            self.left_panel_floating = false;
+                        }
+                        if hide_clicked {
+                            self.show_left_sidebar = false;
+                        }
                         ui.separator();
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
@@ -1690,39 +1779,31 @@ impl eframe::App for UraeNotebookApp {
             } else {
                 egui::Panel::left("sidebar_panel")
                     .resizable(true)
-                    .default_size(260.0)
+                    .default_size(280.0)
                     .show(ui, |ui| {
                         ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.subheading("⚙ Parameters & Variables");
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui
-                                        .button(
-                                            egui::RichText::new("◀ Hide")
-                                                .size(12.0)
-                                                .color(palette.text_muted),
-                                        )
-                                        .on_hover_text("Hide parameters sidebar (Ctrl+B)")
-                                        .clicked()
-                                    {
-                                        self.show_left_sidebar = false;
-                                    }
-                                    if ui
-                                        .button(
-                                            egui::RichText::new("⤢ Float")
-                                                .size(12.0)
-                                                .color(palette.text_muted),
-                                        )
-                                        .on_hover_text("Pop out parameters into a floating window")
-                                        .clicked()
-                                    {
-                                        self.left_panel_floating = true;
-                                    }
-                                },
-                            );
-                        });
+                        let (float_clicked, hide_clicked) = render_column_header(
+                            ui,
+                            &palette,
+                            &ColumnHeaderConfig {
+                                title_full: "⚙ Parameters & Variables",
+                                title_standard: "⚙ Parameters",
+                                title_short: "⚙ Params",
+                                title_tooltip: "Parameters & Variables (Symbol controls, sliders, and domains)",
+                                float_icon: "⤢",
+                                float_full: "⤢ Float",
+                                float_tooltip: "Pop out parameters into a floating window",
+                                hide_icon: "◀",
+                                hide_full: "◀ Hide",
+                                hide_tooltip: "Hide parameters sidebar (Ctrl+B)",
+                            },
+                        );
+                        if float_clicked {
+                            self.left_panel_floating = true;
+                        }
+                        if hide_clicked {
+                            self.show_left_sidebar = false;
+                        }
                         ui.separator();
                         egui::ScrollArea::vertical()
                             .auto_shrink([false, false])
@@ -1736,20 +1817,17 @@ impl eframe::App for UraeNotebookApp {
         }
 
         // Main Central View (Unified Continuous Mathematical Notepad)
-        egui::CentralPanel::default().show(ui, |ui| {
-            self.render_warning_banners(ui);
-            match self.view_mode {
-                ViewMode::SmartStream | ViewMode::FocusEditor => {
-                    if self.render_smart_stream_view(ui, &ctx) {
-                        state_changed = true;
-                    }
+        egui::CentralPanel::default().show(ui, |ui| match self.view_mode {
+            ViewMode::SmartStream | ViewMode::FocusEditor => {
+                if self.render_smart_stream_view(ui, &ctx) {
+                    state_changed = true;
                 }
-                ViewMode::DependencyGraph => {
-                    self.render_dependency_graph_view(ui, &ctx);
-                }
-                ViewMode::PresentationReport => {
-                    self.render_presentation_report_view(ui, &ctx);
-                }
+            }
+            ViewMode::DependencyGraph => {
+                self.render_dependency_graph_view(ui, &ctx);
+            }
+            ViewMode::PresentationReport => {
+                self.render_presentation_report_view(ui, &ctx);
             }
         });
 
@@ -1885,6 +1963,9 @@ impl eframe::App for UraeNotebookApp {
                 self.export_notice = Some(format!("Exported 3D model to '{}'", req.filename));
             }
         }
+
+        // Render Ephemeral Storage & Quota Warning Banner in foreground anchored bottom-center
+        self.render_warning_banners(&ctx);
 
         if state_changed {
             self.state.evaluate_all();
@@ -2109,9 +2190,17 @@ impl UraeNotebookApp {
                 ui.horizontal(|ui| {
                     ui.weak("Palette Swatch:");
                     for color in &palette.plot_palette {
-                        let (rect, _) =
+                        let (rect, resp) =
                             ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
                         ui.painter().rect_filled(rect, 3.0, *color);
+                        let c = *color;
+                        resp.widget_info(move || {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Other,
+                                true,
+                                format!("Color swatch rgb({}, {}, {})", c.r(), c.g(), c.b()),
+                            )
+                        });
                     }
                 });
 
@@ -3260,6 +3349,52 @@ impl UraeNotebookApp {
                                     }
                                 });
 
+                            let expr_label = expr_key.to_string();
+                            plot_response.response.widget_info(move || {
+                                egui::WidgetInfo::labeled(
+                                    egui::WidgetType::Other,
+                                    true,
+                                    format!(
+                                        "Mathematical function plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                        expr_label, min_r, max_r
+                                    ),
+                                )
+                            });
+
+                            let pts_summary = self.state.cached_evaluate_plot_points(
+                                expr_key, "x", min_r, max_r, 80,
+                            );
+                            if !pts_summary.is_empty() {
+                                let valid_pts: Vec<[f64; 2]> = pts_summary.into_iter().filter(|p| p[0].is_finite() && p[1].is_finite()).collect();
+                                if !valid_pts.is_empty() {
+                                    let min_y = valid_pts.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
+                                    let max_y = valid_pts.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+
+                                    let mut roots = Vec::new();
+                                    for i in 1..valid_pts.len() {
+                                        let y0 = valid_pts[i-1][1];
+                                        let y1 = valid_pts[i][1];
+                                        if y0 * y1 <= 0.0 && (y1 - y0).abs() < (max_y - min_y).abs() * 0.5 {
+                                            let x_mid = (valid_pts[i-1][0] + valid_pts[i][0]) * 0.5;
+                                            roots.push(format!("{:.2}", x_mid));
+                                            if roots.len() >= 4 { break; }
+                                        }
+                                    }
+                                    let root_summary = if roots.is_empty() {
+                                        "none in interval".to_string()
+                                    } else {
+                                        roots.join(", ")
+                                    };
+
+                                    ui.collapsing("📊 Plot Data Summary (Screen Reader & Accessible)", |ui| {
+                                        ui.small(format!("Function: {}", expr_key));
+                                        ui.small(format!("Domain X: [{:.2}, {:.2}]", min_r, max_r));
+                                        ui.small(format!("Range Y: [{:.2}, {:.2}]", min_y, max_y));
+                                        ui.small(format!("Approx. roots: {}", root_summary));
+                                    });
+                                }
+                            }
+
                             if plot_response.response.dragged() || plot_response.response.hovered()
                             {
                                 ui.ctx().request_repaint();
@@ -3588,6 +3723,18 @@ impl UraeNotebookApp {
                                                 }
                                             });
 
+                                    let expr_label = expr_key.to_string();
+                                    plot_response.response.widget_info(move || {
+                                        egui::WidgetInfo::labeled(
+                                            egui::WidgetType::Other,
+                                            true,
+                                            format!(
+                                                "Standalone window plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                                expr_label, local_min_r, local_max_r
+                                            ),
+                                        )
+                                    });
+
                                     if plot_response.response.dragged()
                                         || plot_response.response.hovered()
                                     {
@@ -3715,6 +3862,18 @@ impl UraeNotebookApp {
                                             }
                                         });
 
+                                let expr_label = expr_key.to_string();
+                                plot_response.response.widget_info(move || {
+                                    egui::WidgetInfo::labeled(
+                                        egui::WidgetType::Other,
+                                        true,
+                                        format!(
+                                            "Floating window plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                            expr_label, local_min_r, local_max_r
+                                        ),
+                                    )
+                                });
+
                                 if plot_response.response.dragged()
                                     || plot_response.response.hovered()
                                 {
@@ -3808,16 +3967,29 @@ impl UraeNotebookApp {
                 .resizable(true)
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Continuous Text Editor").strong());
-                        if ui.button("⤓ Dock to Center").clicked() {
-                            self.editor_floating = false;
-                        }
-                        if ui.button("✕ Hide").clicked() {
-                            self.show_editor = false;
-                            self.state.session.settings.show_editor = false;
-                        }
-                    });
+                    let (dock_clicked, hide_clicked) = render_column_header(
+                        ui,
+                        &palette,
+                        &ColumnHeaderConfig {
+                            title_full: "📝 Continuous Math Editor",
+                            title_standard: "📝 Editor",
+                            title_short: "📝 Edit",
+                            title_tooltip: "Continuous Mathematical Notepad Editor",
+                            float_icon: "⤓",
+                            float_full: "⤓ Dock",
+                            float_tooltip: "Dock text editor to center",
+                            hide_icon: "✕",
+                            hide_full: "✕ Hide",
+                            hide_tooltip: "Hide text editor",
+                        },
+                    );
+                    if dock_clicked {
+                        self.editor_floating = false;
+                    }
+                    if hide_clicked {
+                        self.show_editor = false;
+                        self.state.session.settings.show_editor = false;
+                    }
                     ui.separator();
                     let mut math_layouter =
                         |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
@@ -3860,15 +4032,28 @@ impl UraeNotebookApp {
                 .resizable(true)
                 .open(&mut open)
                 .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Live Results & Visualizations").strong());
-                        if ui.button("⤓ Dock to Right Half").clicked() {
-                            self.right_panel_floating = false;
-                        }
-                        if ui.button("✕ Hide").clicked() {
-                            self.show_right_sidebar = false;
-                        }
-                    });
+                    let (dock_clicked, hide_clicked) = render_column_header(
+                        ui,
+                        &palette,
+                        &ColumnHeaderConfig {
+                            title_full: "⚡ Results & 3D Surfaces",
+                            title_standard: "⚡ Results",
+                            title_short: "⚡ Results",
+                            title_tooltip: "Live Results Stream and Visualizations",
+                            float_icon: "⤓",
+                            float_full: "⤓ Dock",
+                            float_tooltip: "Dock results to right half",
+                            hide_icon: "✕",
+                            hide_full: "✕ Hide",
+                            hide_tooltip: "Hide results window",
+                        },
+                    );
+                    if dock_clicked {
+                        self.right_panel_floating = false;
+                    }
+                    if hide_clicked {
+                        self.show_right_sidebar = false;
+                    }
                     ui.separator();
                     egui::ScrollArea::vertical()
                         .auto_shrink([false, false])
@@ -3995,248 +4180,281 @@ impl UraeNotebookApp {
                         self.state.session.settings.show_editor = true;
                     }
 
-                    // 1. Line Numbers Column (Interactive Click & Drag explicitly aligned with editor rows, wrapped lines unnumbered)
-                    if self.state.session.settings.show_cell_line_numbers {
-                        let mono_font = egui::FontId::monospace(13.0);
-                        let default_row_height = ui.fonts_mut(|f| f.row_height(&mono_font));
-                        let frame_padding_y = 2.0;
-
-                        let galley = palette.math_syntax_layouter(ui, &self.state.session.raw_document_text, editor_width);
-
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(line_num_width, ui.available_height()),
-                            egui::Layout::top_down(egui::Align::RIGHT),
-                            |ui| {
-                                ui.spacing_mut().item_spacing.y = 0.0;
-                                ui.add_space(frame_padding_y);
-
-                                if galley.rows.is_empty() {
-                                    let (rect, _) = ui.allocate_exact_size(
-                                        egui::vec2(line_num_width, default_row_height),
-                                        egui::Sense::hover(),
-                                    );
-                                    ui.painter().text(
-                                        egui::pos2(rect.right(), rect.center().y),
-                                        egui::Align2::RIGHT_CENTER,
-                                        " 1 ",
-                                        mono_font.clone(),
-                                        palette.text_muted,
-                                    );
-                                } else {
-                                    let mut logical_line_idx = 0;
-                                    let mut is_new_logical_line = true;
-
-                                    for row in &galley.rows {
-                                        let row_height = row.rect().height();
-                                        let (rect, resp) = ui.allocate_exact_size(
-                                            egui::vec2(line_num_width, row_height),
-                                            egui::Sense::click_and_drag(),
-                                        );
-
-                                        if is_new_logical_line {
-                                            logical_line_idx += 1;
-                                            let is_dep_highlighted = dep_highlighted_lines.contains(&(logical_line_idx - 1));
-                                            if is_dep_highlighted {
-                                                ui.painter().rect_filled(
-                                                    rect,
-                                                    2.0,
-                                                    palette.accent_secondary.linear_multiply(0.35),
-                                                );
-                                            }
-                                            let text_color = if resp.hovered() || is_dep_highlighted {
-                                                palette.accent_primary
-                                            } else {
-                                                palette.text_muted
-                                            };
-                                            let num_text = format!("{:2} ", logical_line_idx);
-                                            ui.painter().text(
-                                                egui::pos2(rect.right(), rect.center().y),
-                                                egui::Align2::RIGHT_CENTER,
-                                                num_text,
-                                                mono_font.clone(),
-                                                text_color,
-                                            );
-                                            if resp.clicked() {
-                                                let token = format!("${}", logical_line_idx);
-                                                if let Some(pos) = self.state.cursor_char_idx {
-                                                    let doc = &mut self.state.session.raw_document_text;
-                                                    let clamped = pos.min(doc.len());
-                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
-                                                        format!(" {}", token)
-                                                    } else {
-                                                        token.clone()
-                                                    };
-                                                    doc.insert_str(clamped, &insert_str);
-                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
-                                                } else {
-                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
-                                                }
-                                                self.is_edit_dirty = true;
-                                                self.last_keystroke_time = web_time::Instant::now();
-                                                state_changed = true;
-                                            }
-                                            if resp.hovered() {
-                                                new_hovered_line = Some(logical_line_idx - 1);
-                                                self.inspected_symbol = Some(format!("${}", logical_line_idx));
-                                            }
-                                            resp.on_hover_text(format!("Line {} — Click to insert ${} into notepad", logical_line_idx, logical_line_idx));
-                                        } else {
-                                            // Wrapped continuation lines do NOT receive a line number
-                                            if resp.clicked() {
-                                                let token = format!("${}", logical_line_idx);
-                                                if let Some(pos) = self.state.cursor_char_idx {
-                                                    let doc = &mut self.state.session.raw_document_text;
-                                                    let clamped = pos.min(doc.len());
-                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
-                                                        format!(" {}", token)
-                                                    } else {
-                                                        token.clone()
-                                                    };
-                                                    doc.insert_str(clamped, &insert_str);
-                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
-                                                } else {
-                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
-                                                }
-                                                self.is_edit_dirty = true;
-                                                self.last_keystroke_time = web_time::Instant::now();
-                                                state_changed = true;
-                                            }
-                                            if resp.hovered() {
-                                                new_hovered_line = Some(logical_line_idx - 1);
-                                                self.inspected_symbol = Some(format!("${}", logical_line_idx));
-                                            }
-                                            resp.on_hover_text(format!("Line {} (wrapped continuation)", logical_line_idx));
-                                        }
-
-                                        is_new_logical_line = row.ends_with_newline;
-                                    }
-                                }
-                            },
-                        );
-                    }
-
-                    // 2. Main Continuous Text Editor (if visible and docked)
+                    // Main Continuous Text Editor & Line Numbers (if visible and docked)
                     if self.show_editor && !self.editor_floating {
+                        let total_editor_w = line_num_width + editor_width;
                         ui.allocate_ui_with_layout(
-                            egui::vec2(editor_width, ui.available_height()),
+                            egui::vec2(total_editor_w, ui.available_height()),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.weak("📝 Editor");
-                                    if ui.small_button("⤢ Float").on_hover_text("Pop out text editor into floating window").clicked() {
-                                        self.editor_floating = true;
+                                ui.add_space(4.0);
+                                let (float_clicked, hide_clicked) = render_column_header(
+                                    ui,
+                                    &palette,
+                                    &ColumnHeaderConfig {
+                                        title_full: "📝 Continuous Math Editor",
+                                        title_standard: "📝 Editor",
+                                        title_short: "📝 Edit",
+                                        title_tooltip: "Continuous Mathematical Notepad Editor (Ctrl+E)",
+                                        float_icon: "⤢",
+                                        float_full: "⤢ Float",
+                                        float_tooltip: "Pop out text editor into floating window",
+                                        hide_icon: "✕",
+                                        hide_full: "✕ Hide",
+                                        hide_tooltip: "Hide text editor (Ctrl+E)",
+                                    },
+                                );
+                                if float_clicked {
+                                    self.editor_floating = true;
+                                }
+                                if hide_clicked {
+                                    self.show_editor = false;
+                                    self.state.session.settings.show_editor = false;
+                                }
+                                ui.separator();
+
+                                ui.horizontal_top(|ui| {
+                                    // 1. Line Numbers Column (Interactive Click & Drag explicitly aligned with editor rows, wrapped lines unnumbered)
+                                    if self.state.session.settings.show_cell_line_numbers {
+                                        let mono_font = egui::FontId::monospace(13.0);
+                                        let default_row_height = ui.fonts_mut(|f| f.row_height(&mono_font));
+                                        let frame_padding_y = 2.0;
+
+                                        let galley = palette.math_syntax_layouter(ui, &self.state.session.raw_document_text, editor_width);
+
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(line_num_width, ui.available_height()),
+                                            egui::Layout::top_down(egui::Align::RIGHT),
+                                            |ui| {
+                                                ui.spacing_mut().item_spacing.y = 0.0;
+                                                ui.add_space(frame_padding_y);
+
+                                                if galley.rows.is_empty() {
+                                                    let (rect, _) = ui.allocate_exact_size(
+                                                        egui::vec2(line_num_width, default_row_height),
+                                                        egui::Sense::hover(),
+                                                    );
+                                                    ui.painter().text(
+                                                        egui::pos2(rect.right(), rect.center().y),
+                                                        egui::Align2::RIGHT_CENTER,
+                                                        " 1 ",
+                                                        mono_font.clone(),
+                                                        palette.text_muted,
+                                                    );
+                                                } else {
+                                                    let mut logical_line_idx = 0;
+                                                    let mut is_new_logical_line = true;
+
+                                                    for row in &galley.rows {
+                                                        let row_height = row.rect().height();
+                                                        let (rect, resp) = ui.allocate_exact_size(
+                                                            egui::vec2(line_num_width, row_height),
+                                                            egui::Sense::click_and_drag(),
+                                                        );
+
+                                                        if is_new_logical_line {
+                                                            logical_line_idx += 1;
+                                                            let line_no = logical_line_idx;
+                                                            resp.widget_info(move || {
+                                                                egui::WidgetInfo::labeled(
+                                                                    egui::WidgetType::Button,
+                                                                    true,
+                                                                    format!("Line number {}", line_no),
+                                                                )
+                                                            });
+                                                            let is_dep_highlighted = dep_highlighted_lines.contains(&(logical_line_idx - 1));
+                                                            if is_dep_highlighted {
+                                                                ui.painter().rect_filled(
+                                                                    rect,
+                                                                    2.0,
+                                                                    palette.accent_secondary.linear_multiply(0.35),
+                                                                );
+                                                            }
+                                                            let text_color = if resp.hovered() || is_dep_highlighted {
+                                                                palette.accent_primary
+                                                            } else {
+                                                                palette.text_muted
+                                                            };
+                                                            let num_text = format!("{:2} ", logical_line_idx);
+                                                            ui.painter().text(
+                                                                egui::pos2(rect.right(), rect.center().y),
+                                                                egui::Align2::RIGHT_CENTER,
+                                                                num_text,
+                                                                mono_font.clone(),
+                                                                text_color,
+                                                            );
+                                                            if resp.clicked() {
+                                                                let token = format!("${}", logical_line_idx);
+                                                                if let Some(pos) = self.state.cursor_char_idx {
+                                                                    let doc = &mut self.state.session.raw_document_text;
+                                                                    let clamped = pos.min(doc.len());
+                                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
+                                                                        format!(" {}", token)
+                                                                    } else {
+                                                                        token.clone()
+                                                                    };
+                                                                    doc.insert_str(clamped, &insert_str);
+                                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
+                                                                } else {
+                                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                                }
+                                                                self.is_edit_dirty = true;
+                                                                self.last_keystroke_time = web_time::Instant::now();
+                                                                state_changed = true;
+                                                            }
+                                                            if resp.hovered() {
+                                                                new_hovered_line = Some(logical_line_idx - 1);
+                                                                self.inspected_symbol = Some(format!("${}", logical_line_idx));
+                                                            }
+                                                            resp.on_hover_text(format!("Line {} — Click to insert ${} into notepad", logical_line_idx, logical_line_idx));
+                                                        } else {
+                                                            // Wrapped continuation lines do NOT receive a line number
+                                                            if resp.clicked() {
+                                                                let token = format!("${}", logical_line_idx);
+                                                                if let Some(pos) = self.state.cursor_char_idx {
+                                                                    let doc = &mut self.state.session.raw_document_text;
+                                                                    let clamped = pos.min(doc.len());
+                                                                    let insert_str = if clamped > 0 && !doc[..clamped].ends_with(' ') && !doc[..clamped].ends_with('\n') {
+                                                                        format!(" {}", token)
+                                                                    } else {
+                                                                        token.clone()
+                                                                    };
+                                                                    doc.insert_str(clamped, &insert_str);
+                                                                    self.state.cursor_char_idx = Some(clamped + insert_str.len());
+                                                                } else {
+                                                                    self.state.session.raw_document_text.push_str(&format!(" ${}", logical_line_idx));
+                                                                }
+                                                                self.is_edit_dirty = true;
+                                                                self.last_keystroke_time = web_time::Instant::now();
+                                                                state_changed = true;
+                                                            }
+                                                            if resp.hovered() {
+                                                                new_hovered_line = Some(logical_line_idx - 1);
+                                                                self.inspected_symbol = Some(format!("${}", logical_line_idx));
+                                                            }
+                                                            resp.on_hover_text(format!("Line {} (wrapped continuation)", logical_line_idx));
+                                                        }
+
+                                                        is_new_logical_line = row.ends_with_newline;
+                                                    }
+                                                }
+                                            },
+                                        );
                                     }
-                                    if ui.small_button("✕").on_hover_text("Hide text editor (Ctrl+E)").clicked() {
-                                        self.show_editor = false;
-                                        self.state.session.settings.show_editor = false;
-                                    }
+
+                                    // 2. Main Continuous Text Editor
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(editor_width, ui.available_height()),
+                                        egui::Layout::top_down(egui::Align::LEFT),
+                                        |ui| {
+                                            let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
+                                                let string = string.as_str();
+                                                let eff_wrap = if self.state.session.settings.editor_word_wrap {
+                                                    wrap_width
+                                                } else {
+                                                    f32::INFINITY
+                                                };
+                                                if self.state.session.settings.editor_syntax_highlighting {
+                                                    palette.math_syntax_layouter(ui, string, eff_wrap)
+                                                } else {
+                                                    palette.plain_monospace_layouter(ui, string, eff_wrap)
+                                                }
+                                            };
+
+                                            let text_edit = egui::TextEdit::multiline(&mut self.state.session.raw_document_text)
+                                                .layouter(&mut math_layouter)
+                                                .desired_width(editor_width)
+                                                .desired_rows(line_count.max(20))
+                                                .lock_focus(true);
+
+                                            let edit_resp = ui.add(text_edit);
+                                            if let Some(text_state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id) {
+                                                if let Some(char_range) = text_state.cursor.char_range() {
+                                                    let char_idx = char_range.primary.index;
+                                                    let text = &self.state.session.raw_document_text;
+                                                    let clamped = usize::from(char_idx).min(text.len());
+                                                    let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
+                                                    self.state.focused_line = Some(current_line_idx);
+                                                    self.state.cursor_char_idx = Some(clamped);
+                                                }
+                                            }
+                                            if edit_resp.changed() {
+                                                self.is_edit_dirty = true;
+                                                self.last_keystroke_time = web_time::Instant::now();
+                                                state_changed = true;
+                                            }
+
+                                            // Inline Number Scrubbing via Alt + Drag
+                                            let is_alt_down = self.state.session.settings.editor_alt_scrubbing && ui.input(|i| i.modifiers.alt);
+                                            if is_alt_down && (edit_resp.hovered() || self.active_scrubbing.is_some()) {
+                                                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                                            }
+
+                                            if is_alt_down && ui.input(|i| i.pointer.primary_down()) {
+                                                if self.active_scrubbing.is_none() {
+                                                    let pointer_pos = ui.input(|i| i.pointer.interact_pos());
+                                                    let char_idx = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id)
+                                                        .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
+                                                    if let Some(c_idx) = char_idx {
+                                                        if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
+                                                            find_numeric_literal_at(&self.state.session.raw_document_text, usize::from(c_idx))
+                                                        {
+                                                            let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
+                                                            self.active_scrubbing = Some(ActiveScrubbing {
+                                                                byte_range: (byte_start, byte_end),
+                                                                original_val: val,
+                                                                has_decimal: has_dec,
+                                                                decimal_places: dec_places,
+                                                                start_pointer_x: start_x,
+                                                            });
+                                                        }
+                                                    }
+                                                }
+
+                                                if let Some(ref mut scrub) = self.active_scrubbing {
+                                                    let curr_x = ui.input(|i| {
+                                                        i.pointer
+                                                            .interact_pos()
+                                                            .map(|p| p.x)
+                                                            .unwrap_or(scrub.start_pointer_x)
+                                                    });
+                                                    let delta_x = curr_x - scrub.start_pointer_x;
+                                                    let is_shift = ui.input(|i| i.modifiers.shift);
+                                                    let step = if is_shift {
+                                                        if scrub.has_decimal {
+                                                            10.0_f64.powi(-(scrub.decimal_places as i32)) * 0.1
+                                                        } else {
+                                                            0.1
+                                                        }
+                                                    } else if scrub.has_decimal {
+                                                        10.0_f64.powi(-(scrub.decimal_places as i32))
+                                                    } else {
+                                                        1.0
+                                                    };
+                                                    let new_val = scrub.original_val + (delta_x as f64 * step * 0.2);
+
+                                                    let new_str = if scrub.has_decimal {
+                                                        format!("{:.precision$}", new_val, precision = scrub.decimal_places)
+                                                    } else {
+                                                        format!("{}", new_val.round() as i64)
+                                                    };
+
+                                                    let doc = &mut self.state.session.raw_document_text;
+                                                    let (start_b, end_b) = scrub.byte_range;
+                                                    if start_b <= end_b && end_b <= doc.len() {
+                                                        doc.replace_range(start_b..end_b, &new_str);
+                                                        scrub.byte_range = (start_b, start_b + new_str.len());
+                                                        self.is_edit_dirty = true;
+                                                        self.last_keystroke_time = web_time::Instant::now();
+                                                        state_changed = true;
+                                                    }
+                                                }
+                                            } else if !ui.input(|i| i.pointer.primary_down()) {
+                                                self.active_scrubbing = None;
+                                            }
+                                        },
+                                    );
                                 });
-
-                                let mut math_layouter = |ui: &egui::Ui, string: &dyn egui::TextBuffer, wrap_width: f32| {
-                                    let string = string.as_str();
-                                    let eff_wrap = if self.state.session.settings.editor_word_wrap {
-                                        wrap_width
-                                    } else {
-                                        f32::INFINITY
-                                    };
-                                    if self.state.session.settings.editor_syntax_highlighting {
-                                        palette.math_syntax_layouter(ui, string, eff_wrap)
-                                    } else {
-                                        palette.plain_monospace_layouter(ui, string, eff_wrap)
-                                    }
-                                };
-
-                                let text_edit = egui::TextEdit::multiline(&mut self.state.session.raw_document_text)
-                                    .layouter(&mut math_layouter)
-                                    .desired_width(editor_width)
-                                    .desired_rows(line_count.max(20))
-                                    .lock_focus(true);
-
-                                let edit_resp = ui.add(text_edit);
-                                if let Some(text_state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id) {
-                                    if let Some(char_range) = text_state.cursor.char_range() {
-                                        let char_idx = char_range.primary.index;
-                                        let text = &self.state.session.raw_document_text;
-                                        let clamped = usize::from(char_idx).min(text.len());
-                                        let current_line_idx = text[..clamped].chars().filter(|&c| c == '\n').count();
-                                        self.state.focused_line = Some(current_line_idx);
-                                        self.state.cursor_char_idx = Some(clamped);
-                                    }
-                                }
-                                if edit_resp.changed() {
-                                    self.is_edit_dirty = true;
-                                    self.last_keystroke_time = web_time::Instant::now();
-                                    state_changed = true;
-                                }
-
-                                // Inline Number Scrubbing via Alt + Drag
-                                let is_alt_down = self.state.session.settings.editor_alt_scrubbing && ui.input(|i| i.modifiers.alt);
-                                if is_alt_down && (edit_resp.hovered() || self.active_scrubbing.is_some()) {
-                                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                                }
-
-                                if is_alt_down && ui.input(|i| i.pointer.primary_down()) {
-                                    if self.active_scrubbing.is_none() {
-                                        let pointer_pos = ui.input(|i| i.pointer.interact_pos());
-                                        let char_idx = egui::text_edit::TextEditState::load(ui.ctx(), edit_resp.id)
-                                            .and_then(|s| s.cursor.char_range().map(|cr| cr.primary.index));
-                                        if let Some(c_idx) = char_idx {
-                                            if let Some((byte_start, byte_end, val, has_dec, dec_places)) =
-                                                find_numeric_literal_at(&self.state.session.raw_document_text, usize::from(c_idx))
-                                            {
-                                                let start_x = pointer_pos.map(|p| p.x).unwrap_or(0.0);
-                                                self.active_scrubbing = Some(ActiveScrubbing {
-                                                    byte_range: (byte_start, byte_end),
-                                                    original_val: val,
-                                                    has_decimal: has_dec,
-                                                    decimal_places: dec_places,
-                                                    start_pointer_x: start_x,
-                                                });
-                                            }
-                                        }
-                                    }
-
-                                    if let Some(ref mut scrub) = self.active_scrubbing {
-                                        let curr_x = ui.input(|i| {
-                                            i.pointer
-                                                .interact_pos()
-                                                .map(|p| p.x)
-                                                .unwrap_or(scrub.start_pointer_x)
-                                        });
-                                        let delta_x = curr_x - scrub.start_pointer_x;
-                                        let is_shift = ui.input(|i| i.modifiers.shift);
-                                        let step = if is_shift {
-                                            if scrub.has_decimal {
-                                                10.0_f64.powi(-(scrub.decimal_places as i32)) * 0.1
-                                            } else {
-                                                0.1
-                                            }
-                                        } else if scrub.has_decimal {
-                                            10.0_f64.powi(-(scrub.decimal_places as i32))
-                                        } else {
-                                            1.0
-                                        };
-                                        let new_val = scrub.original_val + (delta_x as f64 * step * 0.2);
-
-                                        let new_str = if scrub.has_decimal {
-                                            format!("{:.precision$}", new_val, precision = scrub.decimal_places)
-                                        } else {
-                                            format!("{}", new_val.round() as i64)
-                                        };
-
-                                        let doc = &mut self.state.session.raw_document_text;
-                                        let (start_b, end_b) = scrub.byte_range;
-                                        if start_b <= end_b && end_b <= doc.len() {
-                                            doc.replace_range(start_b..end_b, &new_str);
-                                            scrub.byte_range = (start_b, start_b + new_str.len());
-                                            self.is_edit_dirty = true;
-                                            self.last_keystroke_time = web_time::Instant::now();
-                                            state_changed = true;
-                                        }
-                                    }
-                                } else if !ui.input(|i| i.pointer.primary_down()) {
-                                    self.active_scrubbing = None;
-                                }
                             },
                         );
                     }
@@ -4260,29 +4478,42 @@ impl UraeNotebookApp {
                         } else {
                             ui.painter().rect_filled(res_rect, 0.0, palette.border);
                         }
+                        res_resp.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Other,
+                                true,
+                                "Sidebar resize handle",
+                            )
+                        });
                         let _ = res_resp.on_hover_text("Drag to resize results column");
 
                         ui.allocate_ui_with_layout(
                             egui::vec2(gutter_width, ui.available_height()),
                             egui::Layout::top_down(egui::Align::LEFT),
                             |ui| {
-                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-
-                                ui.horizontal(|ui| {
-                                    ui.colored_label(palette.accent_secondary, "⚡ Results & 3D Surfaces");
-                                    if ui.small_button("⤢ Float").on_hover_text("Pop out results and graphs into floating window").clicked() {
-                                        self.right_panel_floating = !self.right_panel_floating;
-                                    }
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui
-                                            .button(egui::RichText::new("Hide ▶").size(12.0).color(palette.text_muted))
-                                            .on_hover_text("Hide results stream (Ctrl+J)")
-                                            .clicked()
-                                        {
-                                            self.show_right_sidebar = false;
-                                        }
-                                    });
-                                });
+                                ui.add_space(4.0);
+                                let (float_clicked, hide_clicked) = render_column_header(
+                                    ui,
+                                    &palette,
+                                    &ColumnHeaderConfig {
+                                        title_full: "⚡ Results & 3D Surfaces",
+                                        title_standard: "⚡ Results",
+                                        title_short: "⚡ Results",
+                                        title_tooltip: "Live Results Stream and Visualizations (Ctrl+J)",
+                                        float_icon: "⤢",
+                                        float_full: "⤢ Float",
+                                        float_tooltip: "Pop out results and graphs into floating window",
+                                        hide_icon: "▶",
+                                        hide_full: "Hide ▶",
+                                        hide_tooltip: "Hide results stream (Ctrl+J)",
+                                    },
+                                );
+                                if float_clicked {
+                                    self.right_panel_floating = !self.right_panel_floating;
+                                }
+                                if hide_clicked {
+                                    self.show_right_sidebar = false;
+                                }
                                 ui.separator();
 
                                 if parsed_lines.is_empty() {
@@ -4640,6 +4871,17 @@ impl UraeNotebookApp {
                                                                     });
 
                                                                 let mut resp = plot_resp.response;
+                                                                let token_label = line_token.to_string();
+                                                                resp.widget_info(move || {
+                                                                    egui::WidgetInfo::labeled(
+                                                                        egui::WidgetType::Other,
+                                                                        true,
+                                                                        format!(
+                                                                            "Side stream plot of {}. Domain: x in [{:.2}, {:.2}]. Drag to pan, scroll to zoom.",
+                                                                            token_label, min_r, max_r
+                                                                        ),
+                                                                    )
+                                                                });
                                                                 if resp.hovered() {
                                                                     new_hovered_line = Some(line_idx);
                                                                 }
