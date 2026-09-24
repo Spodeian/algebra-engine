@@ -246,3 +246,10 @@ flowchart LR
 - **Kac-Moody & OPEs**:
   - Affine current algebras $\hat{\mathfrak{g}}$, Operator Product Expansions, and Sugawara energy-momentum tensors.
 
+### 5.15 Phase 29: Universal `cargo-ndk` Android Mobile Deployment [COMPLETE]
+- [x] Multi-target cross-compilation toolchain for `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`.
+- [x] Dual `cdylib` / `rlib` targets in `crates/urae-notebook` and `crates/urae-ffi`.
+- [x] Native activity entry point `android_main` in `crates/urae-notebook/src/lib.rs`.
+- [x] Automated compilation scripts (`scripts/build-android.ps1`, `scripts/build-android.sh`).
+
+

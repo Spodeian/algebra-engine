@@ -164,6 +164,7 @@ RUSTDOCFLAGS="--html-in-header docs/katex-header.html" cargo doc --no-deps --wor
 Before submitting changes or advancing phases:
 - [ ] `cargo doc --no-deps --workspace` completes with **0 warnings** and **0 broken links**.
 - [ ] `cargo test --doc --workspace` passes **100% of doc-tests**.
+- [ ] Android mobile build (`scripts/build-android.ps1` / `scripts/build-android.sh`) verifies with `cargo-ndk`.
 - [ ] All public structs, enums, and functions have explicit KaTeX formulas and doc comments.
 - [ ] All square brackets in KaTeX formulas are properly escaped (`\[n\]`).
 - [ ] Links to macros use `crate::macro_name!` syntax to prevent ambiguous intra-doc link warnings.

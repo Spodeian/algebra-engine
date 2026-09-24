@@ -56,6 +56,8 @@ urae-ffi = { path = "crates/urae-ffi" }
 egui = "0.36"
 eframe = { version = "0.36", default-features = false, features = ["default_fonts"] }
 egui_plot = "0.37"
+winit = { version = "0.30", default-features = false }
+android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
 
 # Numerics & High-Precision CAS
 bnum = "0.13"

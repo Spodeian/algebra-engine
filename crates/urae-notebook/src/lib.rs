@@ -275,3 +275,17 @@ pub async fn start_web(canvas_id: &str) -> Result<(), JsValue> {
         .await
         .map_err(|e| JsValue::from_str(&format!("{:?}", e)))
 }
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    use eframe::NativeOptions;
+    let mut options = NativeOptions::default();
+    options.android_app = Some(app);
+    eframe::run_native(
+        "urae-notebook",
+        options,
+        Box::new(|cc| Ok(Box::new(app::UraeNotebookApp::new(cc)))),
+    ).unwrap();
+}
+

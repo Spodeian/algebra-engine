@@ -4636,6 +4636,7 @@ dependencies = [
 name = "urae-notebook"
 version = "0.3.1"
 dependencies = [
+ "android-activity",
  "base64",
  "bson",
  "console_error_panic_hook",
@@ -4658,6 +4659,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "winit",
 ]
 
 [[package]]

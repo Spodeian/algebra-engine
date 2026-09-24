@@ -9,6 +9,7 @@ homepage.workspace = true
 description = "Cross-platform egui reactive mathematics notebook application for URAE"
 
 [lib]
+crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [[bin]]
@@ -42,11 +43,15 @@ toml.workspace = true
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 mimalloc.workspace = true
 rayon.workspace = true
 tracing-subscriber.workspace = true
 eframe = { workspace = true, features = ["x11", "wayland"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { workspace = true, features = ["android-native-activity"] }
+android-activity = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 eframe = { workspace = true }
