@@ -182,16 +182,8 @@ pub fn run_gui() -> Result<(), eframe::Error> {
         LogLevel::current().label()
     ));
 
-    let default_filter = if cfg!(debug_assertions) {
-        "debug"
-    } else {
-        "info"
-    };
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_filter));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(env_filter)
-        .try_init();
+    spodeian_telemetry::init_default();
+
 
     log_debug("Configuring eframe::NativeOptions (inner_size: 1100x750, min: 600x400)...");
     let options = eframe::NativeOptions {
@@ -243,7 +235,8 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 pub async fn start_web(canvas_id: &str) -> Result<(), JsValue> {
     use wasm_bindgen::JsCast;
-    console_error_panic_hook::set_once();
+    spodeian_telemetry::init_default();
+
     let web_options = eframe::WebOptions::default();
 
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window object"))?;

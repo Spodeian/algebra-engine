@@ -749,21 +749,9 @@ impl UraeNotebookApp {
 
     /// Triggers a cross-platform file download (browser download in WASM, filesystem write on native desktop).
     pub fn trigger_file_download(&self, filename: &str, data: &[u8], _mime_type: &str) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            use base64::Engine;
-            let b64 = base64::engine::general_purpose::STANDARD.encode(data);
-            let code = format!(
-                "if (window.__triggerBinaryDownload) {{ window.__triggerBinaryDownload({:?}, {:?}, {:?}); }}",
-                filename, b64, _mime_type
-            );
-            let _ = js_sys::eval(&code);
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let _ = std::fs::write(filename, data);
-        }
+        spodeian_web_utils::trigger_binary_download(filename, data, _mime_type);
     }
+
 
     /// Download active session as a compressed .bson binary file
     pub fn download_bson_backup(&self) {
