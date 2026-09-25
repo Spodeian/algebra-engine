@@ -58,6 +58,7 @@ eframe = { version = "0.36", default-features = false, features = ["default_font
 egui_plot = "0.37"
 winit = { version = "0.30", default-features = false }
 android-activity = { version = "0.6", default-features = false, features = ["native-activity"] }
+spodeian-tokens = { path = "../spodeian-core/crates/spodeian-tokens" }
 
 # Numerics & High-Precision CAS
 bnum = "0.13"
