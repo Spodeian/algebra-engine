@@ -8381,6 +8381,153 @@ fn two_sided_inverse_z_transform_sums_back_to_x_of_z_in_the_annulus() {
 }
 
 #[test]
+fn complex_schur_blocks_are_standardised_to_equal_diagonal_entries() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let cases: [Vec<Vec<i64>>; 4] = [
+        vec![vec![0, -1], vec![1, 0]],
+        vec![vec![1, 2], vec![-3, 1]],
+        vec![vec![2, -5], vec![1, -2]],
+        vec![vec![1, 3], vec![-2, 5]],
+    ];
+    for data in cases {
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let out = run(&format!("schur({text})"));
+        let t = matrix(
+            out.strip_prefix("T = ")
+                .unwrap()
+                .split_once("; Q = ")
+                .unwrap()
+                .0,
+        );
+        // Every 2x2 block with complex eigenvalues has equal diagonal entries and off-diagonal entries of opposite sign.
+        for k in 0..t.len() - 1 {
+            if t[k + 1][k].abs() > 1e-9 {
+                assert!(
+                    (t[k][k] - t[k + 1][k + 1]).abs() < 1e-7,
+                    "unequal diagonal: {out}"
+                );
+                assert!(
+                    t[k][k + 1] * t[k + 1][k] < 0.0,
+                    "same-sign off-diagonal: {out}"
+                );
+            }
+        }
+    }
+    // The 2x2 with eigenvalues 1 +- i sqrt(6) has its complex block standardised.
+    let out = run("schur([[1,2],[-3,1]])");
+    let t = matrix(
+        out.strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap()
+            .0,
+    );
+    assert!(
+        (t[0][0] - 1.0).abs() < 1e-9 && (t[1][1] - 1.0).abs() < 1e-9,
+        "{out}"
+    );
+}
+
+#[test]
+fn real_schur_identities_hold_at_forty_by_forty() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x40F0_0D5E_ED5C_AB1Eu64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    let n = 40usize;
+    let data: Vec<Vec<i64>> = (0..n).map(|_| (0..n).map(|_| next(19)).collect()).collect();
+    let text = format!(
+        "[{}]",
+        data.iter()
+            .map(|r| format!(
+                "[{}]",
+                r.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let out = run(&format!("schur({text})"));
+    let (t, q) = {
+        let (t_text, q_text) = out
+            .strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap();
+        (matrix(t_text), matrix(q_text))
+    };
+    let a: Vec<Vec<f64>> = data
+        .iter()
+        .map(|r| r.iter().map(|v| *v as f64).collect())
+        .collect();
+    let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+    for i in 0..n {
+        for j in 0..n {
+            let orthogonal: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+            assert!(
+                (orthogonal - if i == j { 1.0 } else { 0.0 }).abs() < 1e-6,
+                "Q not orthogonal at ({i}, {j})"
+            );
+        }
+    }
+    // A = Q T Q^T, computed as (Q T) Q^T to keep the cost at n^3.
+    let qt: Vec<Vec<f64>> = (0..n)
+        .map(|i| {
+            (0..n)
+                .map(|j| (0..n).map(|k| q[i][k] * t[k][j]).sum())
+                .collect()
+        })
+        .collect();
+    for i in 0..n {
+        for j in 0..n {
+            let value: f64 = (0..n).map(|k| qt[i][k] * q[j][k]).sum();
+            assert!(
+                (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                "reconstruction off at ({i}, {j}): {value} vs {}",
+                a[i][j]
+            );
+        }
+    }
+    for i in 0..n {
+        for j in 0..i.saturating_sub(1) {
+            assert!(t[i][j].abs() < 1e-9, "not quasi-triangular at ({i}, {j})");
+        }
+    }
+}
+
+#[test]
 fn riccati_equations_with_exponential_particular_solutions_satisfy_the_equation() {
     // y' = y^2 - 2 e^x y + e^x + e^(2x) has y_p = e^x, and the linear part for the constant has no y-coefficient:
     // y = e^x + 1 / (C - x). Similarly y' = y^2 - 2 e^(2x) y + 2 e^(2x) + e^(4x) has y_p = e^(2x) (the y-coefficient cancels, q1 + 2 y_p = 0, so the constant solves v' = -1).
