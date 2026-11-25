@@ -8446,3 +8446,83 @@ fn complex_schur_blocks_are_standardised_to_equal_diagonal_entries() {
         "{out}"
     );
 }
+
+#[test]
+fn real_schur_identities_hold_at_forty_by_forty() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x40F0_0D5E_ED5C_AB1Eu64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    let n = 40usize;
+    let data: Vec<Vec<i64>> = (0..n).map(|_| (0..n).map(|_| next(19)).collect()).collect();
+    let text = format!(
+        "[{}]",
+        data.iter()
+            .map(|r| format!(
+                "[{}]",
+                r.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let out = run(&format!("schur({text})"));
+    let (t, q) = {
+        let (t_text, q_text) = out
+            .strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap();
+        (matrix(t_text), matrix(q_text))
+    };
+    let a: Vec<Vec<f64>> = data
+        .iter()
+        .map(|r| r.iter().map(|v| *v as f64).collect())
+        .collect();
+    let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+    for i in 0..n {
+        for j in 0..n {
+            let orthogonal: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+            assert!(
+                (orthogonal - if i == j { 1.0 } else { 0.0 }).abs() < 1e-6,
+                "Q not orthogonal at ({i}, {j})"
+            );
+        }
+    }
+    // A = Q T Q^T, computed as (Q T) Q^T to keep the cost at n^3.
+    let qt: Vec<Vec<f64>> = (0..n)
+        .map(|i| {
+            (0..n)
+                .map(|j| (0..n).map(|k| q[i][k] * t[k][j]).sum())
+                .collect()
+        })
+        .collect();
+    for i in 0..n {
+        for j in 0..n {
+            let value: f64 = (0..n).map(|k| qt[i][k] * q[j][k]).sum();
+            assert!(
+                (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                "reconstruction off at ({i}, {j}): {value} vs {}",
+                a[i][j]
+            );
+        }
+    }
+    for i in 0..n {
+        for j in 0..i.saturating_sub(1) {
+            assert!(t[i][j].abs() < 1e-9, "not quasi-triangular at ({i}, {j})");
+        }
+    }
+}
