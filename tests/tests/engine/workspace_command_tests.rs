@@ -8379,3 +8379,70 @@ fn two_sided_inverse_z_transform_sums_back_to_x_of_z_in_the_annulus() {
             .is_error
     );
 }
+
+#[test]
+fn complex_schur_blocks_are_standardised_to_equal_diagonal_entries() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let cases: [Vec<Vec<i64>>; 4] = [
+        vec![vec![0, -1], vec![1, 0]],
+        vec![vec![1, 2], vec![-3, 1]],
+        vec![vec![2, -5], vec![1, -2]],
+        vec![vec![1, 3], vec![-2, 5]],
+    ];
+    for data in cases {
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let out = run(&format!("schur({text})"));
+        let t = matrix(
+            out.strip_prefix("T = ")
+                .unwrap()
+                .split_once("; Q = ")
+                .unwrap()
+                .0,
+        );
+        // Every 2x2 block with complex eigenvalues has equal diagonal entries and off-diagonal entries of opposite sign.
+        for k in 0..t.len() - 1 {
+            if t[k + 1][k].abs() > 1e-9 {
+                assert!(
+                    (t[k][k] - t[k + 1][k + 1]).abs() < 1e-7,
+                    "unequal diagonal: {out}"
+                );
+                assert!(
+                    t[k][k + 1] * t[k + 1][k] < 0.0,
+                    "same-sign off-diagonal: {out}"
+                );
+            }
+        }
+    }
+    // The 2x2 with eigenvalues 1 +- i sqrt(6) has its complex block standardised.
+    let out = run("schur([[1,2],[-3,1]])");
+    let t = matrix(
+        out.strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap()
+            .0,
+    );
+    assert!(
+        (t[0][0] - 1.0).abs() < 1e-9 && (t[1][1] - 1.0).abs() < 1e-9,
+        "{out}"
+    );
+}
