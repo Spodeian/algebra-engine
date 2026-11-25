@@ -8670,6 +8670,7 @@ fn ordered_schur_puts_real_eigenvalues_in_decreasing_order_with_the_same_decompo
 
 #[test]
 fn ordered_schur_selection_puts_the_chosen_sign_first() {
+    type Sign = fn(f64) -> bool;
     fn matrix(text: &str) -> Vec<Vec<f64>> {
         text.trim()
             .trim_start_matches('[')
@@ -8713,8 +8714,7 @@ fn ordered_schur_selection_puts_the_chosen_sign_first() {
             .map(|r| r.iter().map(|v| *v as f64).collect())
             .collect();
         let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
-        let modes: [(&str, fn(f64) -> bool); 2] =
-            [("negative", |v| v < 0.0), ("positive", |v| v > 0.0)];
+        let modes: [(&str, Sign); 2] = [("negative", |v| v < 0.0), ("positive", |v| v > 0.0)];
         for (mode, chosen) in modes {
             let out = run(&format!("ordered_schur({text}, {mode})"));
             let (t_text, q_text) = out
