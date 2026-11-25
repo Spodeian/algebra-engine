@@ -103,26 +103,29 @@ fn francis_step(h: &mut M, q: &mut M, l: usize, hi: usize, exceptional: bool) {
     }
 }
 
-/// A 2x2 diagonal block with real eigenvalues is rotated to upper triangular form; complex blocks are left alone.
+/// A 2x2 diagonal block is rotated to upper triangular form (real eigenvalues) or to equal diagonal entries (complex pair).
 fn standardise_2x2(h: &mut M, q: &mut M, p: usize) {
     let n = h.len();
     let (a, b, c, d) = (h[p][p], h[p][p + 1], h[p + 1][p], h[p + 1][p + 1]);
     let half = (a - d) / 2.0;
     let disc = half * half + b * c;
-    if disc < 0.0 {
-        return;
-    }
-    let lambda = (a + d) / 2.0 + disc.sqrt();
-    let (v0, v1) = if (lambda - a).abs() + b.abs() >= (lambda - d).abs() + c.abs() {
-        (b, lambda - a)
+    let (cs, sn) = if disc < 0.0 {
+        // Complex pair: the rotation with (a' - d') = (a - d) cos 2t + (b + c) sin 2t = 0 gives equal diagonal entries.
+        let theta = (-(a - d)).atan2(b + c) / 2.0;
+        (theta.cos(), theta.sin())
     } else {
-        (lambda - d, c)
+        let lambda = (a + d) / 2.0 + disc.sqrt();
+        let (v0, v1) = if (lambda - a).abs() + b.abs() >= (lambda - d).abs() + c.abs() {
+            (b, lambda - a)
+        } else {
+            (lambda - d, c)
+        };
+        let r = v0.hypot(v1);
+        if r == 0.0 {
+            return;
+        }
+        (v0 / r, v1 / r)
     };
-    let r = v0.hypot(v1);
-    if r == 0.0 {
-        return;
-    }
-    let (cs, sn) = (v0 / r, v1 / r);
     // Right multiplication by G = [[cs, -sn], [sn, cs]] on columns p and p+1.
     for row in h.iter_mut() {
         let (x, y) = (row[p], row[p + 1]);
@@ -140,7 +143,9 @@ fn standardise_2x2(h: &mut M, q: &mut M, p: usize) {
         h[p][col] = cs * x + sn * y;
         h[p + 1][col] = -sn * x + cs * y;
     }
-    h[p + 1][p] = 0.0;
+    if disc >= 0.0 {
+        h[p + 1][p] = 0.0;
+    }
 }
 
 /// The real Schur form of a square matrix: `(T, Q)` with `A = Q T Q^T`.
