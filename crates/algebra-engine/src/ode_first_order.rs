@@ -376,7 +376,118 @@ fn riccati(
             }
         }
     }
+    // Quadratic particular solutions y = a x^2 + b x + c for a constant q2 = k, q1 = p1 x + p0 and q0 = sum r_j x^j (j <= 4).
+    // Matching powers of x in y' = q0 + q1 y + k y^2 gives
+    //   x^4: -r4 - k a^2 = 0,   x^3: -r3 - p1 a - 2 k a b = 0,   x^2: -r2 - p1 b - p0 a - k (b^2 + 2 a c) = 0,
+    //   x^1: 2a - r1 - p1 c - p0 b - 2 k b c = 0,   x^0: b - r0 - p0 c - k c^2 = 0.
+    // a comes from x^4, b from x^3, c from x^1 (or from x^0 when its coefficient vanishes); the residual check verifies the rest.
+    let mut partial: Option<String> = None;
+    if !symbols_of(session, &q2)?.contains(x) {
+        let q0_fifth = nth_derivative(session, &q0, x, 5)?;
+        let q1_second = nth_derivative(session, &q1, x, 2)?;
+        let vanishes = |session: &mut UraeSession, text: &str| -> bool {
+            session
+                .eval(&format!("simplify({text})"))
+                .map(|v| v.trim() == "0")
+                .unwrap_or(false)
+        };
+        if vanishes(session, &q0_fifth) && vanishes(session, &q1_second) {
+            let p0 = substitute(session, &q1, x, "0")?;
+            let q1_first = nth_derivative(session, &q1, x, 1)?;
+            let p1 = substitute(session, &q1_first, x, "0")?;
+            let r0 = taylor_coefficient(session, &q0, x, 0)?;
+            let r1 = taylor_coefficient(session, &q0, x, 1)?;
+            let r3 = taylor_coefficient(session, &q0, x, 3)?;
+            let r4 = taylor_coefficient(session, &q0, x, 4)?;
+            let roots_a = session
+                .eval(&format!("solve(-({r4}) - ({q2})*c^2 = 0, c)"))
+                .ok()?;
+            let list_a = roots_a
+                .split(": [")
+                .nth(1)
+                .and_then(|r| r.strip_suffix(']'));
+            for root_a in list_a.unwrap_or("").split(", ") {
+                let a = root_a.trim();
+                if a.is_empty() || a.contains("RootOf") || a.contains('i') {
+                    continue;
+                }
+                let Ok(b) = session.eval(&format!(
+                    "simplify((-({r3}) - ({p1})*({a})) / (2*({q2})*({a})))"
+                )) else {
+                    continue;
+                };
+                let Ok(denominator) = session.eval(&format!("simplify(({p1}) + 2*({q2})*({b}))"))
+                else {
+                    continue;
+                };
+                let c_candidates: Vec<String> = if denominator.trim() == "0" {
+                    // x^1 gives no information about c here; take c from x^0.
+                    let Ok(roots_c) = session.eval(&format!(
+                        "solve(({b}) - ({r0}) - ({p0})*c - ({q2})*c^2 = 0, c)"
+                    )) else {
+                        continue;
+                    };
+                    roots_c
+                        .split(": [")
+                        .nth(1)
+                        .and_then(|r| r.strip_suffix(']'))
+                        .unwrap_or("")
+                        .split(", ")
+                        .map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty() && !t.contains("RootOf") && !t.contains('i'))
+                        .collect()
+                } else {
+                    match session.eval(&format!(
+                        "simplify((2*({a}) - ({r1}) - ({p0})*({b})) / (({p1}) + 2*({q2})*({b})))"
+                    )) {
+                        Ok(c) => vec![c],
+                        Err(_) => continue,
+                    }
+                };
+                for c in c_candidates {
+                    let Ok(particular) =
+                        session.eval(&format!("simplify(({a})*{x}^2 + ({b})*{x} + ({c}))"))
+                    else {
+                        continue;
+                    };
+                    let check = residual_of(session, &particular)?;
+                    if !residual_vanishes(session, &check, x)? {
+                        continue;
+                    }
+                    if let Some(solution) = riccati_finish(session, &particular, &q1, &q2) {
+                        return Some(solution);
+                    }
+                    // The equation for the constant is not elementary here: keep the first verified particular solution.
+                    partial.get_or_insert(particular);
+                }
+            }
+        }
+        if let Some(particular) = partial {
+            return Some(Ok(format!(
+                "particular solution y = {particular} (Riccati equation; the general solution needs the integral of the linear equation for the constant, which has no elementary form)"
+            )));
+        }
+    }
     None
+}
+
+/// The n-th derivative of `text` with respect to `x`.
+fn nth_derivative(session: &mut UraeSession, text: &str, x: &str, order: u32) -> Option<String> {
+    let mut current = text.to_string();
+    for _ in 0..order {
+        current = session.eval(&format!("diff(({current}), {x})")).ok()?;
+    }
+    Some(current)
+}
+
+/// The coefficient of x^j in the Taylor expansion of `text` at x = 0.
+fn taylor_coefficient(session: &mut UraeSession, text: &str, x: &str, j: u32) -> Option<String> {
+    let derivative = nth_derivative(session, text, x, j)?;
+    let value = substitute(session, &derivative, x, "0")?;
+    let factorial: u64 = (1..=j as u64).product();
+    session
+        .eval(&format!("simplify(({value})/{factorial})"))
+        .ok()
 }
 
 /// Solve the linear equation for the constant of a Riccati equation given one particular solution, and assemble the solution.

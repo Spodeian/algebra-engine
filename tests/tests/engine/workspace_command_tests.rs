@@ -8962,3 +8962,47 @@ fn riccati_equations_with_linear_polynomial_particular_solutions_satisfy_the_equ
         }
     }
 }
+
+#[test]
+fn riccati_quadratic_particular_solutions_are_found_and_verified() {
+    // y' = y^2 - x^4 - 2x^2 + 2x - 1 has the particular solution y = x^2 + 1. Its general solution needs the integral of
+    // exp(2x^3/3 + 2x), which is not elementary, so the answer is the verified particular solution.
+    let out = run("dsolve(y' = y^2 - x^4 - 2*x^2 + 2*x - 1)");
+    assert!(out.contains("particular solution y = "), "{out}");
+    let text = out
+        .split("particular solution y = ")
+        .nth(1)
+        .unwrap()
+        .split(" (Riccati")
+        .next()
+        .unwrap()
+        .to_string();
+    let value = |x: f64| -> f64 {
+        let chars: Vec<char> = text.replace('\u{b7}', "*").chars().collect();
+        let mut expr = String::new();
+        for (i, ch) in chars.iter().enumerate() {
+            let alone = (i == 0 || !chars[i - 1].is_alphanumeric())
+                && chars.get(i + 1).is_none_or(|n| !n.is_alphanumeric());
+            if *ch == 'x' && alone {
+                expr.push_str(&format!("({x:?})"));
+            } else {
+                expr.push(*ch);
+            }
+        }
+        run(&format!("evalf({expr})"))
+            .trim()
+            .parse()
+            .unwrap_or_else(|_| panic!("{text}"))
+    };
+    let rhs = |x: f64, y: f64| y * y - x.powi(4) - 2.0 * x * x + 2.0 * x - 1.0;
+    for x in [-0.7, 0.2, 0.9, 1.4] {
+        let h = 1e-5;
+        let derivative = (value(x + h) - value(x - h)) / (2.0 * h);
+        let y = value(x);
+        assert!(
+            (derivative - rhs(x, y)).abs() < 1e-6 * (1.0 + y.abs()),
+            "x = {x}: y' = {derivative}, f = {}: {out}",
+            rhs(x, y)
+        );
+    }
+}

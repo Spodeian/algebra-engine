@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 ### Added
 
+- `dsolve` finds Riccati particular solutions of degree two and reports them when the general solution is not elementary.
 - `dsolve` solves Riccati equations with linear polynomial particular solutions y = a x + b.
 - `ordered_schur(A, mode)`: choose the sign of the eigenvalues that come first (negative or positive).
 - `ordered_schur(A)`: real Schur form with real eigenvalues in decreasing order.
