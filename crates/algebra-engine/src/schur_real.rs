@@ -243,12 +243,17 @@ fn swap_single(t: &mut M, q: &mut M, k: usize) {
 /// Real Schur form with the real eigenvalues (1x1 blocks) in decreasing order down the diagonal. Complex 2x2 blocks keep
 /// their place; only adjacent single blocks are exchanged.
 pub fn decompose_descending(a: &[Vec<f64>]) -> Result<(M, M), String> {
+    decompose_ranked(a, &|v: f64| v)
+}
+
+/// The real Schur form with the real eigenvalues ordered by a rank: a larger rank comes first (so `rank` decides the order).
+pub fn decompose_ranked(a: &[Vec<f64>], rank: &dyn Fn(f64) -> f64) -> Result<(M, M), String> {
     let (mut t, mut q) = decompose(a)?;
     let n = t.len();
     loop {
         let mut swapped = false;
         for k in 0..n.saturating_sub(1) {
-            if is_single(&t, k) && is_single(&t, k + 1) && t[k][k] < t[k + 1][k + 1] {
+            if is_single(&t, k) && is_single(&t, k + 1) && rank(t[k][k]) < rank(t[k + 1][k + 1]) {
                 swap_single(&mut t, &mut q, k);
                 swapped = true;
             }
