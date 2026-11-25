@@ -241,10 +241,16 @@ fn substitute(
     variable: &str,
     value: &str,
 ) -> Option<String> {
+    // The printer writes a middle dot for multiplication, which the parser does not read back: use '*' everywhere.
+    let expression = expression.replace('·', "*");
     let replaced = session
         .eval(&format!("subs(({expression}), {variable} = ({value}))"))
-        .ok()?;
-    session.eval(&format!("simplify({replaced})")).ok()
+        .ok()?
+        .replace('·', "*");
+    session
+        .eval(&format!("simplify({replaced})"))
+        .ok()
+        .map(|text| text.replace('·', "*"))
 }
 
 /// Riccati equations `y' = q0 + q1 y + q2 y^2`: a particular solution `y_p = c x^k` is searched for; then `y = y_p + 1/v` turns
@@ -282,10 +288,17 @@ fn riccati(
             .eval(&format!("simplify(diff({shape}, {x}) - ({rhs}))"))
             .ok()
     };
-    for power in [0i32, 1, -1, 2, -2, 3, -3] {
-        let shape = format!("c*{x}^({power})");
+    let mut shapes: Vec<String> = [0i32, 1, -1, 2, -2, 3, -3]
+        .iter()
+        .map(|power| format!("c*{x}^({power})"))
+        .collect();
+    // Exponential particular solutions c e^(k x), for the exponential forcing of the coefficients.
+    shapes.extend([1i32, -1, 2, -2].iter().map(|k| format!("c*exp({k}*{x})")));
+    for shape in shapes {
         let residual = residual_of(session, &shape)?;
-        let at = substitute(session, &residual, x, "2")?;
+        // Exponential shapes are solved at x = 0, where every e^(kx) is 1 and the coefficients are rational.
+        let point = if shape.contains("exp") { "0" } else { "2" };
+        let at = substitute(session, &residual, x, point)?;
         let Ok(roots) = session.eval(&format!("solve(({at}) = 0, c)")) else {
             continue;
         };
@@ -300,10 +313,19 @@ fn riccati(
             let particular = substitute(session, &shape, "c", root)?;
             let check = residual_of(session, &particular)?;
             let mut vanishes = true;
-            for xv in ["3", "5", "7/2"] {
-                if substitute(session, &check, x, xv)?.trim() != "0" {
-                    vanishes = false;
-                    break;
+            for xv in ["1/3", "2/3", "1/2"] {
+                let at_point = substitute(session, &check, x, xv)?;
+                if at_point.trim() == "0" {
+                    continue;
+                }
+                // Exponentials do not simplify to exact zero: accept a residual that is zero to 1e-9 numerically.
+                let numeric = session.eval(&format!("evalf({at_point})")).ok();
+                match numeric.and_then(|v| v.trim().parse::<f64>().ok()) {
+                    Some(value) if value.abs() < 1e-9 => {}
+                    _ => {
+                        vanishes = false;
+                        break;
+                    }
                 }
             }
             if !vanishes {
