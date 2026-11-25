@@ -341,6 +341,7 @@ pub fn run(session: &mut UraeSession, input: &str) -> Option<Result<String, Stri
         "jordan_form",
         "hessenberg",
         "sqrtm",
+        "schur",
         "matrix_sqrt",
         "logm",
         "matrix_log",
@@ -381,6 +382,7 @@ fn evaluate(
         "lr_test" | "likelihood_ratio_test" => likelihood_ratio(session, a, args),
         "hessenberg" => hessenberg(session, a),
         "sqrtm" | "matrix_sqrt" => sqrtm(session, a),
+        "schur" => schur(a),
         "logm" | "matrix_log" => logm(session, a),
         "rowspace" | "row_space" => {
             let (reduced, pivots) = rref(a);
@@ -1394,4 +1396,39 @@ fn logm(session: &mut UraeSession, a: &Matrix) -> Result<String, String> {
         })
         .collect();
     Ok(format!("[ {} ]", rows.join(" ; ")))
+}
+
+fn clean_float(v: f64) -> String {
+    if v.abs() < 5e-11 {
+        return "0".into();
+    }
+    let t = format!("{v:.10}");
+    t.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+fn float_matrix(m: &[Vec<f64>]) -> String {
+    let rows: Vec<String> = m
+        .iter()
+        .map(|r| {
+            r.iter()
+                .map(|v| clean_float(*v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .collect();
+    format!("[ {} ]", rows.join(" ; "))
+}
+
+/// : the real Schur form T and the orthogonal Q with A = Q T Q^T, as decimals (complex pairs are 2x2 blocks).
+fn schur(a: &Matrix) -> Result<String, String> {
+    let float: Vec<Vec<f64>> = a
+        .iter()
+        .map(|r| r.iter().map(|q| q.to_f64().unwrap_or(f64::NAN)).collect())
+        .collect();
+    let (t, q) = crate::schur_real::decompose(&float)?;
+    Ok(format!(
+        "T = {}; Q = {}",
+        float_matrix(&t),
+        float_matrix(&q)
+    ))
 }
