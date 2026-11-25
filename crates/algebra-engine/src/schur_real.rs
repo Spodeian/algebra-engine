@@ -204,3 +204,58 @@ pub fn decompose(a: &[Vec<f64>]) -> Result<(M, M), String> {
     }
     Ok((h, q))
 }
+
+/// A 1x1 diagonal block at `j`: no nonzero subdiagonal entry on either side of it.
+fn is_single(t: &M, j: usize) -> bool {
+    let n = t.len();
+    (j == 0 || t[j][j - 1] == 0.0) && (j + 1 >= n || t[j + 1][j] == 0.0)
+}
+
+/// Swap the adjacent 1x1 blocks at `k` and `k + 1` by a plane rotation whose first column is the eigenvector of the second
+/// eigenvalue: the block [[a, b], [0, d]] becomes [[d, *], [0, a]].
+fn swap_single(t: &mut M, q: &mut M, k: usize) {
+    let n = t.len();
+    let (a, b, d) = (t[k][k], t[k][k + 1], t[k + 1][k + 1]);
+    let (v0, v1) = (b, d - a);
+    let r = v0.hypot(v1);
+    if r == 0.0 {
+        return;
+    }
+    let (cs, sn) = (v0 / r, v1 / r);
+    for row in t.iter_mut() {
+        let (x, y) = (row[k], row[k + 1]);
+        row[k] = cs * x + sn * y;
+        row[k + 1] = -sn * x + cs * y;
+    }
+    for row in q.iter_mut() {
+        let (x, y) = (row[k], row[k + 1]);
+        row[k] = cs * x + sn * y;
+        row[k + 1] = -sn * x + cs * y;
+    }
+    for col in 0..n {
+        let (x, y) = (t[k][col], t[k + 1][col]);
+        t[k][col] = cs * x + sn * y;
+        t[k + 1][col] = -sn * x + cs * y;
+    }
+    t[k + 1][k] = 0.0;
+}
+
+/// Real Schur form with the real eigenvalues (1x1 blocks) in decreasing order down the diagonal. Complex 2x2 blocks keep
+/// their place; only adjacent single blocks are exchanged.
+pub fn decompose_descending(a: &[Vec<f64>]) -> Result<(M, M), String> {
+    let (mut t, mut q) = decompose(a)?;
+    let n = t.len();
+    loop {
+        let mut swapped = false;
+        for k in 0..n.saturating_sub(1) {
+            if is_single(&t, k) && is_single(&t, k + 1) && t[k][k] < t[k + 1][k + 1] {
+                swap_single(&mut t, &mut q, k);
+                swapped = true;
+            }
+        }
+        if !swapped {
+            break;
+        }
+    }
+    Ok((t, q))
+}

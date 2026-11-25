@@ -342,6 +342,7 @@ pub fn run(session: &mut UraeSession, input: &str) -> Option<Result<String, Stri
         "hessenberg",
         "sqrtm",
         "schur",
+        "ordered_schur",
         "matrix_sqrt",
         "logm",
         "matrix_log",
@@ -383,6 +384,7 @@ fn evaluate(
         "hessenberg" => hessenberg(session, a),
         "sqrtm" | "matrix_sqrt" => sqrtm(session, a),
         "schur" => schur(a),
+        "ordered_schur" => ordered_schur(a),
         "logm" | "matrix_log" => logm(session, a),
         "rowspace" | "row_space" => {
             let (reduced, pivots) = rref(a);
@@ -1426,6 +1428,20 @@ fn schur(a: &Matrix) -> Result<String, String> {
         .map(|r| r.iter().map(|q| q.to_f64().unwrap_or(f64::NAN)).collect())
         .collect();
     let (t, q) = crate::schur_real::decompose(&float)?;
+    Ok(format!(
+        "T = {}; Q = {}",
+        float_matrix(&t),
+        float_matrix(&q)
+    ))
+}
+
+/// `ordered_schur(A)`: the real Schur form with the real eigenvalues in decreasing order along the diagonal.
+fn ordered_schur(a: &Matrix) -> Result<String, String> {
+    let float: Vec<Vec<f64>> = a
+        .iter()
+        .map(|r| r.iter().map(|q| q.to_f64().unwrap_or(f64::NAN)).collect())
+        .collect();
+    let (t, q) = crate::schur_real::decompose_descending(&float)?;
     Ok(format!(
         "T = {}; Q = {}",
         float_matrix(&t),

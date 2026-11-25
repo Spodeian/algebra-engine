@@ -8650,3 +8650,84 @@ fn two_sided_inverse_z_transform_with_complex_poles_sums_back_to_x_of_z() {
             .is_error
     );
 }
+
+#[test]
+fn ordered_schur_puts_real_eigenvalues_in_decreasing_order_with_the_same_decomposition() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x0DE4_EDC4_0A11_1E5Au64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    for round in 0..20 {
+        let n = 2 + round % 4;
+        // Symmetric integer matrices have only real eigenvalues, so every block is 1x1.
+        let mut data = vec![vec![0i64; n]; n];
+        for i in 0..n {
+            for j in i..n {
+                let v = next(11);
+                data[i][j] = v;
+                data[j][i] = v;
+            }
+        }
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let out = run(&format!("ordered_schur({text})"));
+        let (t_text, q_text) = out
+            .strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap();
+        let (t, q) = (matrix(t_text), matrix(q_text));
+        let a: Vec<Vec<f64>> = data
+            .iter()
+            .map(|r| r.iter().map(|v| *v as f64).collect())
+            .collect();
+        let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+        // Decreasing diagonal.
+        for k in 0..n - 1 {
+            assert!(t[k][k] >= t[k + 1][k + 1] - 1e-7, "not decreasing: {out}");
+        }
+        // Q orthogonal and A = Q T Q^T.
+        for i in 0..n {
+            for j in 0..n {
+                let dot: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+                assert!(
+                    (dot - if i == j { 1.0 } else { 0.0 }).abs() < 1e-7,
+                    "Q not orthogonal: {out}"
+                );
+                let value: f64 = (0..n)
+                    .map(|k| (0..n).map(|l| q[i][k] * t[k][l] * q[j][l]).sum::<f64>())
+                    .sum();
+                assert!(
+                    (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                    "A != Q T Q^T for {text}: {out}"
+                );
+            }
+        }
+        // The diagonal is the eigenvalues: same trace as A, and the same sum of squares as A^2.
+        let trace_a: f64 = (0..n).map(|i| a[i][i]).sum();
+        let trace_t: f64 = (0..n).map(|i| t[i][i]).sum();
+        assert!((trace_a - trace_t).abs() < 1e-6 * scale * n as f64, "{out}");
+    }
+}
