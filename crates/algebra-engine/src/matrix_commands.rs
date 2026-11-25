@@ -1454,9 +1454,26 @@ fn ordered_schur(a: &Matrix, args: &[String]) -> Result<String, String> {
         "positive" => {
             crate::schur_real::decompose_ranked(&float, &|v: f64| if v > 0.0 { 1.0 } else { 0.0 })?
         }
+        other if other.starts_with("above ") || other.starts_with("below ") => {
+            let above = other.starts_with("above ");
+            let text = other.split_once(' ').map(|(_, t)| t).unwrap_or("");
+            let threshold: f64 = text
+                .trim()
+                .parse()
+                .map_err(|_| format!("the threshold {text} is not a number"))?;
+            if above {
+                crate::schur_real::decompose_ranked(&float, &|v: f64| {
+                    if v > threshold { 1.0 } else { 0.0 }
+                })?
+            } else {
+                crate::schur_real::decompose_ranked(&float, &|v: f64| {
+                    if v < threshold { 1.0 } else { 0.0 }
+                })?
+            }
+        }
         other => {
             return Err(format!(
-                "unknown ordering {other}: use descending, negative or positive"
+                "unknown ordering {other}: use descending, negative, positive, or above t / below t"
             ));
         }
     };
