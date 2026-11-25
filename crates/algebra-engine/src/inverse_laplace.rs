@@ -268,8 +268,15 @@ fn invert_mode(
                         magnitude.numer() * magnitude.denom(),
                         magnitude.denom()
                     );
-                    if radius_side.is_some() {
-                        return Err("two-sided inverse Z-transforms with complex poles are not supported yet".into());
+                    // A complex pair has modulus sqrt(r): it is causal inside the radius and anticausal outside it.
+                    if let Some((radius, causal)) = radius_side {
+                        let radius_squared = radius * radius;
+                        if r == radius_squared {
+                            return Err("the radius must not equal the modulus of a pole".into());
+                        }
+                        if (r < radius_squared) != causal {
+                            continue;
+                        }
                     }
                     if z_mode {
                         if hyperbolic {
