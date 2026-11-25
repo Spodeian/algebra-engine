@@ -102,7 +102,7 @@ pub fn invert(
     s_name: &str,
     t_name: &str,
 ) -> Result<String, String> {
-    invert_mode(session, f_text, s_name, t_name, false)
+    invert_mode(session, f_text, s_name, t_name, false, None)
 }
 
 /// With `z_mode` the function is `X(z) / z` and the terms are those of the inverse Z-transform: `A / (z - a)^j` gives
@@ -113,6 +113,7 @@ fn invert_mode(
     s_name: &str,
     t_name: &str,
     z_mode: bool,
+    radius_side: Option<(&Q, bool)>,
 ) -> Result<String, String> {
     // The rational function as numerator / denominator polynomials in s.
     let together = session.eval(&format!("cancel(together({f_text}))"))?;
@@ -201,6 +202,14 @@ fn invert_mode(
                 1 => {
                     let a = -qi.coeffs[0].clone();
                     let big_a = coefficient(0);
+                    if let Some((radius, causal)) = radius_side {
+                        if a.abs() == *radius {
+                            return Err("the radius must not equal the modulus of a pole".into());
+                        }
+                        if (a.abs() < *radius) != causal {
+                            continue;
+                        }
+                    }
                     if big_a.is_zero() {
                         continue;
                     }
@@ -259,6 +268,9 @@ fn invert_mode(
                         magnitude.numer() * magnitude.denom(),
                         magnitude.denom()
                     );
+                    if radius_side.is_some() {
+                        return Err("two-sided inverse Z-transforms with complex poles are not supported yet".into());
+                    }
                     if z_mode {
                         if hyperbolic {
                             return Err("irrational real poles are not supported by the inverse Z-transform yet".into());
@@ -341,14 +353,53 @@ pub fn run_z(session: &mut UraeSession, input: &str) -> Option<Result<String, St
     if left {
         args.pop();
     }
+    // A fourth argument is a radius r: poles inside |z| = r give causal terms, poles outside give anticausal terms.
+    let mut radius: Option<Q> = None;
+    if args.len() == 4 {
+        if left {
+            return Some(Err("choose either left or a radius, not both".into()));
+        }
+        let text = args.pop().unwrap_or_default();
+        match crate::list_utils::rational(session, &text) {
+            Some(r) => radius = Some(r),
+            None => return Some(Err("the radius must be a rational number".into())),
+        }
+    }
     if args.is_empty() || args.len() > 3 {
-        return Some(Err("inverse_ztransform(X, z, n[, left])".into()));
+        return Some(Err("inverse_ztransform(X, z, n[, left | radius])".into()));
     }
     let z_name = args.get(1).cloned().unwrap_or_else(|| "z".into());
     let n_name = args.get(2).cloned().unwrap_or_else(|| "n".into());
     let divided = format!("({})/({z_name})", args[0]);
+    if let Some(r) = radius {
+        if r <= Q::zero() {
+            return Some(Err("the radius must be positive".into()));
+        }
+        let causal = match invert_mode(session, &divided, &z_name, &n_name, true, Some((&r, true)))
+        {
+            Ok(v) => v,
+            Err(e) => return Some(Err(e)),
+        };
+        let anti = match invert_mode(session, &divided, &z_name, &n_name, true, Some((&r, false))) {
+            Ok(v) => v,
+            Err(e) => return Some(Err(e)),
+        };
+        let anti_negated = if anti.trim() == "0" {
+            "0".to_string()
+        } else {
+            match session.eval(&format!("-({anti})")) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            }
+        };
+        return Some(Ok(format!(
+            "Z^-1{{{}}}[{n_name}] = {causal} for {n_name} >= 0; {anti_negated} for {n_name} <= -1 (two-sided, radius {})",
+            args[0],
+            q(&r)
+        )));
+    }
     Some(
-        invert_mode(session, &divided, &z_name, &n_name, true).and_then(|value| {
+        invert_mode(session, &divided, &z_name, &n_name, true, None).and_then(|value| {
             if !left {
                 return Ok(format!("Z^-1{{{}}}[{n_name}] = {value}", args[0]));
             }
