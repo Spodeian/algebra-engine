@@ -312,40 +312,106 @@ fn riccati(
             }
             let particular = substitute(session, &shape, "c", root)?;
             let check = residual_of(session, &particular)?;
-            let mut vanishes = true;
-            for xv in ["1/3", "2/3", "1/2"] {
-                let at_point = substitute(session, &check, x, xv)?;
-                if at_point.trim() == "0" {
+            if !residual_vanishes(session, &check, x)? {
+                continue;
+            }
+            if let Some(solution) = riccati_finish(session, &particular, &q1, &q2) {
+                return Some(solution);
+            }
+        }
+    }
+    // Linear polynomial particular solutions y = a x + b, for a constant q2, q1 of degree at most 1 and q0 of degree at most 2.
+    // Matching powers of x in y' = q0 + q1 y + q2 y^2 gives, with q1 = p1 x + p0 and q0 = r2 x^2 + r1 x + r0:
+    //   -r2 - p1 a - q2 a^2 = 0,   -r1 - p1 b - p0 a - 2 q2 a b = 0,   a - r0 - p0 b - q2 b^2 = 0.
+    // The first is quadratic in a, the second fixes b; the residual check verifies the third.
+    if !symbols_of(session, &q2)?.contains(x) {
+        let derivative = |session: &mut UraeSession, text: &str, order: u32| -> Option<String> {
+            let mut current = text.to_string();
+            for _ in 0..order {
+                current = session.eval(&format!("diff(({current}), {x})")).ok()?;
+            }
+            Some(current)
+        };
+        let q1_second = derivative(session, &q1, 2)?;
+        let q0_third = derivative(session, &q0, 3)?;
+        let zero = |session: &mut UraeSession, text: &str| -> bool {
+            session
+                .eval(&format!("simplify({text})"))
+                .map(|v| v.trim() == "0")
+                .unwrap_or(false)
+        };
+        if zero(session, &q1_second) && zero(session, &q0_third) {
+            let p0 = substitute(session, &q1, x, "0")?;
+            let q1_first = derivative(session, &q1, 1)?;
+            let p1 = substitute(session, &q1_first, x, "0")?;
+            let q0_first = derivative(session, &q0, 1)?;
+            let r1 = substitute(session, &q0_first, x, "0")?;
+            let q0_second = derivative(session, &q0, 2)?;
+            let r2_value = substitute(session, &q0_second, x, "0")?;
+            let r2 = session.eval(&format!("simplify(({r2_value})/2)")).ok()?;
+            let roots = session
+                .eval(&format!("solve(-({r2}) - ({p1})*c - ({q2})*c^2 = 0, c)"))
+                .ok()?;
+            let list = roots.split(": [").nth(1).and_then(|r| r.strip_suffix(']'));
+            for root in list.unwrap_or("").split(", ") {
+                let a = root.trim();
+                if a.is_empty() || a.contains("RootOf") || a.contains('i') {
                     continue;
                 }
-                // Exponentials do not simplify to exact zero: accept a residual that is zero to 1e-9 numerically.
-                let numeric = session.eval(&format!("evalf({at_point})")).ok();
-                match numeric.and_then(|v| v.trim().parse::<f64>().ok()) {
-                    Some(value) if value.abs() < 1e-9 => {}
-                    _ => {
-                        vanishes = false;
-                        break;
-                    }
+                let Ok(b) = session.eval(&format!(
+                    "simplify((({r1}) + ({p0})*({a})) / (-({p1}) - 2*({q2})*({a})))"
+                )) else {
+                    continue;
+                };
+                let Ok(particular) = session.eval(&format!("simplify(({a})*{x} + ({b}))")) else {
+                    continue;
+                };
+                let check = residual_of(session, &particular)?;
+                if !residual_vanishes(session, &check, x)? {
+                    continue;
+                }
+                if let Some(solution) = riccati_finish(session, &particular, &q1, &q2) {
+                    return Some(solution);
                 }
             }
-            if !vanishes {
-                continue;
-            }
-            let coefficient = session
-                .eval(&format!("simplify(({q1}) + 2*({q2})*({particular}))"))
-                .ok()?;
-            let linear = session
-                .eval(&format!("dsolve(y' = -({coefficient})*y - ({q2}))"))
-                .ok()?;
-            let Some(v) = linear.strip_prefix("y(x) = ") else {
-                continue;
-            };
-            return Some(Ok(format!(
-                "y(x) = {particular} + 1/({v})  (Riccati equation; particular solution {particular})"
-            )));
         }
     }
     None
+}
+
+/// Solve the linear equation for the constant of a Riccati equation given one particular solution, and assemble the solution.
+fn riccati_finish(
+    session: &mut UraeSession,
+    particular: &str,
+    q1: &str,
+    q2: &str,
+) -> Option<Result<String, String>> {
+    let coefficient = session
+        .eval(&format!("simplify(({q1}) + 2*({q2})*({particular}))"))
+        .ok()?;
+    let linear = session
+        .eval(&format!("dsolve(y' = -({coefficient})*y - ({q2}))"))
+        .ok()?;
+    let v = linear.strip_prefix("y(x) = ")?;
+    Some(Ok(format!(
+        "y(x) = {particular} + 1/({v})  (Riccati equation; particular solution {particular})"
+    )))
+}
+
+/// Whether a residual vanishes at three sample points: exactly, or numerically to 1e-9 (exponentials do not simplify to zero).
+fn residual_vanishes(session: &mut UraeSession, check: &str, x: &str) -> Option<bool> {
+    for xv in ["1/3", "2/3", "1/2"] {
+        let at_point = substitute(session, check, x, xv)?;
+        if at_point.trim() == "0" {
+            continue;
+        }
+        let numeric = session.eval(&format!("evalf({at_point})")).ok();
+        match numeric.and_then(|v| v.trim().parse::<f64>().ok()) {
+            Some(value) if value.abs() < 1e-9 => {}
+            _ => return Some(false),
+        }
+    }
+    Some(true)
 }
 
 /// d'Alembert (Lagrange) equations `y = x F(y') + G(y')` with `F(p) != p`: differentiating and taking `p` as the independent

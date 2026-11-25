@@ -8903,3 +8903,62 @@ fn ordered_schur_threshold_puts_eigenvalues_above_or_below_the_threshold_first()
             .is_error
     );
 }
+
+#[test]
+fn riccati_equations_with_linear_polynomial_particular_solutions_satisfy_the_equation() {
+    // y' = (y - x)^2 has y_p = x + 1; y' = (y - 2x)^2 + 1 has y_p = 2x + 1; y' = 2y^2 - 4xy + 2x^2 - 1 has y_p = x + 1.
+    type Rhs = fn(f64, f64) -> f64;
+    let cases: [(&str, Rhs); 3] = [
+        ("y' = (y - x)^2", |x, y| (y - x) * (y - x)),
+        ("y' = (y - 2*x)^2 + 1", |x, y| {
+            (y - 2.0 * x) * (y - 2.0 * x) + 1.0
+        }),
+        ("y' = 2*y^2 - 4*x*y + 2*x^2 - 1", |x, y| {
+            2.0 * y * y - 4.0 * x * y + 2.0 * x * x - 1.0
+        }),
+    ];
+    for (equation, rhs) in cases {
+        let out = run(&format!("dsolve({equation})"));
+        assert!(out.contains("Riccati"), "{equation}: {out}");
+        let solution = out
+            .strip_prefix("y(x) = ")
+            .unwrap()
+            .split("  (Riccati")
+            .next()
+            .unwrap()
+            .to_string();
+        let value = |x: f64, c: f64| -> f64 {
+            let chars: Vec<char> = solution
+                .replace('\u{b7}', "*")
+                .replace("C1", &format!("({c:?})"))
+                .chars()
+                .collect();
+            let mut text = String::new();
+            for (i, ch) in chars.iter().enumerate() {
+                let alone = (i == 0 || !chars[i - 1].is_alphanumeric())
+                    && chars.get(i + 1).is_none_or(|n| !n.is_alphanumeric());
+                if *ch == 'x' && alone {
+                    text.push_str(&format!("({x:?})"));
+                } else {
+                    text.push(*ch);
+                }
+            }
+            run(&format!("evalf({text})"))
+                .trim()
+                .parse()
+                .unwrap_or_else(|_| panic!("{solution}"))
+        };
+        for c in [0.37, 9.9] {
+            for x in [-0.8, 0.3, 0.9] {
+                let h = 1e-5;
+                let derivative = (value(x + h, c) - value(x - h, c)) / (2.0 * h);
+                let y = value(x, c);
+                assert!(
+                    (derivative - rhs(x, y)).abs() < 1e-4 * (1.0 + y.abs().powi(2)),
+                    "{equation}: x = {x}, c = {c}: y' = {derivative}, f = {}: {out}",
+                    rhs(x, y)
+                );
+            }
+        }
+    }
+}
