@@ -8528,6 +8528,66 @@ fn real_schur_identities_hold_at_forty_by_forty() {
 }
 
 #[test]
+fn riccati_equations_with_exponential_particular_solutions_satisfy_the_equation() {
+    // y' = y^2 - 2 e^x y + e^x + e^(2x) has y_p = e^x, and the linear part for the constant has no y-coefficient:
+    // y = e^x + 1 / (C - x). Similarly y' = y^2 - 2 e^(2x) y + 2 e^(2x) + e^(4x) has y_p = e^(2x) (the y-coefficient cancels, q1 + 2 y_p = 0, so the constant solves v' = -1).
+    type Rhs = fn(f64, f64) -> f64;
+    let cases: [(&str, Rhs); 2] = [
+        ("y' = y^2 - 2*exp(x)*y + exp(x) + exp(2*x)", |x, y| {
+            y * y - 2.0 * x.exp() * y + x.exp() + (2.0 * x).exp()
+        }),
+        ("y' = y^2 - 2*exp(2*x)*y + 2*exp(2*x) + exp(4*x)", |x, y| {
+            y * y - 2.0 * (2.0 * x).exp() * y + 2.0 * (2.0 * x).exp() + (4.0 * x).exp()
+        }),
+    ];
+    for (equation, rhs) in cases {
+        let out = run(&format!("dsolve({equation})"));
+        assert!(out.contains("Riccati"), "{equation}: {out}");
+        let solution = out
+            .strip_prefix("y(x) = ")
+            .unwrap()
+            .split("  (Riccati")
+            .next()
+            .unwrap()
+            .to_string();
+        let value = |x: f64, c: f64| -> f64 {
+            let chars: Vec<char> = solution
+                .replace("C1", &format!("({c:?})"))
+                .chars()
+                .collect();
+            let mut text = String::new();
+            for (i, ch) in chars.iter().enumerate() {
+                let alone = (i == 0 || !chars[i - 1].is_alphanumeric())
+                    && chars.get(i + 1).is_none_or(|n| !n.is_alphanumeric());
+                if *ch == 'x' && alone {
+                    text.push_str(&format!("({x:?})"));
+                } else {
+                    text.push(*ch);
+                }
+            }
+            run(&format!("evalf({text})"))
+                .trim()
+                .parse()
+                .unwrap_or_else(|_| panic!("{solution}"))
+        };
+        for c in [0.37, 9.9] {
+            for x in [-0.8, 0.3, 0.9] {
+                let h = 1e-5;
+                let derivative = (value(x + h, c) - value(x - h, c)) / (2.0 * h);
+                let y = value(x, c);
+                assert!(
+                    (derivative - rhs(x, y)).abs() < 1e-4 * (1.0 + y.abs().powi(2)),
+                    "{equation}: x = {x}, c = {c}: y' = {derivative}, f = {}: {out}",
+                    rhs(x, y)
+                );
+            }
+        }
+    }
+    // Forcing that is not of the shapes searched for is still not claimed.
+    assert!(!run("dsolve(y' = y^2 + sin(x))").contains("Riccati"));
+}
+
+#[test]
 fn two_sided_inverse_z_transform_with_complex_poles_sums_back_to_x_of_z() {
     fn substitute(text: &str, name: &str, value: &str) -> String {
         let chars: Vec<char> = text.replace('\u{b7}', "*").chars().collect();
