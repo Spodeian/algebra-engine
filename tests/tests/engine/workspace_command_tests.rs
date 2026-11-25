@@ -8303,3 +8303,79 @@ fn real_schur_form_is_an_orthogonal_similarity_to_quasi_triangular_form() {
             .is_error
     );
 }
+
+#[test]
+fn two_sided_inverse_z_transform_sums_back_to_x_of_z_in_the_annulus() {
+    // Causal terms for poles inside |z| = r, anticausal terms for poles outside. The Laurent series sum x[n] z^-n over all n
+    // converges to X(z) inside the annulus, which is checked numerically at points in the region of convergence.
+    fn substitute(text: &str, name: &str, value: &str) -> String {
+        let chars: Vec<char> = text.chars().collect();
+        let mut out = String::new();
+        for (i, ch) in chars.iter().enumerate() {
+            let alone = (i == 0 || !chars[i - 1].is_alphanumeric())
+                && chars.get(i + 1).is_none_or(|n| !n.is_alphanumeric());
+            if alone && ch.to_string() == name {
+                out.push_str(&format!("({value})"));
+            } else {
+                out.push(*ch);
+            }
+        }
+        out
+    }
+    let evaluate = |text: &str| -> f64 {
+        run(&format!("evalf({text})"))
+            .trim()
+            .parse()
+            .unwrap_or_else(|_| panic!("{text}"))
+    };
+    // (X(z), radius, a point inside the region of convergence)
+    let cases: [(&str, &str, &str); 4] = [
+        ("z/((z-1)*(z-4))", "2", "2"),
+        ("z/((z-1)*(z-4))", "2.5", "3"),
+        ("z/((z-2)*(z-5))", "3", "3.5"),
+        ("z^2/((z-1)*(z-3)*(z-6))", "2", "1.7"),
+    ];
+    for (x, radius, point) in cases {
+        let out = run(&format!("inverse_ztransform({x}, z, n, {radius})"));
+        let body = out.split("] = ").nth(1).unwrap().to_string();
+        let causal = body.split(" for n >= 0; ").next().unwrap().to_string();
+        let anticausal = body
+            .split(" for n >= 0; ")
+            .nth(1)
+            .unwrap()
+            .split(" for n <= -1")
+            .next()
+            .unwrap()
+            .to_string();
+        let mut total = 0.0;
+        for n in 0..=80i64 {
+            total += evaluate(&substitute(&causal, "n", &n.to_string()))
+                * evaluate(&format!("({point})^({})", -n));
+        }
+        for n in -80..=-1i64 {
+            total += evaluate(&substitute(&anticausal, "n", &n.to_string()))
+                * evaluate(&format!("({point})^({})", -n));
+        }
+        let exact = evaluate(&substitute(x, "z", point));
+        assert!(
+            (total - exact).abs() < 1e-9 * (1.0 + exact.abs()),
+            "{x} radius {radius}: series {total} vs X = {exact}: {out}"
+        );
+    }
+    // A pole exactly on the circle, complex poles, and a non-positive radius are refused.
+    assert!(
+        UraeSession::new()
+            .execute_line("inverse_ztransform(z/((z-1)*(z-4)), z, n, 4)")
+            .is_error
+    );
+    assert!(
+        UraeSession::new()
+            .execute_line("inverse_ztransform(z/(z^2+1), z, n, 2)")
+            .is_error
+    );
+    assert!(
+        UraeSession::new()
+            .execute_line("inverse_ztransform(z/((z-1)*(z-4)), z, n, -2)")
+            .is_error
+    );
+}

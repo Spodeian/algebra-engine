@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 ### Added
 
+- `inverse_ztransform(X, z, n, r)`: two-sided sequences for real poles, split by the radius r.
 - `schur(A)`: real Schur decomposition A = Q T Q^T.
 - `max_weight_matching(edges)`: maximum weight matching of a general graph.
 - `min_cost_flow(arcs, balances)`: minimum cost flow with capacities.
