@@ -8183,3 +8183,123 @@ fn maximum_weight_matching_matches_exhaustive_edge_subsets() {
         "weight 5"
     );
 }
+
+#[test]
+fn real_schur_form_is_an_orthogonal_similarity_to_quasi_triangular_form() {
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x7E57_5C4B_A11A_B1E5u64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    let mut cases: Vec<Vec<Vec<i64>>> = Vec::new();
+    for round in 0..30 {
+        let n = 2 + round % 4;
+        cases.push((0..n).map(|_| (0..n).map(|_| next(9)).collect()).collect());
+    }
+    cases.push(vec![vec![0, -1], vec![1, 0]]);
+    cases.push(vec![vec![1, 2], vec![-3, 1]]);
+    cases.push(vec![vec![2, 1], vec![0, 2]]);
+    cases.push(vec![
+        vec![0, 0, 1, 0],
+        vec![0, 0, 0, 2],
+        vec![-1, 0, 0, 0],
+        vec![0, -3, 0, 0],
+    ]);
+    for data in cases {
+        let n = data.len();
+        let a: Vec<Vec<f64>> = data
+            .iter()
+            .map(|r| r.iter().map(|v| *v as f64).collect())
+            .collect();
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let out = run(&format!("schur({text})"));
+        let (t_text, q_text) = out
+            .strip_prefix("T = ")
+            .unwrap()
+            .split_once("; Q = ")
+            .unwrap();
+        let (t, q) = (matrix(t_text), matrix(q_text));
+        let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+        // Q is orthogonal.
+        for i in 0..n {
+            for j in 0..n {
+                let dot: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+                assert!(
+                    (dot - if i == j { 1.0 } else { 0.0 }).abs() < 1e-7,
+                    "Q not orthogonal: {out}"
+                );
+            }
+        }
+        // A = Q T Q^T.
+        for i in 0..n {
+            for j in 0..n {
+                let value: f64 = (0..n)
+                    .map(|k| (0..n).map(|l| q[i][k] * t[k][l] * q[j][l]).sum::<f64>())
+                    .sum();
+                assert!(
+                    (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                    "A != Q T Q^T for {text}: {out}"
+                );
+            }
+        }
+        // T is quasi upper triangular: nothing below the first subdiagonal, and each nonzero subdiagonal entry starts a
+        // 2x2 block with complex eigenvalues; two such blocks never touch.
+        for i in 0..n {
+            for j in 0..i.saturating_sub(1) {
+                assert!(t[i][j].abs() < 1e-9, "not quasi-triangular: {out}");
+            }
+        }
+        for k in 0..n.saturating_sub(1) {
+            if t[k + 1][k].abs() > 1e-9 {
+                let disc = ((t[k][k] - t[k + 1][k + 1]) / 2.0).powi(2) + t[k][k + 1] * t[k + 1][k];
+                assert!(
+                    disc < 0.0,
+                    "a real eigenvalue pair left in a 2x2 block: {out}"
+                );
+                if k + 2 < n {
+                    assert!(t[k + 2][k + 1].abs() < 1e-9, "adjacent 2x2 blocks: {out}");
+                }
+            }
+        }
+        // The trace is an eigenvalue sum, so it is preserved.
+        let (trace_a, trace_t): (f64, f64) =
+            ((0..n).map(|i| a[i][i]).sum(), (0..n).map(|i| t[i][i]).sum());
+        assert!((trace_a - trace_t).abs() < 1e-6 * scale * n as f64, "{out}");
+    }
+    // Real eigenvalues are triangularised: the 2x2 with eigenvalues 5 and 2 has no subdiagonal left.
+    let triangular = run("schur([[4,1],[2,3]])");
+    let t_text = triangular
+        .strip_prefix("T = ")
+        .unwrap()
+        .split_once("; Q = ")
+        .unwrap()
+        .0;
+    assert!(matrix(t_text)[1][0].abs() < 1e-9, "{triangular}");
+    assert!(
+        UraeSession::new()
+            .execute_line("schur([[1,2,3],[4,5,6]])")
+            .is_error
+    );
+}
