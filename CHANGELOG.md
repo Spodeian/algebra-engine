@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 ### Added
 
+- `ordered_schur(A, mode)`: choose the sign of the eigenvalues that come first (negative or positive).
 - `ordered_schur(A)`: real Schur form with real eigenvalues in decreasing order.
 - `schur(A)`: complex 2x2 blocks in standard form (equal diagonal entries).
 - `dsolve` solves Riccati equations with exponential particular solutions c e^(kx).
