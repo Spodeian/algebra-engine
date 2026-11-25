@@ -384,7 +384,7 @@ fn evaluate(
         "hessenberg" => hessenberg(session, a),
         "sqrtm" | "matrix_sqrt" => sqrtm(session, a),
         "schur" => schur(a),
-        "ordered_schur" => ordered_schur(a),
+        "ordered_schur" => ordered_schur(a, args),
         "logm" | "matrix_log" => logm(session, a),
         "rowspace" | "row_space" => {
             let (reduced, pivots) = rref(a);
@@ -1435,13 +1435,48 @@ fn schur(a: &Matrix) -> Result<String, String> {
     ))
 }
 
-/// `ordered_schur(A)`: the real Schur form with the real eigenvalues in decreasing order along the diagonal.
-fn ordered_schur(a: &Matrix) -> Result<String, String> {
+/// `ordered_schur(A[, mode])`: the real Schur form with the real eigenvalues ordered down the diagonal. The mode is
+/// `descending` (the default), `negative` (negative eigenvalues first) or `positive` (positive eigenvalues first).
+fn ordered_schur(a: &Matrix, args: &[String]) -> Result<String, String> {
     let float: Vec<Vec<f64>> = a
         .iter()
         .map(|r| r.iter().map(|q| q.to_f64().unwrap_or(f64::NAN)).collect())
         .collect();
-    let (t, q) = crate::schur_real::decompose_descending(&float)?;
+    let mode = args
+        .get(1)
+        .map(|m| m.trim().trim_matches('"').to_ascii_lowercase())
+        .unwrap_or_else(|| "descending".into());
+    let (t, q) = match mode.as_str() {
+        "descending" => crate::schur_real::decompose_descending(&float)?,
+        "negative" => {
+            crate::schur_real::decompose_ranked(&float, &|v: f64| if v < 0.0 { 1.0 } else { 0.0 })?
+        }
+        "positive" => {
+            crate::schur_real::decompose_ranked(&float, &|v: f64| if v > 0.0 { 1.0 } else { 0.0 })?
+        }
+        other if other.starts_with("above ") || other.starts_with("below ") => {
+            let above = other.starts_with("above ");
+            let text = other.split_once(' ').map(|(_, t)| t).unwrap_or("");
+            let threshold: f64 = text
+                .trim()
+                .parse()
+                .map_err(|_| format!("the threshold {text} is not a number"))?;
+            if above {
+                crate::schur_real::decompose_ranked(&float, &|v: f64| {
+                    if v > threshold { 1.0 } else { 0.0 }
+                })?
+            } else {
+                crate::schur_real::decompose_ranked(&float, &|v: f64| {
+                    if v < threshold { 1.0 } else { 0.0 }
+                })?
+            }
+        }
+        other => {
+            return Err(format!(
+                "unknown ordering {other}: use descending, negative, positive, or above t / below t"
+            ));
+        }
+    };
     Ok(format!(
         "T = {}; Q = {}",
         float_matrix(&t),

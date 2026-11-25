@@ -8733,6 +8733,178 @@ fn ordered_schur_puts_real_eigenvalues_in_decreasing_order_with_the_same_decompo
 }
 
 #[test]
+fn ordered_schur_selection_puts_the_chosen_sign_first() {
+    type Sign = fn(f64) -> bool;
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x5E1E_C7ED_0DD5_EEDAu64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    for round in 0..20 {
+        let n = 3 + round % 3;
+        let mut data = vec![vec![0i64; n]; n];
+        for i in 0..n {
+            for j in i..n {
+                let v = next(13);
+                data[i][j] = v;
+                data[j][i] = v;
+            }
+        }
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let a: Vec<Vec<f64>> = data
+            .iter()
+            .map(|r| r.iter().map(|v| *v as f64).collect())
+            .collect();
+        let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+        let modes: [(&str, Sign); 2] = [("negative", |v| v < 0.0), ("positive", |v| v > 0.0)];
+        for (mode, chosen) in modes {
+            let out = run(&format!("ordered_schur({text}, {mode})"));
+            let (t_text, q_text) = out
+                .strip_prefix("T = ")
+                .unwrap()
+                .split_once("; Q = ")
+                .unwrap();
+            let (t, q) = (matrix(t_text), matrix(q_text));
+            // Every chosen eigenvalue comes before every other one.
+            let flags: Vec<bool> = (0..n).map(|k| chosen(t[k][k])).collect();
+            let first_other = flags.iter().position(|f| !f).unwrap_or(n);
+            assert!(flags[first_other..].iter().all(|f| !f), "{mode}: {out}");
+            // The decomposition is still an orthogonal similarity.
+            for i in 0..n {
+                for j in 0..n {
+                    let dot: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+                    assert!(
+                        (dot - if i == j { 1.0 } else { 0.0 }).abs() < 1e-7,
+                        "Q not orthogonal: {out}"
+                    );
+                    let value: f64 = (0..n)
+                        .map(|k| (0..n).map(|l| q[i][k] * t[k][l] * q[j][l]).sum::<f64>())
+                        .sum();
+                    assert!(
+                        (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                        "A != Q T Q^T for {text}, {mode}: {out}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        UraeSession::new()
+            .execute_line("ordered_schur([[1,2],[2,1]], sideways)")
+            .is_error
+    );
+}
+
+#[test]
+fn ordered_schur_threshold_puts_eigenvalues_above_or_below_the_threshold_first() {
+    type Chosen = fn(f64, f64) -> bool;
+    fn matrix(text: &str) -> Vec<Vec<f64>> {
+        text.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(';')
+            .map(|row| row.split(',').map(|c| c.trim().parse().unwrap()).collect())
+            .collect()
+    }
+    let mut state = 0x7EED_0B1D_5C0F_F5A7u64;
+    let mut next = move |m: u64| {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        (state % m) as i64 - (m as i64) / 2
+    };
+    for round in 0..20 {
+        let n = 3 + round % 3;
+        let mut data = vec![vec![0i64; n]; n];
+        for i in 0..n {
+            for j in i..n {
+                let v = next(13);
+                data[i][j] = v;
+                data[j][i] = v;
+            }
+        }
+        let text = format!(
+            "[{}]",
+            data.iter()
+                .map(|r| format!(
+                    "[{}]",
+                    r.iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let a: Vec<Vec<f64>> = data
+            .iter()
+            .map(|r| r.iter().map(|v| *v as f64).collect())
+            .collect();
+        let scale = a.iter().flatten().map(|v| v.abs()).fold(1.0, f64::max);
+        let threshold = (round as i64 % 5) - 2;
+        let modes: [(String, Chosen); 2] = [
+            (format!("above {threshold}"), |v, t| v > t),
+            (format!("below {threshold}"), |v, t| v < t),
+        ];
+        for (mode, chosen) in modes {
+            let out = run(&format!("ordered_schur({text}, \"{mode}\")"));
+            let (t_text, q_text) = out
+                .strip_prefix("T = ")
+                .unwrap()
+                .split_once("; Q = ")
+                .unwrap();
+            let (t, q) = (matrix(t_text), matrix(q_text));
+            let flags: Vec<bool> = (0..n).map(|k| chosen(t[k][k], threshold as f64)).collect();
+            let first_other = flags.iter().position(|f| !f).unwrap_or(n);
+            assert!(flags[first_other..].iter().all(|f| !f), "{mode}: {out}");
+            for i in 0..n {
+                for j in 0..n {
+                    let dot: f64 = (0..n).map(|k| q[k][i] * q[k][j]).sum();
+                    assert!(
+                        (dot - if i == j { 1.0 } else { 0.0 }).abs() < 1e-7,
+                        "Q not orthogonal: {out}"
+                    );
+                    let value: f64 = (0..n)
+                        .map(|k| (0..n).map(|l| q[i][k] * t[k][l] * q[j][l]).sum::<f64>())
+                        .sum();
+                    assert!(
+                        (value - a[i][j]).abs() < 1e-6 * scale * n as f64,
+                        "A != Q T Q^T for {text}, {mode}: {out}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        UraeSession::new()
+            .execute_line("ordered_schur([[1,2],[2,1]], \"above x\")")
+            .is_error
+    );
+}
+
+#[test]
 fn riccati_equations_with_linear_polynomial_particular_solutions_satisfy_the_equation() {
     // y' = (y - x)^2 has y_p = x + 1; y' = (y - 2x)^2 + 1 has y_p = 2x + 1; y' = 2y^2 - 4xy + 2x^2 - 1 has y_p = x + 1.
     type Rhs = fn(f64, f64) -> f64;
