@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 - `ordered_schur(A, mode)`: choose the sign of the eigenvalues that come first (negative or positive).
 - `ordered_schur(A)`: real Schur form with real eigenvalues in decreasing order.
+- `inverse_ztransform(X, z, n, r)` handles complex poles in two-sided sequences.
 - `schur(A)`: complex 2x2 blocks in standard form (equal diagonal entries).
 - `dsolve` solves Riccati equations with exponential particular solutions c e^(kx).
 - `inverse_ztransform(X, z, n, r)`: two-sided sequences for real poles, split by the radius r.
