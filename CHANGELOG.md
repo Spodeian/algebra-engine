@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Sema
 
 ### Added
 
+- `inverse_ztransform(X, z, n, r)` handles complex poles in two-sided sequences.
 - `schur(A)`: complex 2x2 blocks in standard form (equal diagonal entries).
 - `inverse_ztransform(X, z, n, r)`: two-sided sequences for real poles, split by the radius r.
 - `schur(A)`: real Schur decomposition A = Q T Q^T.
