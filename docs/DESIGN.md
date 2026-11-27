@@ -252,10 +252,12 @@ specification wave (8.39). Revision 6 (commit `840a4c2`) added differentiation a
 randomness, the remaining domains, and the ways external libraries integrate (8.18 to 8.22). Revision 7 (commit `1c34fad`)
 designed UraeScript, tier B modules in full and memoisation, and traced a worked example through every layer (8.23 to
 8.26). Revision 8 (commit `2371a6b`) made spacing decide implicit multiplication, deprecated the old syntaxes
-behind a converter, and added auditable records and their exports (8.23, 8.27). Revision 9 designs simplification and
-compilation, infinities, branches, assumption reasoning and the website (8.28 to 8.32), fixes ten inconsistencies, and
-adds appendices of types and wire formats (8.43, 8.44). Section 8.45 lists the changes in each revision and why. The section proposes answers to
-the first, third and fourth of the open decisions in section 6. It reuses the specification's names where one exists
+behind a converter, and added auditable records and their exports (8.23, 8.27). Revision 9 (commit `d2e2e1a`) designed
+simplification and compilation, infinities, branches, assumption reasoning and the website (8.28 to 8.32), fixed ten
+inconsistencies, and added appendices of types and wire formats (8.43, 8.44). Revision 10 makes branches always
+parametric with a recorded principal fallback (8.30), and keeps the website's sessions in the user's local storage
+(8.32). Section 8.45 lists the changes in each revision and why. The section proposes answers to all four open
+decisions in section 6. It reuses the specification's names where one exists
 (`ExecutionObjective`, `AccuracyGoal`, `NumericRep`, `RuntimeEnv`, `ScalarRing` and `ContextualAlgebra`,
 certify-or-escalate) and says where it differs.*
 
@@ -359,7 +361,7 @@ revision 4 against R15 to R21; P37 to P42 while testing revision 5 against R22 t
 | P49 | Branch handling is numeric only (`MultiValuedResult` holds `f64` pairs) and the sheet is one session-wide setting (`branch_sheet`). | `branch.rs`, `session.rs` |
 | P50 | Simplification has one objective: e-graph extraction with a single fixed weighting (`AlgebraicCostFunction`: an addition 2, a power 8, a function 10), whatever the result is for. | `simplify/mod.rs` |
 | P51 | Assumptions are predicates consulted by guards; nothing derives facts, narrows domains or feeds them to solvers, methods or precision choices. | `logic.rs` (`AssumptionsContext`) |
-| P52 | The Worker serves static files and one JSON endpoint; there is no query area, no notepad over a shared session, and no way for a session to persist between requests. | `crates/urae-wasm/worker.js` |
+| P52 | The Worker serves static files and one JSON endpoint; the page has no query area, no notepad over a shared session, and keeps no session in the browser between visits. | `crates/urae-wasm/worker.js`, `crates/urae-wasm/public/` |
 
 ### 8.3 Overview
 
@@ -2312,17 +2314,11 @@ and complex infinity (P48), which are different things.
 
 Logarithms, roots, inverse trigonometric functions, Lambert W and algebraic functions have several values. The code
 already has branch-cut geometries, branch selections and multivalued results (`branch.rs`, `f64` only), and a
-session-wide `branch_sheet`. The design gives these a symbolic meaning with three policies.
+session-wide `branch_sheet`.
 
-```rust
-pub enum BranchPolicy {
-    Any,                    // any branch will do: the cheapest consistent choice, recorded
-    Principal,              // the conventional principal branch, by the function's declared convention
-    Parametric,             // introduce a branch parameter so that all branches coexist in one formula
-    Along(PathSpec),        // the branch reached by continuing analytically along a stated path
-    Sheet(i64),             // a stated sheet
-}
-```
+**The rule: branches are always parametric.** A multivalued function always introduces its branch parameter, and
+every branch coexists in the result. A concrete branch is chosen only at a point that needs one. If nothing chose it by
+then, the principal branch is assumed, and the assumption is recorded.
 
 - **The function declares its branch structure.** A function's descriptor (8.12) declares:
   - whether it is multivalued;
@@ -2333,25 +2329,32 @@ pub enum BranchPolicy {
     - `z^(1/n) = |z|^(1/n) exp(i (Arg z + 2 pi j)/n)`, with `j in 0..n-1`;
     - `asin z = (-1)^k Asin z + k pi`;
     - `W_k(z)`.
-- **The policy is a setting.** `Env` carries a default policy, a user can override it per function or per statement
-  (`with branch = parametric`, `with branch log = principal`), and the planner may choose `Any` only when the
-  result does not depend on the choice.
-- **`Any`** is right when every branch gives the same final answer (`|sqrt(z)|^2 = |z|`), or when any root will do (a
-  starting point for a solver). The choice is recorded.
-- **`Principal`** is the usual implied convention. The answer carries the condition "principal branch of `log`" in
-  `holds_when` (8.4), so a reader knows which convention the result rests on.
-- **`Parametric`** is the general case. Each multivalued function introduces a branch parameter (`k in Z`, or
-  `j in 0..n-1`), declared in the answer like a `SolutionSet::Family` parameter (8.4).
-  - The result is one formula, or a `Cases` over parameter ranges, in which every branch coexists.
-  - The branch can be decided later (`with k = 0`, or by continuity along a path), or never.
-  - Simplification (8.28) removes parameters that cancel. A branch-independent result therefore comes out with no
-    parameter left.
+- **Results carry their parameters.**
+  - Each branch parameter (`k in Z`, or `j in 0..n-1`) is declared in the answer like a `SolutionSet::Family`
+    parameter (8.4). The result is one formula, or a `Cases` over parameter ranges.
+  - `solve exp(x) = 2` is `x = log 2 + 2 pi i k` with `k in Z`, and nothing is lost.
+- **Simplification removes parameters that do not matter.** When the branches agree (`exp(log z) = z`,
+  `|sqrt(z)|^2 = |z|`), simplification (8.28) removes the parameter. A branch-independent result therefore needs no
+  choice at all.
+- **Choosing a branch.** A branch can be chosen at any point, or never:
+  - by a value: `with k = 0`, or `with branch log = 1`;
+  - by continuity along a path: `with branch along path(...)`;
+  - by a stated sheet: the session's `branch_sheet` becomes an ordinary scoped setting in `Env` instead of a global
+    one.
+- **Where a branch must be provided** and none was, the principal branch is assumed:
+  - numerical evaluation of an expression that still has a branch parameter;
+  - running a compiled kernel without a value for its branch input;
+  - exporting to a target that has only single-valued functions (Lean's `Complex.log` is the principal logarithm);
+  - an operation whose method needs one concrete function.
+
+  The assumption is never silent. It is a condition "principal branch of `log`" in `holds_when` with origin `Engine`
+  (8.4), and a premise in the record (8.27).
 - **Compiling keeps the parameter.** A parametric formula is simplified, then compiled with the branch parameters as
-  ordinary inputs (8.28.3). One kernel evaluates any branch, and choosing the branch later costs nothing.
-- **Enclosures near cuts.** When an enclosure straddles a branch cut, the value is not continuous across it. The
-  evaluation splits the enclosure along the cut and returns `Cases`, never a ball that pretends to contain both sides.
-- **The session's `branch_sheet`** becomes the `Sheet` policy in `Env`, so it scopes like any other setting instead of
-  being global.
+  ordinary inputs (8.28.3). One kernel evaluates any branch, and the principal default fills an input only when the
+  caller supplies none.
+- **Enclosures near cuts.** When an enclosure of the principal branch straddles its cut, the value is not continuous
+  across it. The evaluation splits the enclosure along the cut and returns `Cases`, never a ball that pretends to
+  contain both sides.
 
 ### 8.31 Assumption reasoning
 
@@ -2437,8 +2440,11 @@ The site has two areas over one session:
 
 #### 8.32.2 Where computation runs
 
-- **In the browser by default.** The engine runs as WebAssembly in a Web Worker (8.33), so typing, sliders and plots
-  never wait on a network, and a user's mathematics stays on their machine.
+- **In the browser.** The site runs locally: the engine runs as WebAssembly in a Web Worker (8.33), so typing,
+  sliders and plots never wait on a network, and a user's mathematics stays on their machine.
+- **Sessions live in the user's local storage.** The notepad, the query history, loaded modules and the result cache
+  persist in the browser's own storage (IndexedDB), in the binary form of 8.12. They are reopened on the next visit and
+  exported or imported as files (`.urae`, binary records). The server never holds a session.
 - **The natural-language dialect** is the rule-based intent parser of spec 45, so it also runs in the browser. An
   optional model-backed parser (the agent, 8.35) can run on the server. Its output is UraeScript shown to the user before
   it runs, and it is untrusted like any agent output.
@@ -2457,11 +2463,12 @@ enclosures arrive as anytime results when the user pauses (8.33).
 
 #### 8.32.4 The server side
 
-- **Stateless requests.** The Worker keeps no session in memory between requests. A request carries its session as the
-  binary form of its environment and modules (8.12, 8.27), or names one held in Cloudflare storage. Which storage (KV,
-  Durable Objects, R2) is an open question (8.42).
+- **The Worker serves the site.** Its main job is the static assets (the page, the WebAssembly engine, styles), which
+  is what `worker.js` and `public/` do today.
+- **Requests are stateless.** Optional server requests (the list in 8.32.2) carry whatever they need in the request
+  itself, in the binary form of 8.12. The Worker stores no sessions and keeps nothing between requests.
 - **Limits and isolation.**
-  - Each request runs under input limits, budgets and memory ceilings (8.35), and tenants have quotas.
+  - Each request runs under input limits, budgets and memory ceilings (8.35), with per-client rate limits.
   - Shared, certified memo packs (8.25) are readable by everyone.
   - One user's results are never visible to another.
 - **Other uses of the Worker** are to be decided (8.42). Candidates: the JSON API for `urae_run`, an embeddable
@@ -3135,12 +3142,13 @@ a cost threshold (8.37.5).
 | One `oo` value everywhere (today) | simple | conflates a limit, a bound, extended-line points and surreal numbers; `oo - oo` has no meaning to give |
 | **Elaboration by position and structure (adopted)** | each meaning has its rules; nothing is silently promoted | the elaborator needs the structure in scope |
 
-#### 8.38.31 Branches (added in revision 9)
+#### 8.38.31 Branches (added in revision 9, revised in revision 10)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | Principal branch only | conventional | loses solutions; answers that need another branch are wrong without warning |
-| **Policies, with a parametric form where all branches coexist (adopted)** | the branch can be chosen later or never; one compiled kernel serves every branch | formulas carry an extra parameter until simplification removes it |
+| A choice of policies (any, principal, parametric) per setting (revision 9) | flexible | the same input could mean different things under different settings |
+| **Always parametric, principal assumed only where a branch must be provided and none was (adopted in revision 10)** | one meaning for every input; no solution is lost; the principal convention appears exactly where it is used, and is recorded | formulas carry an extra parameter until simplification removes it or a choice is made |
 
 #### 8.38.32 Assumption reasoning (added in revision 9)
 
@@ -3155,7 +3163,7 @@ a cost threshold (8.37.5).
 | Option | For | Against |
 | :--- | :--- | :--- |
 | On the server | one engine to operate | latency on every keystroke; user data leaves the machine; server cost grows with users |
-| **In the browser by default, the server on request (adopted)** | interactive; private; the server handles only what needs it | the WebAssembly bundle must stay small enough to load quickly |
+| **Locally in the browser, sessions in local storage, the server only for optional requests (adopted)** | interactive; private; the server handles only what needs it | the WebAssembly bundle must stay small enough to load quickly |
 
 #### 8.38.34 Smaller choices
 
@@ -3191,7 +3199,7 @@ one the design forgot.
 | Caching | the notebook's `LineCache` and `PlotCache`, the VM's `subexpr_cache` | the memoisation layers (8.25) | as cached | 1, 2, 6 |
 | Modules and records | none today | tier B modules (8.24); audit records and exports (8.27) | as recorded | 1, 3, 6, 7 |
 | Branches and infinities | `branch`, `Number::Constant` (`Infinity`, `NegInfinity`, `Undefined`) | branch policies and descriptors (8.30); extended structures and the elaboration of `oo` (8.29) | exact; `Cases` at cuts | 3, 4 |
-| Website | `urae-wasm` (`worker.js`, `public/`) | the query and notepad areas, browser-side computation, stateless server requests (8.32) | as rendered | 7 |
+| Website | `urae-wasm` (`worker.js`, `public/`) | the query and notepad areas, local computation and local storage of sessions, stateless optional server requests (8.32) | as rendered | 7 |
 | Extensions | none today | extension points, tiers A to E, contract and testing kit (8.22) | as declared, weighed by trust | 1, 7 |
 | AI agent | `algebra-advanced::agent` | an untrusted client of the operation API (8.35) | through certification only | 7 |
 | Categorical engine | `cat-core`, `cat-bridge`, `cat-anytime`, `cat-egraph`, `cat-tangent`, `cat-numbers`, `cat-lang` | method-local `CatTerm`; bridge as morphisms; shared types (8.16) | as the method declares | 3 to 5 |
@@ -3387,7 +3395,7 @@ Work:
 - rule termination checks;
 - `known` with certificates;
 - `ExtendedReal`, `ProjectiveReal`, `RiemannSphere` and the elaboration of `oo` by position (8.29);
-- branch descriptors and `BranchPolicy` (8.30);
+- branch descriptors, parametric results and the principal fallback (8.30);
 - the abstract-value lattices and the forward sweep of the reasoner (8.31);
 - `Undefined` split from complex infinity (P48).
 
@@ -3405,7 +3413,8 @@ Exit tests:
 - a looping rule is rejected or confined to the e-graph;
 - `oo` in a limit, a sum bound, `ExtendedReal` and `R` gives a bound, a bound, an element and a diagnostic respectively;
 - `0 * oo` is undefined in `ExtendedReal` and `0` in `ExtendedReal(measure)`;
-- `log(z)` under `Parametric` gives `Log z + 2 pi i k` with `k in Z`, and `exp(log z)` simplifies to `z` with no parameter left;
+- `log(z)` gives `Log z + 2 pi i k` with `k in Z`, and `exp(log z)` simplifies to `z` with no parameter left;
+- evaluating `log(-1)` numerically with no branch chosen gives `i pi` and records the principal-branch condition;
 - `sqrt(x^2)` simplifies to `x` with no condition when `x = y^2` and `y` is real.
 
 Performance gate: typing pass 10% or less of the cost of the operation it serves on the probe workload.
@@ -3515,7 +3524,7 @@ Work:
 - `urae verify`;
 - redacted exports;
 - removal of the converter's old parsers from the default build;
-- the website's query and notepad areas over one session, porting between them, browser-side computation, stateless server requests and tenant isolation (8.32).
+- the website's query and notepad areas over one session, porting between them, local computation, sessions in the browser's local storage, stateless optional server requests (8.32).
 
 Exit tests:
 
@@ -3585,14 +3594,8 @@ Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap wave
   `~` opts out per literal; whether a scope-wide setting is also needed is open.
 - **Rule termination.** A decreasing measure on patterns is sufficient but conservative; some useful rule packs will
   need the `bidirectional` escape. How often that happens should be measured on the existing rule sets.
-- **Server-side session storage.** A session that outlives a request lives in the request itself (the binary form) or
-  in Cloudflare storage. KV, Durable Objects and R2 trade consistency, latency and size differently; which to use is
-  open.
 - **Other uses of the Worker** are to be decided: the JSON API, an embeddable calculator, a package index, record
   sharing and verification.
-- **Default branch policy.** `Principal` matches convention and most users' expectations. `Parametric` is more general
-  but shows parameters people did not ask for. The default proposed is `Principal` for display and `Parametric` inside
-  solving and compilation, to be checked with the usability probes.
 - **Reasoner strength.** Which lattices to build first (sign, interval and integrality are the obvious start), and when
   polyhedral or congruence domains pay for their cost, should be measured on the probe workloads.
 - **WebAssembly extensions on the Worker.** A WebAssembly module cannot embed wasmtime, so in the browser and on the
@@ -3634,7 +3637,7 @@ pub struct NumericPolicy {
     pub reps: RepSet,                // the representations allowed (8.7.2)
     pub max_precision_bits: u32,
     pub rigour: Rigour,              // Required | Preferred | NotRequired
-    pub branch: BranchPolicy,        // 8.30
+    pub branch: BranchChoice,        // 8.30: Unchosen (the default) | Value(i64) | Along(PathSpec)
 }
 pub struct Overrides { pub method: Option<MethodId>, pub precision_bits: Option<u32>,
                        pub structure: Option<StructureId>, pub calculus: Option<CalculusId> }
@@ -3914,7 +3917,7 @@ and when it is an id, and adopted these changes:
 
 Also: requirement R31, problem P47, migration work for records, and the worked example's record (8.26).
 
-**Revision 9** (this text) followed direction on five areas and fixed what a fresh review found:
+**Revision 9** (commit `d2e2e1a`) followed direction on five areas and fixed what a fresh review found:
 
 1. **Simplification is a pseudo no-op (8.28):** a meaning-preserving change of representation toward an objective
    (display, evaluation, canonical, for a following operation, or user-weighted) built from metrics. Canonical forms
@@ -3931,7 +3934,8 @@ Also: requirement R31, problem P47, migration work for records, and the worked e
    budgeted, used to narrow search spaces, start enclosures, choose methods, improve accuracy and avoid branch cuts,
    with every derived fact a premise in the record.
 5. **The website (8.32):** a natural-language query area and a UraeScript notepad over one session, which see each other
-   and port results, computing in the browser by default, with stateless server requests and isolated tenants.
+   and port results, computing in the browser by default, with stateless server requests and isolated tenants
+   (revised in revision 10: computing locally, with sessions in the browser's local storage).
 6. **Ten fixes:**
    - natural language as a dialect (8.13, 8.23.7);
    - one `Trust` vocabulary (8.43);
@@ -3947,3 +3951,15 @@ Also: requirement R31, problem P47, migration work for records, and the worked e
    ranges and the WebAssembly interface (8.44).
 8. **Also:** requirements R32 to R36, problems P48 to P52, five alternatives (8.38.29 to 8.38.33), consolidations and
    open questions.
+
+**Revision 10** (this text) followed two decisions from review:
+
+1. **Branches are always parametric (8.30).** The choice of policies is gone. Every multivalued function introduces its
+   branch parameter, and simplification removes it where the branches agree. A branch is chosen by value, by path or
+   by sheet. Where one must be provided and none was (numerical evaluation, a compiled kernel without its branch input,
+   an export to single-valued functions), the principal branch is assumed, recorded as a condition and a premise. The
+   open question on the default policy is closed, and the alternative is updated (8.38.31).
+2. **The website runs locally (8.32).** Sessions, modules and the cache persist in the browser's local storage
+   (IndexedDB) and move as files. The Worker serves the site and answers only optional, stateless requests. The open
+   question on server-side session storage is closed.
+3. **The status note** now says the section answers all four open decisions of section 6. Revision 5 answered the second.
