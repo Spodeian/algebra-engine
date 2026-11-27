@@ -2,7 +2,8 @@
 
 *Checked 19 Nov 2026 against `dev` after v0.6.0 (unreleased changes are in the changelog). This file describes the architecture as it is built, the invariants the
 code keeps, and how the long-range target in [`specs/ARCHITECTURE_SPEC.md`](specs/ARCHITECTURE_SPEC.md) grows out of it.
-What is planned and in what order is in [`PLANNING.md`](PLANNING.md); what is wrong is in [`LEDGER.md`](LEDGER.md).*
+What is planned and in what order is in [`PLANNING.md`](PLANNING.md); what is wrong is in [`LEDGER.md`](LEDGER.md).
+Sections 1 to 7 describe what is built. Section 8 is a proposal, not a description, and says so at its start.*
 
 ## 1. What URAE is
 
@@ -222,7 +223,7 @@ Design decisions to settle before wave 1 starts: the trait boundary between scal
 numerical `CsrMatrix<f64>` is the generic `CsrMatrix<R>` of the carrier design or a first step toward it (the symbolic
 `sparse::CsrMatrix` and the FEA CSR type already exist separately); how errors and certificates thread through the
 operator traits; and how the executor's `MathOperation` grows to cover composed pipelines without becoming a
-second language.
+second language. Section 8 proposes answers to the last two.
 
 ## 7. Known design debts
 
@@ -233,3 +234,161 @@ second language.
   coefficients beside the symbolic ones, `C5`).
 - Frontend coverage of the engine is uneven; the notebook is far ahead of the LSP's completion catalogue (`C15`).
 - Documentation numbers (test counts, line counts) drift; the ledger and this file avoid them where they can.
+
+## 8. Proposal: one operation model for every calling style
+
+*Status: proposed, revision 1 (27 Nov 2026). Nothing in this section is built. It answers two of the open decisions
+in section 6: how errors and certificates thread through the operator traits, how `MathOperation` grows without
+becoming a second language, and where mutation and memory reclamation live.*
+
+### 8.1 Problems this addresses
+
+Each item below was checked against `dev` at commit `1dfd2d4`.
+
+| # | Observation | Where |
+| :--- | :--- | :--- |
+| P1 | Every graph parameter is `&ExprGraph` (668 sites, no `&mut ExprGraph`), because interning works through locks inside the graph. A signature does not say whether an operation adds nodes. | `algebra-core/src/graph.rs` |
+| P2 | `ExprGraph::get` returns a clone of the node; a clone allocates when the node owns heap data (a spilled `SmallVec`, a `BigInteger`, a `Matrix` `Vec`). Every node is stored twice, in the `Vec` and as the key of the deduplication map. | `graph.rs` (`get`, `intern`) |
+| P3 | The graph only grows. The notebook's graph is created once and never reset, and every re-evaluation adds to it. | `urae-notebook/src/notebook/mod.rs` |
+| P4 | Variations are method-name suffixes (`diff` / `diff_with_steps`; `solveset` / `solveset_outcome` / `solveset_certified`; `simplify` / `simplify_with_conditions` / `simplify_with`). Each new axis (steps, certificates, assumptions, budget, async) multiplies the methods. | `calculus.rs`, `solver.rs`, `api.rs` |
+| P5 | Result types disagree: `diff` cannot fail, `integrate` returns `AlgebraResult`, `solveset_outcome` returns a typed outcome, and `SymbolicSimplifier::simplify` returns its input unchanged on failure. | `calculus.rs:15`, `simplify/mod.rs:1954` |
+| P6 | Nine engine traits (`SymbolicCalculus`, `SymbolicSolver`, `NumericalEval`, ...) each have one implementation, for `ExprGraph`; `Simplifier` is a unit struct of associated functions. Nothing is generic over storage. | `impl ... for ExprGraph` |
+| P7 | Async is `ComputeFuture::spawn`: one OS thread per call, and dropping the future does not stop the work. No algebra-engine module reads `ResourceBudget` (only `cat_eval.rs` uses the anytime budget). | `stream.rs` |
+| P8 | `ConstRational` uses plain `i64` `*`. In a `const` context an overflow is a compile error; at run time, with `overflow-checks = false` in the release profile, it wraps silently. | `api.rs`, `Cargo.toml` |
+| P9 | The C ABI is three string-in, string-out calls. Every failure is `NULL`; there is no `catch_unwind` (and release builds abort on panic, so the host process dies); `urae_session_execute` takes `&mut *session` with no lock. | `urae-ffi/src/lib.rs` |
+| P10 | `urae-py` has no Python binding layer: `PyExprGraph` stores LaTeX and Unicode strings and re-parses on every call. | `urae-py/src/lib.rs` |
+
+### 8.2 Goals and non-goals
+
+Goals:
+
+1. A new axis of variation (steps, certificates, budgets, async, a new frontend) costs one adapter, not one method per
+   operation.
+2. Types say what an operation may do: read the graph, add nodes, or mutate an owned buffer.
+3. One result type carries the value, the reason for a refusal, and any evidence.
+4. Memory from intermediate nodes is reclaimed at the end of the operation that made them.
+5. The C ABI cannot crash its host and keeps expression handles between calls.
+
+Non-goals: a custom global allocator (section 8.5 gives the measurements), `async fn` in the engine's traits (the
+engine is CPU-bound, and async traits would spread to every caller), and changing the parser or formatter.
+
+### 8.3 Operations are values
+
+Each operation is a plain struct that describes the request, and one trait runs it:
+
+```rust
+pub struct Diff { pub expr: ExprId, pub wrt: SymbolId, pub order: u32 }
+pub struct Simplify { pub expr: ExprId }
+pub struct Solve { pub equation: ExprId, pub unknown: SymbolId }
+
+pub trait Operation {
+    type Output;
+    fn run<S: ExprBuilder>(&self, cx: &mut Cx<S>) -> Outcome<Self::Output>;
+}
+
+pub struct Outcome<T> {
+    pub value: Result<T, AlgebraError>, // succeeds, or refuses with a reason (invariant 4)
+    pub steps: Option<Steps>,           // filled only when requested
+    pub certificate: Option<Certificate>,
+    pub diagnostics: Vec<Diagnostic>,   // e.g. the conditions a simplification assumed
+}
+```
+
+`Cx` carries what is today a suffix or a loose argument: the assumptions, the precision, the `ResourceBudget`, a
+cancellation token and the flags "record steps" and "certify". `diff_with_steps(e, x)` becomes
+`Diff { expr: e, wrt: x, order: 1 }.run(&mut cx.with_steps())`. The number of methods grows with the number of
+operations, not with operations times variations.
+
+`MathOperation` becomes a serde-tagged enum over these structs, so the executor, the fluent API (`api.rs`), the macros
+and every frontend dispatch to the same code. That completes invariant 2 instead of adding a second language. The
+existing traits stay as thin wrappers during migration (section 8.9).
+
+### 8.4 Reading and building are different capabilities
+
+```rust
+pub trait ExprStore: Sync {
+    fn node(&self, id: ExprId) -> NodeRef<'_>; // a borrowed view; no clone
+    fn len(&self) -> usize;
+}
+pub trait ExprBuilder: ExprStore {
+    fn intern(&self, node: NodeSpec) -> ExprId;
+}
+```
+
+Formatters, `equiv` and `free_symbols` take `&impl ExprStore`; operations receive an `ExprBuilder` through `Cx`.
+`ExprGraph`, a scratch graph (section 8.5) and a later flat-encoded graph implement both traits, so engine code is
+written once (P1, P6). `NodeRef` borrows from an append-only store whose elements never move (for example the `boxcar`
+crate, which offers lock-free `push` returning the index and lock-free reads), which removes the clone in `get` and the
+read lock (P2, and audit item J2).
+
+### 8.5 Memory
+
+**No custom global allocator.** Measured on 27 Nov 2026 with a counting allocator around ten typical commands
+(simplify, diff, integrate, expand `(x+y+z)^6`, factor, solve, series, limit) run 30 times per session, release build:
+about 230,000 allocations per pass, 74% of them 16 bytes or smaller, and a peak of 0.6 MB in use. mimalloc and the
+system allocator were within noise of each other (588 to 731 ms). A bump allocator that never frees, which is the best
+case for any arena-style global allocator, was slower (767 to 831 ms) and left 1,535 MB unreclaimed. A global
+allocator sees only `alloc` and `dealloc` calls in arbitrary order; the scope information that makes region allocation
+fast in languages such as Goose is not available to it, and engine results deliberately outlive the call that made
+them.
+
+**Reclaim by scope instead.** Counting the nodes a result still uses against the nodes the command created, on a fresh
+graph: `simplify (x+1)^2 - (x^2+2x+1)` 1 of 24, `diff sin(x)*exp(x^2)*log(x)` 14 of 54, `series exp(x)*sin(x)` 20
+of 55, `solve x^3-6x^2+11x-6 = 0` 0 of 23. So:
+
+1. Each operation runs against a scratch graph layered over the session graph. At the end, the nodes reachable from
+   the result are copied into the session graph and the scratch graph is dropped: one free for all intermediate work.
+   A scratch `ExprId` is a different type from a session `ExprId`, so it cannot leak.
+2. The notebook rebuilds its graph on each `evaluate_all`. It already re-parses every line, and its caches
+   (`LineCache`, `PlotCache`, `ParsedLine`) hold strings and floats, never `ExprId`s, so this is safe today (P3).
+3. Long-lived sessions (CLI, LSP, kernel, Python) compact when the node count passes a limit: copy what is reachable
+   from the session's roots into a new graph and remap. Handles carry an epoch so a stale `ExprId` is caught.
+4. The deduplication map stores hashes and ids, not a second copy of each node (P2).
+
+### 8.6 Execution modes are adapters
+
+- **Synchronous:** `op.run(&mut cx)`.
+- **Asynchronous:** `spawn(op, cx) -> Task<Op::Output>` runs on the rayon pool (native) or is stepped by `cat-anytime`
+  (wasm32). `Task` owns the cancellation token, so dropping it cancels the work (P7).
+- **Budgets and cancellation:** long loops call `cx.checkpoint()?`, which checks cancellation and the `ResourceBudget`
+  in one place. Gröbner S-pairs, e-graph nodes, series order and solver iterations map onto the existing budget
+  fields.
+- **Batches:** `run_batch(ops, cx)` over a shared read-only store.
+
+### 8.7 `const`
+
+Small exact kernels (gcd, checked rational arithmetic, small polynomial evaluation) are written once as `const fn`s
+that return `Option` on overflow. `ConstRational`, `ConstPoly` and the run-time `Number` call the same kernels, so an
+overflow is a compile error in `const` code and a promotion to big integers at run time, never a silent wrap (P8).
+
+### 8.8 Mutability
+
+Expressions are immutable (invariant 1), so there are no `&mut` versions of graph operations. Owned buffers
+(`NumMat`, `MatrixBuffer`, `SymMat`) follow the Rust pair `simplify(&self) -> Self` and `simplify_in_place(&mut self)`,
+as `api.rs` already does.
+
+### 8.9 FFI and bindings
+
+- One C function per operation, generated from the `Operation` types, returning a status code and writing through an
+  out-parameter, for example `urae_status urae_diff(urae_session*, urae_expr, urae_symbol, urae_expr* out)`. The
+  header is generated with cbindgen.
+- `urae_expr` is a plain `{ uint32_t id; uint32_t epoch; }`, so expressions persist between calls; parsing and
+  formatting are separate calls.
+- `urae_last_error(session)` returns the error code and message; `NULL` is kept for out-of-memory only.
+- Every entry point runs inside `catch_unwind`. The `cdylib` is built with `[profile.release-ffi] inherits = "release"`
+  and `panic = "unwind"`: Cargo cannot override `panic` for one package, and under `abort` `catch_unwind` does nothing.
+- A session sits behind a `Mutex` in its handle; read-only calls take only the shared store and may run concurrently
+  (P9).
+- `urae_spawn`, `urae_task_poll`, `urae_task_cancel` and `urae_task_free` expose `Task`.
+- `urae_run(session, request_json, out_json)` covers every operation through the serde form of `MathOperation`.
+- Python (through pyo3) and WASM sit on these layers instead of re-wrapping strings (P10).
+
+### 8.10 Migration
+
+1. Introduce `Outcome`, `Cx` and `Operation`; port `diff`, `simplify` and `solve`; keep the old trait methods as
+   wrappers that call the new code.
+2. Split `ExprStore` from `ExprBuilder`; add the scratch-graph scope; rebuild the notebook graph per evaluation.
+3. Replace `ComputeFuture` with `Task`; add `checkpoint` calls to the long loops.
+4. Rebuild the FFI with handles, status codes and the unwind profile; make the Python and WASM crates thin layers.
+
+Each step starts with a failing test, as section 2 (invariant 8) requires.
