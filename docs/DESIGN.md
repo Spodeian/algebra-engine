@@ -244,13 +244,15 @@ arbitrary algebraic structures, symbolic and numerical analysis together, arbitr
 automatic choice of methods) and changed it where it did not fit. Revision 3 (commit `fc89f9a`) added what the plan
 and the specification still required (logic and decision, proofs and certificates, function identity, units,
 interoperability, serialisation, one registry, composition) and a performance section with measured baselines, data
-layouts and gates. Revision 4 (commit `4ed0ea9`) weighed the alternatives to each decision (section 8.32) and
+layouts and gates. Revision 4 (commit `4ed0ea9`) weighed the alternatives to each decision (section 8.33) and
 adopted the better option where the review found one. Revision 5 fixes the contradictions a full read-through found,
 adds what was still missing (sessions, numerical data and simulation, the categorical engine, presentation and
 diagnostics, safety, crate placement and API evolution), and adds a coverage check of every subsystem, invariant and
-specification wave (8.33). Revision 6 (commit `840a4c2`) added differentiation and machine learning, dimensions and shapes,
-randomness, the remaining domains, and the ways external libraries integrate (8.18 to 8.22). Revision 7 designs
-UraeScript, tier B modules in full, memoisation, and traces a worked example through every layer (8.23 to 8.26). Section 8.37 lists the changes in each revision and why. The section proposes answers to
+specification wave (8.34). Revision 6 (commit `840a4c2`) added differentiation and machine learning, dimensions and shapes,
+randomness, the remaining domains, and the ways external libraries integrate (8.18 to 8.22). Revision 7 (commit `1c34fad`)
+designed UraeScript, tier B modules in full and memoisation, and traced a worked example through every layer (8.23 to
+8.26). Revision 8 makes spacing decide implicit multiplication, deprecates the old syntaxes behind a converter, and
+adds auditable records and their exports (8.23, 8.27). Section 8.38 lists the changes in each revision and why. The section proposes answers to
 the first, third and fourth of the open decisions in section 6. It reuses the specification's names where one exists
 (`ExecutionObjective`, `AccuracyGoal`, `NumericRep`, `RuntimeEnv`, `ScalarRing` and `ContextualAlgebra`,
 certify-or-escalate) and says where it differs.*
@@ -279,22 +281,23 @@ certify-or-escalate) and says where it differs.*
 | R18 | What users see is as honest as the types: accuracy, conditions, cases and refusals always shown; diagnostics with source spans | invariant 4, spec 29, the LSP |
 | R19 | Hostile input (the public Worker, loaded files, the FFI) cannot exhaust resources or crash the engine | invariants 6 and 7, `wrangler.toml` |
 | R20 | The public API evolves gradually, with deprecations and migration notes, and the design states which crate holds what | the `urae` prelude, `api.rs`, `macros.rs` |
-| R21 | Coverage is checkable: every subsystem, invariant and specification wave maps to a part of the design | this proposal (8.33) |
+| R21 | Coverage is checkable: every subsystem, invariant and specification wave maps to a part of the design | this proposal (8.34) |
 | R22 | Differentiation through operations (forward and reverse), with derivative accuracy reported separately | spec 10, `autodiff.rs` |
 | R23 | Machine learning: models as values, training as an operation, learned methods with validity regions, analysis of models, tabular data | spec 10 to 12, `pinn`, `neural_ode`, `geometric_dl`, `heuristic.rs` |
 | R24 | Dimensions: symbolic sizes, shape checking, fixed-size fast paths, dimension as a cost, units on bulk data, manifolds | spec 27, cat-core `SymDimId` |
 | R25 | One reproducible randomness policy, and honesty about results that depend on chance | `probabilistic.rs`, `numbertheory.rs` |
 | R26 | External libraries can integrate without forking: defined extension points, several ways to load, a contract, and a testing kit | this proposal |
 | R27 | The remaining domains (GPU, plotting, geometry representations, interchange, telemetry, long-running work, locale) each have a place in the model | spec 7, 13, 17 |
-| R28 | One language with a written grammar: permissive mathematical notation, today's notebooks still valid, no text rewriting, every ambiguity resolved by a stated default and reported | spec 42 to 45, `examples/notebooks/` |
+| R28 | One language with a written grammar, defined afresh: permissive mathematical notation, no text rewriting, every ambiguity resolved by a stated default and reported; the old syntax and CatScript deprecated and converted once | spec 42 to 45, `examples/notebooks/` |
 | R29 | Native dynamic extension: modules written in that language, provided in context (file, package, cell, string, request), with the reach of static extensions wherever data can express it | this proposal |
 | R30 | Memoisation that the internals use automatically: results, functions, shipped tables, shared intermediate facts and mined knowledge, reused only when accurate and valid enough | this proposal |
+| R31 | Auditable results: every result can be saved as a record of its interpretations, premises and path, verified later, and exported to UraeScript, the binary form, Lean, LaTeX and other formats | invariant 5, this proposal |
 
 ### 8.2 What exists and what is in the way
 
 Each item was checked against `dev` at commit `1dfd2d4`. P1 to P10 come from revision 1; P11 to P20 were found while
 testing it against R3 to R7; P21 to P30 while testing revision 2 against R9 to R14; P31 to P36 while reviewing
-revision 4 against R15 to R21; P37 to P42 while testing revision 5 against R22 to R27; P43 to P46 while designing the language (R28 to R30).
+revision 4 against R15 to R21; P37 to P42 while testing revision 5 against R22 to R27; P43 to P46 while designing the language (R28 to R30); P47 for R31.
 
 | # | Observation | Where |
 | :--- | :--- | :--- |
@@ -325,7 +328,7 @@ revision 4 against R15 to R21; P37 to P42 while testing revision 5 against R22 t
 | P25 | Two unit models: `units.rs` (seven integer SI exponents) and cat-core's `DimVector` (eight rational exponents), which algebra-engine never uses. | `units.rs`, `cat-core/src/dimensions.rs` |
 | P26 | Two command tables that must stay in step (`parser.rs`, `numeric_commands.rs`), an ordered hook list (`COMMAND_HOOKS`) and inline special cases before it; no single registry of operations. | `PLANNING.md` (Structure), `session.rs` |
 | P27 | The deduplication maps (`ExprGraph`, `SymbolTable`, the cat-core arenas) are `DashMap`s with the default SipHash: 25–41 ns to hash a node, against 4–8 ns for ahash or FxHash (ahash is already a dependency). | `graph.rs`, `symbol.rs`, `cat-core/src/context.rs` |
-| P28 | A node read costs 40–46 ns (read lock, clone, `SmallVec` copy of the children) against 2.5 ns from a flat `u32` array; a node is 72 bytes, 32 of them a `Domain`, and is stored twice. | 8.31.1 |
+| P28 | A node read costs 40–46 ns (read lock, clone, `SmallVec` copy of the children) against 2.5 ns from a flat `u32` array; a node is 72 bytes, 32 of them a `Domain`, and is stored twice. | 8.32.1 |
 | P29 | Walkers are recursive (audit `E4`), and `parallel.rs`'s `contains_matching` starts a parallel iterator at every level of the tree. | `parallel.rs`, `format.rs`, `simplify` |
 | P30 | The bytecode VM is `f64`-only (`LoadConst(f64)`, a fixed 32-slot stack and 16 locals), so balls and arbitrary precision have no compiled lane; the criterion suites are compiled in CI but never run, so nothing guards performance. | `vm.rs`, section 5 |
 | P31 | Session state is a set of separate mutable maps on `UraeSession`; the notebook keeps its own undo stacks; the LSP builds a fresh session for every request. | `session.rs`, `urae-notebook/src/notebook/history.rs`, `urae-lsp/src/lib.rs` |
@@ -344,6 +347,7 @@ revision 4 against R15 to R21; P37 to P42 while testing revision 5 against R22 t
 | P44 | Definitions are substituted into the input text (`UraeSession::expand_definitions`, up to eight passes) instead of being bound and resolved. | `session.rs` |
 | P45 | Three surface syntaxes (the permissive parser, CatScript, the notebook's role and domain lines) with no shared specification; the 48 example notebooks are the de facto definition, and some pass expressions as strings. | `cat-lang`, `urae-notebook/src/notebook/parser.rs`, `examples/notebooks/` |
 | P46 | Nothing memoises across operations: the notebook's line and plot caches are per view, and the VM compiler's `subexpr_cache` is read but never written (audit `E4`). | `urae-notebook/src/notebook/cache.rs`, `vm.rs` |
+| P47 | No result is auditable. The notebook saves its text; `ProofTrace` export is a separate feature reached from two places; results record neither the assumptions and definitions they used, nor how the input was read, nor the methods behind them. | `urae-notebook/src/notebook/session.rs`, `urae-cli/src/json_api.rs`, `urae-notebook/src/export.rs` |
 
 ### 8.3 Overview
 
@@ -356,14 +360,14 @@ Nine decisions carry the design:
 3. **Every value says how well it is known.** Exact, rigorously enclosed, estimated, probabilistic or asymptotic, as
    distinct cases that never convert silently (8.7).
 4. **A calculus is a registered rule set, not a fork of the engine** (8.8).
-5. **Storage and calling style are adapters** around one core (8.5, 8.27, 8.28).
-6. **Everything that leaves a session has a portable form,** and everything that claims to be true can carry evidence
-   (8.11, 8.12).
+5. **Storage and calling style are adapters** around one core (8.5, 8.28, 8.29).
+6. **Everything that leaves a session has a portable form,** everything that claims to be true can carry evidence, and
+   every result can be audited: its interpretation, premises and path saved, verified and exported (8.11, 8.12, 8.27).
 7. **Performance is a measured contract.** A `u64` header column and `u32` pools, dense ids and monomorphised inner
-   loops; the new layers are paid for only when used, and hot paths are gated (8.31).
+   loops; the new layers are paid for only when used, and hot paths are gated (8.32).
 8. **Nothing is left implicit.** Sessions, bulk numerical data, the categorical engine, presentation, safety, crate
    placement, differentiation and learning, dimensions, randomness, the language, modules and memoisation each have a
-   section, and 8.33 maps every
+   section, and 8.34 maps every
    subsystem, invariant and specification wave to the design.
 9. **Open to outside libraries.** Defined extension points, five ways to load an extension, a contract and a testing
    kit, proved on first-party code (8.22).
@@ -422,7 +426,7 @@ operations (contract, symmetrise, canonicalise) and structure queries (is this a
 (invariant 2) and the request language does not grow separately. Its fields hold portable inputs (8.12), and an input
 may be another operation's output, which is how pipelines compose (8.13).
 
-**Environment and run state.** Revision 1 had one mutable `Cx`. Parallel portfolios (8.9) and tasks (8.27) need the
+**Environment and run state.** Revision 1 had one mutable `Cx`. Parallel portfolios (8.9) and tasks (8.28) need the
 shared part separated from the exclusive part:
 
 ```rust
@@ -443,7 +447,7 @@ pub struct Run<'a> {
     pub meter: BudgetMeter,        // ResourceBudget, wall clock and memory, charged as work happens
     pub cancel: CancelToken,
     pub recorder: Recorder,        // steps and provenance
-    pub progress: Option<ProgressSink>, // anytime refinements (8.27)
+    pub progress: Option<ProgressSink>, // anytime refinements (8.28)
 }
 ```
 
@@ -472,7 +476,7 @@ pub enum Refusal<T> {
     Unsupported(AlgebraError),       // names the limitation
     Undecidable(AlgebraError),
     InvalidInput(AlgebraError),
-    BudgetExceeded { resource: Resource, best: Option<Box<Answer<T>>> }, // time, memory, steps, size (8.29)
+    BudgetExceeded { resource: Resource, best: Option<Box<Answer<T>>> }, // time, memory, steps, size (8.30)
     Contradiction { facts: Conditions }, // the scope's facts contradict each other (8.10)
     Cancelled { best: Option<Box<Answer<T>>> }, // the best answer so far, if any
 }
@@ -510,7 +514,7 @@ answer.
 - `?` works on `result`.
 - Steps, certificates and conditions are fields, not method variants (P4, P5).
 
-Revision 4 replaced revision 3's struct of optional fields; 8.32.4 gives the comparison.
+Revision 4 replaced revision 3's struct of optional fields; 8.33.4 gives the comparison.
 
 ### 8.5 Storage and memory
 
@@ -541,10 +545,10 @@ created on a fresh graph: `simplify (x+1)^2 - (x^2+2x+1)` 1 of 24; `diff sin(x)*
 
   Formatters, equivalence tests and free-symbol queries take `&impl ExprStore`; methods add nodes through `Run`'s
   builder (P1). `ExprGraph`, the scratch scope and a later flat encoding implement both, so engine code is written once
-  (P6). The store's layout, a header column and a child pool with lock-free reads, is set out in 8.31.2.
+  (P6). The store's layout, a header column and a child pool with lock-free reads, is set out in 8.32.2.
 - **Scratch scopes.** Each run interns into a scratch graph layered over the session graph. At the end the nodes the
   result reaches are copied into the session graph and the scratch graph is dropped in one step. Scratch ids continue
-  the session's numbering (8.31.2), and `run` promotes every id in an `Outcome` before returning it, so a scratch id
+  the session's numbering (8.32.2), and `run` promotes every id in an `Outcome` before returning it, so a scratch id
   cannot escape the run.
 - **Small nodes, payloads beside them.** Big integers, big rationals, balls and p-adic digit vectors live in side tables
   keyed by node, so nodes stay small and cheap to hash. Precision and accuracy are never stored in a node (they belong
@@ -552,13 +556,13 @@ created on a fresh graph: `simplify (x+1)^2 - (x^2+2x+1)` 1 of 24; `diff sin(x)*
 - **The deduplication map** holds hashes and ids, not a second copy of each node.
 - **Lifetimes of graphs.**
   - The notebook keeps one region per cell. A cell may refer only to earlier cells, so editing cell `k` drops the
-    regions of cells `k` onward and nothing else (8.32.7).
+    regions of cells `k` onward and nothing else (8.33.7).
   - Until regions exist, the notebook rebuilds its graph on each `evaluate_all`. Its caches hold strings and floats,
     never `ExprId`s, so this is safe now (P3).
   - Long-lived sessions compact when the node count passes a limit tied to the memory constraint: copy what the
     session's roots reach, remap, and bump an epoch carried in every handle so a stale id is detected.
   - Compaction never invalidates a running task. The task's snapshot keeps the old segments alive (they are `Arc`s,
-    8.31.2), and the compaction keeps its old-to-new remap table until every task that started before it has promoted.
+    8.32.2), and the compaction keeps its old-to-new remap table until every task that started before it has promoted.
     A promotion from such a task remaps through the table first.
 
 ### 8.6 Algebraic structures
@@ -622,7 +626,7 @@ Choices behind the sketch:
 - **Laws are tested.** Every structure gets property tests of the axioms its `StructureInfo` claims, checked on random
   elements: associativity, distributivity, inverses, Jacobi and so on. Where equality is undecidable, the check uses
   `Ternary` and fails only on a definite `False`.
-- **Dispatch** is layered (8.32.8):
+- **Dispatch** is layered (8.33.8):
   - a `StructureDesc` enum tree, hash-consed into a `StructureId`, describes every structure for typing, planning and
     serialisation;
   - kernels are monomorphised for a fixed table of element representations and selected once per batch;
@@ -655,7 +659,7 @@ associativity (octonions do not have it). The simplifier's domain detector becom
 **Expressions are typed by context.** `Domain` leaves `ExprNode` (audit `J2`), so `x + 1` is one node whether `x` is
 real, complex, in `GF(7)` or a matrix. `Env.knowledge` records each symbol's structure (`x in GF(7)`, `A in Mat_3(Q)`,
 `t` on the time scale `hZ`). Typing assigns a structure to each node a run touches, lazily and memoised in the run, and
-methods read it. Whole-graph passes type in one forward sweep instead (8.32.9). Domains and physical dimensions ride on
+methods read it. Whole-graph passes type in one forward sweep instead (8.33.9). Domains and physical dimensions ride on
 the same pass (8.12).
 
 #### 8.6.3 Structures built from structures
@@ -825,7 +829,7 @@ The umbral identities become morphisms between calculi with stated remainders: `
 
 ```rust
 #[repr(u8)]
-pub enum CalculusKind {             // closed: rules match on it exhaustively (8.32.10)
+pub enum CalculusKind {             // closed: rules match on it exhaustively (8.33.10)
     Classical, Difference, QDifference, TimeScale, Ito, Stratonovich, Colombeau, Fractional,
 }
 
@@ -969,7 +973,7 @@ unsatisfiable, and the next operation reports it rather than computing from it.
 
 **Guards stay cheap.** When a rewrite needs `a != 0`, the planner first tries the cheapest deciders under a small fixed
 budget: exact evaluation, an interval bound, a lookup in the scope's facts. Only if those fail does it record `a != 0`
-in `holds_when`. A guard check must never cost more than the rewrite it protects (8.31).
+in `holds_when`. A guard check must never cost more than the rewrite it protects (8.32).
 
 ### 8.11 Proofs and certificates
 
@@ -1022,13 +1026,13 @@ pub enum Trust { CheckedHere(CheckerId), CheckableExternally(ProofSystem), Unche
   A step that cannot be closed stays `sorry` or `Admitted`, and the certificate's trust says `Unchecked`.
 - **Equivalence classification** (`morphism.rs`, audit `A13`) answers through certificates, so a claimed isomorphism is
   either evidenced or reported as unknown.
-- **Cost.** Proof objects live in side tables and are built only when `Env.record` asks for them (8.31).
+- **Cost.** Proof objects live in side tables and are built only when `Env.record` asks for them (8.32).
 
 ### 8.12 Identity, interoperability and serialisation
 
 **Function identity.** `FunctionId(u32)` (spec 38) names each function once, with its arities and a `DisplayAliasTag`
 so printing can reproduce the user's spelling. The built-in functions are a closed `#[repr(u16)] enum Builtin` whose
-discriminants are the low ids (8.32.2). The differentiator, evaluator and simplifier match on `Builtin` exhaustively,
+discriminants are the low ids (8.33.2). The differentiator, evaluator and simplifier match on `Builtin` exhaustively,
 and every other id goes through its registry descriptor.
 
 - The parser resolves a name to its id once.
@@ -1072,7 +1076,7 @@ value used at boundaries (the specification's `MathValue`) is an enum of:
 | SMT-LIB | `Int`, `Real`, `BitVec`, `Array` sorts; finite fields where the solver supports them |
 | Python | `int`, `fractions.Fraction`, mpmath `mpf` and interval values for balls, NumPy arrays through the buffer protocol |
 | JavaScript | `BigInt`, `Number`, typed arrays |
-| C | the tagged `urae_value` of 8.28 |
+| C | the tagged `urae_value` of 8.29 |
 
 **Serialisation.** Today nothing portable exists (P21):
 
@@ -1087,7 +1091,7 @@ Every artefact that leaves a session gets a portable, versioned form:
   - a symbol table and a function table (canonical names, and the bodies of user-defined functions);
   - the calculus table of the calculus ids its nodes use (kind and parameters, 8.8.2);
   - a payload table (big integers as limbs, binary floats as exact mantissa and exponent);
-  - the node header and pool arrays in the layout of 8.31.2, with local, dense ids and children before parents;
+  - the node header and pool arrays in the layout of 8.32.2, with local, dense ids and children before parents;
   - the roots.
 
   Loading re-interns into the target store in one linear pass. It checks that every child id is smaller than its
@@ -1100,10 +1104,10 @@ Every artefact that leaves a session gets a portable, versioned form:
   radii rounded upward.
 - **Operations, outcomes, certificates and provenance** use serde with a `schema_version`. `MathOperation`'s fields
   become `Input<...>` over portable values (8.13). Text stays an input syntax, not the wire format.
-- **Formats** (8.32.14).
+- **Formats** (8.33.14).
   - A CBOR envelope (RFC 8949) holds the metadata, tables and versioned keys. The header and pool arrays sit inside it
     as little-endian byte strings, so the bulk is copied, not parsed, and any language with a CBOR reader can load it
-    without generated code. This form serves FFI, caches, Web Worker messages (8.27) and bulk data.
+    without generated code. This form serves FFI, caches, Web Worker messages (8.28) and bulk data.
   - JSON is a debug and interoperability view of the same envelope.
   - Renderers (LaTeX, Unicode, MathML, SMT-LIB, Lean) registered per operation and type (8.13).
 - **Compatibility.** Readers accept the current and the previous schema version (audit `E8`). A saved notebook keeps its
@@ -1171,7 +1175,7 @@ for its lifetime.
 
 ```rust
 pub struct Session {
-    pub store: SessionStore,                 // the shared expression store (8.31.2)
+    pub store: SessionStore,                 // the shared expression store (8.32.2)
     pub calculi: CalculusTable, pub functions: FunctionTable, // the session's tables (8.8, 8.12)
     pub env: Arc<Env>,                       // the current environment
     pub history: PersistentVec<Arc<Env>>,    // every earlier environment, shared structurally
@@ -1212,14 +1216,14 @@ linear algebra. This section gives them first-class values.
 
 This answers the second open decision of section 6: the numerical CSR matrix is the generic `Csr<A>` with
 `A = f64` (or `f64` balls). It is not a separate type. Kernels are monomorphised for the representations in the kernel
-table, as for scalars (8.31.4), so the generic type costs nothing over a hand-written `f64` one.
+table, as for scalars (8.32.4), so the generic type costs nothing over a hand-written `f64` one.
 
 **Functions as values.** A computed function is a value:
 
 ```rust
 pub enum FunctionValue {
     Symbolic { body: ExprId, params: SmallVec<[SymbolId; 2]> },
-    Compiled { program: ProgramId, tier: PrecisionTier },          // the VM of 8.31.6
+    Compiled { program: ProgramId, tier: PrecisionTier },          // the VM of 8.32.6
     Basis { basis: ApproximationBasis, coefficients: Array<Elem> }, // Chebyshev, splines, ... (spec 27.2)
     OdeSolution { segments: Vec<DenseSegment>, accuracy: Accuracy }, // dense output, today `OdeTrajectory`
     Piecewise(Cases<Box<FunctionValue>>),
@@ -1256,7 +1260,7 @@ The categorical crates have their own term system:
 
 Today algebra-engine reaches them through two files.
 
-The design keeps `CatTerm` as a **method-local representation**, as the e-graph is (8.32.5). It does not become a
+The design keeps `CatTerm` as a **method-local representation**, as the e-graph is (8.33.5). It does not become a
 second session store.
 
 - **The bridge's lift and lower are morphisms** (8.6.4) between expressions and `CatTerm`s, with the exactness and
@@ -1275,9 +1279,9 @@ second session store.
   | `EquivalenceKind` | `Relation` |
   | `WeilJet` | `Weil<A, I>` |
 
-- **`cat-lang`** (the CatScript parser, unused by the engine today) becomes one more input syntax that produces
-  operations, under the same "interpreted as" rule (8.13).
-- **The shadow harness becomes the migration's safety net** (8.35): old and new code run side by side on the test
+- **`cat-lang`** (the CatScript parser, unused by the engine today) is deprecated. Its Hindley–Milner and dimensional
+  elaboration ideas move into UraeScript's elaborator, and its files are converted (8.23.9).
+- **The shadow harness becomes the migration's safety net** (8.36): old and new code run side by side on the test
   suites and must agree before the old path is removed.
 
 ### 8.17 Presentation and diagnostics
@@ -1352,7 +1356,7 @@ pub trait Differentiable<O: Operation>: Method<O> {
 ```
 
 - **Expressions.** Reverse mode is a backward sweep over node ids. Children have smaller ids than their parents
-  (8.31.2), so descending id order is already a reverse topological order. Adjoints accumulate in a `Vec` side table:
+  (8.32.2), so descending id order is already a reverse topological order. Adjoints accumulate in a `Vec` side table:
   no tape, no hashing.
 - **Solves.** The derivative of a solution with respect to the problem's parameters comes from the implicit function
   theorem: `dx/dp = -(dF/dx)^-1 dF/dp`. It is computed exactly when the Jacobian is symbolic, and with stated accuracy
@@ -1378,8 +1382,8 @@ pub enum FunctionValue {
 - Weights are arrays in any lane, including the specification's minifloat and quantised formats (spec 17.4), which join
   the representation tower as point formats with `Estimated` accuracy.
 - Loading weights (through `sml-runtime` and candle, as an extension, 8.22) is untrusted input. Shapes, sizes and
-  finiteness are validated before use (8.29).
-- A model can be differentiated (8.18.1), evaluated in batches on the VM or GPU lanes (8.31.6), and analysed (8.18.4).
+  finiteness are validated before use (8.30).
+- A model can be differentiated (8.18.1), evaluated in batches on the VM or GPU lanes (8.32.6), and analysed (8.18.4).
 
 #### 8.18.3 Training and learned methods
 
@@ -1396,7 +1400,7 @@ pub enum FunctionValue {
 Spec §§11–12 analyse AI systems. These fit the existing types:
 
 - **Bounds through a network.** Interval bound propagation is ball arithmetic over the `ModelGraph`. Linear relaxations
-  (CROWN-style) are the affine `Enclosure` case of 8.32.11.
+  (CROWN-style) are the affine `Enclosure` case of 8.33.11.
 - **Lipschitz bounds** are `Evaluate` with an `Enclosed` result.
 - **Robustness** ("no input within `epsilon` of `x` changes the class") is a `Decide` with a certificate (8.10, 8.11).
 - **Symbolic analysis** of small networks converts the `ModelGraph` into expressions and reuses the whole symbolic
@@ -1429,7 +1433,7 @@ importer (8.22).
    on `Array`s only when the request asks for it. A shape error is a diagnostic with spans (8.17), never a panic.
 3. **Fixed or run-time sizes in kernels.** Sizes up to 4 that recur in hot code (points, vectors and matrices in 2, 3
    and 4 dimensions, quaternions, SE(3)) have const-generic kernels in the kernel table (8.6.1). Everything else uses
-   run-time sizes with SIMD over the inner dimension. The selection happens once per batch (8.31.4).
+   run-time sizes with SIMD over the inner dimension. The selection happens once per batch (8.32.4).
 4. **High dimension as a cost.** Dimension is an input to every prediction (8.9.1). For large dimension the planner
    reaches for:
    - low-rank and tensor-train forms (in the specification);
@@ -1487,11 +1491,11 @@ Each of these adds values or methods to the existing model rather than changing 
     STL, OBJ, CSV and spec 7.3's simulation formats.
   - Each is an extension point (8.22), and each importer is an input syntax under the "interpreted as" rule (8.13).
 - **Telemetry and privacy.** Planner calibration (8.9.4) is local by default. Nothing leaves the machine unless the
-  user opts in, and what would be sent is shown first. Saved documents never depend on calibration (8.36).
+  user opts in, and what would be sent is shown first. Saved documents never depend on calibration (8.37).
 - **Long-running and distributed work.**
   - A `Task`'s state serialises (8.12), so a long job can pause, survive a restart and resume.
   - Large results go to `sml-lake`.
-  - Running across machines (the specification's federated loop) uses the same messages as the Web Worker (8.32.16)
+  - Running across machines (the specification's federated loop) uses the same messages as the Web Worker (8.33.16)
     and is later work.
 - **Locale.** The parser accepts dialect options: a decimal comma, localised function names (through
   `DisplayAliasTag`, 8.12) and localised keywords. Diagnostics are translated by code (8.17).
@@ -1506,12 +1510,12 @@ defines what an extension can add, the ways it can be loaded, and the contract i
 
 | Extension point | What the extension provides | How it enters the engine |
 | :--- | :--- | :--- |
-| Function | a descriptor: canonical name in a namespace, arities, numeric kernels per lane, derivative rule, domain and range contract (8.12), simplification rules, renderers, the Lean name | an id above the `Builtin` range (8.32.2) |
+| Function | a descriptor: canonical name in a namespace, arities, numeric kernels per lane, derivative rule, domain and range contract (8.12), simplification rules, renderers, the Lean name | an id above the `Builtin` range (8.33.2) |
 | Operation | a struct implementing `Operation`, its descriptor (8.13) and at least one method | a registry entry; at the dynamic boundary, `AnyOperation::Extension` dispatching by name |
 | Method for an existing operation | a `Method<O>` with `applies` and `predict` (8.9.1), optionally `Differentiable` (8.18.1) | added to that operation's method list; the planner weighs it like any other |
 | Structure | the structure traits (8.6.1), or a `StructureConstants` table, or a `dyn Structure` | `StructureDesc::Extension { name, params }`; kernels for its element type, if it provides them |
-| Rule pack | rewrite rules as data: pattern, replacement, required axioms, guards | compiled per structure like core rules (8.31.4) |
-| Calculus | for the sigma-derivation family only: `sigma` and `delta` given as data (8.8.1) | `CalculusKind::Ore` with parameters; other kinds stay closed (8.32.10) |
+| Rule pack | rewrite rules as data: pattern, replacement, required axioms, guards | compiled per structure like core rules (8.32.4) |
+| Calculus | for the sigma-derivation family only: `sigma` and `delta` given as data (8.8.1) | `CalculusKind::Ore` with parameters; other kinds stay closed (8.33.10) |
 | Evidence kind and checker | an evidence format and a checker for it | `Evidence::Extension { kind, bytes }`; trust as in 8.22.3 |
 | Decider | a decision procedure for some logic or theory (8.10) | a method of `Decide` and `Prove` |
 | Value type | a bulk or opaque value with serialisation and renderers | `MathValue::Extension { kind, value }`; refused if it has no serialisation |
@@ -1526,10 +1530,10 @@ defines what an extension can add, the ways it can be loaded, and the contract i
 | B. Data package | a versioned manifest plus rule packs, function definitions, units and constants in CBOR or TOML | in process, no code | domain libraries of identities, conventions, unit systems | can only add what data can express; safe to load anywhere, including the public Worker |
 | C. WebAssembly component | a module exporting a WIT interface of the extension points; values cross as `PortableExpr` and CBOR (8.12) | a sandbox (wasmtime natively, the browser's own engine on the web), with fuel and memory limits | third-party code loaded at run time without recompiling: notebooks, the Worker, the kernel | a copy per call, so numeric kernels must take batches; no access to the host's memory |
 | D. Host-language callback | a Python function (through pyo3) or a JavaScript function (through wasm-bindgen) registered as a function or a method | on the host language's thread | users wrapping NumPy, SciPy, PyTorch or JavaScript code they already have | single-threaded (Python's global interpreter lock, the JavaScript event loop), so the planner never races them in parallel; results untrusted |
-| E. External process | a solver or system speaking a stdio protocol (CBOR or JSON messages) | a separate process with time and memory limits | SMT solvers, Lean and Coq, other computer algebra systems | process start-up cost; results are evidence to check (8.29) |
+| E. External process | a solver or system speaking a stdio protocol (CBOR or JSON messages) | a separate process with time and memory limits | SMT solvers, Lean and Coq, other computer algebra systems | process start-up cost; results are evidence to check (8.30) |
 
 Not offered: native dynamic libraries loaded with `dlopen` through the C ABI. They would need `unsafe` code outside the
-FFI crate (invariant 7), have no stable Rust ABI, and do not exist on `wasm32`. 8.32.22 compares the tiers.
+FFI crate (invariant 7), have no stable Rust ABI, and do not exist on `wasm32`. 8.33.22 compares the tiers.
 
 #### 8.22.3 The contract
 
@@ -1544,7 +1548,7 @@ FFI crate (invariant 7), have no stable Rust ABI, and do not exist on `wasm32`. 
   The host refuses a manifest whose API range it does not satisfy. Static extensions also pass `cargo-deny` in the
   host's build.
 - **Namespaces and conflicts.** Every name an extension adds is namespaced, and serialised data uses the namespaced
-  canonical name (8.32.1, rule 4). Core names win over extension names. Two extensions that register the same name are
+  canonical name (8.33.1, rule 4). Core names win over extension names. Two extensions that register the same name are
   a registration error, never a silent override.
 - **Saved data records its extensions.** A `PortableExpr`, a session or a notebook that uses an extension's items
   records that extension's name and version. Loading without the extension is a refusal with a diagnostic naming what is
@@ -1616,17 +1620,18 @@ designs it.
 
 `PLANNING.md` records that almost every wrong answer the usability probes found came from these rewrites.
 
+This section defines UraeScript afresh. The current permissive syntax and CatScript are deprecated. A converter
+migrates existing files once (8.23.9), and neither old syntax is accepted at run time.
+
 #### 8.23.1 Principles
 
 1. **Mathematics as written on paper.** `x^2 + 2x = 0`, `f(x) = sin(x)/x`, `solve sin(x) = 1/2` and
    `integrate x e^(-x^2), x` need no boilerplate. Unbound symbols are allowed, and so is implicit notation.
-2. **Today's notebooks stay valid.** Every form used in the 48 examples keeps its meaning:
-   - `name: Role = value [unit]`;
-   - set-builder domains `{ x in Reals | -10 <= x <= 10 }`;
-   - `f(x) = ...` definitions and `name = expr` bindings;
-   - call-style commands (`diff(f(x), x)`) and prefix commands (`solve ..., x`);
-   - keyword arguments (`mean = 0.0`);
-   - expressions passed as strings.
+2. **Old files are converted, not kept.** The language is defined by this section, not by today's files.
+   - Forms from today's notebooks stay where they are good design: `name: Role = value [unit]`, set-builder domains,
+     `f(x) = ...` definitions, call-style and prefix commands, keyword arguments.
+   - Forms that are not good design go: expressions passed as strings, and the string-prefix English shortcuts.
+   - The converter (8.23.9) rewrites old files into canonical UraeScript and reports every change.
 3. **One grammar, no text rewriting.** A finite-state lexer and a Pratt parser, with no regular expressions and no
    string pre-passes (spec 42.1). Every token and node carries a source span.
 4. **Every statement elaborates to data.** A statement becomes changes to the environment, operations, or both (8.4,
@@ -1636,7 +1641,10 @@ designs it.
 6. **Pure by construction.** UraeScript has no mutable variables, no loops other than ranges, comprehensions and
    recursion, and no input or output. Rebinding a name shadows it (8.10). So every user function is a pure function of
    its arguments and the environment, which is what makes memoisation (8.25) and parallel evaluation sound. Recursion
-   runs under the budget like everything else (8.29).
+   runs under the budget like everything else (8.30).
+7. **Friendly in, auditable out.** However informal the input, the result is an auditable record (8.27). The record
+   shows how each statement was read, every assumption and definition a result rests on, and the path to it. It can be
+   exported back to canonical UraeScript, to the binary form, to Lean, to LaTeX and more.
 
 #### 8.23.2 Lexical structure
 
@@ -1706,14 +1714,37 @@ attributes   = "#[" attribute { "," attribute } "]" ;              (* #[lock], #
 | 6 | `=`, `!=`, `==`, `<`, `<=`, `>`, `>=`, `in`, `subset`, `divides` | chained: `0 < x < 1` means both |
 | 7 | `..` (ranges), `o` (composition) | none, left |
 | 8 | `+`, `-` | left |
-| 9 | `*`, `/`, `@` (matrix product), `mod`, implicit multiplication | left |
-| 10 | prefix `-` | prefix |
-| 11 | `^` | right |
-| 12 | postfix `!`, `'`, calls `f(...)`, indexing `v[i]`, units `[m]` | postfix |
+| 9 | `*`, `/`, `@` (matrix product), `mod`, and **spaced** juxtaposition (`a b`, `1/2 x`) | left |
+| 10 | **tight** juxtaposition: factors with no whitespace between them (`2x`, `3ab`, `2(x+1)`, `2x^2`) | left |
+| 11 | prefix `-` | prefix |
+| 12 | `^` | right |
+| 13 | postfix `!`, `'`, calls `f(...)`, indexing `v[i]`, units `[m]` | postfix |
 
-Function application without brackets (`sin x`) is not a precedence level. Its argument is the implicit product that
-follows: factors joined without an explicit operator, up to the next function name or explicit operator (8.23.4). So
-`sin 2x` is `sin(2x)`, `sin x^2` is `sin(x^2)`, `sin x cos x` is `sin(x)·cos(x)`, and `sin x + 1` is `sin(x) + 1`.
+**Spacing decides how juxtaposed factors group.**
+
+- Factors written together with no space form a **tight term**, which binds more strongly than `*` and `/`. So
+  `1/2x` is `1/(2x)`, and `1/2x^2` is `1/(2x^2)`.
+- Factors separated by a space multiply at the level of `*`, from left to right. So `1/2 x` is `(1/2)·x`, and `a/b c`
+  is `(a/b)·c`.
+- Explicit operators are unaffected by spacing: `1/2*x` and `1 / 2 * x` are both `(1/2)·x`.
+- After an operand, `-` is always binary, whatever the spacing: `a -b` is `a - b`.
+- A run of letters that is not a known name is one identifier. When every letter in it is bound separately and the
+  run itself is not, it is read as a tight product of those names (`ab` is `a·b` when `a` and `b` are bound), and
+  "interpreted as" says so.
+
+Because whitespace carries meaning here:
+
+- the canonical printer always writes the grouping explicitly (`1/(2x)`, `(1/2) x`);
+- the formatter never changes spacing inside an expression;
+- the LSP and the notebook show the grouping on hover.
+
+Function application without brackets (`sin x`) is not a precedence level. Its argument is the tight term that
+follows (8.23.4). So:
+
+- `sin 2x` is `sin(2x)` and `sin x^2` is `sin(x^2)`;
+- `sin 2 x` is `sin(2)·x`;
+- `sin x cos x` is `sin(x)·cos(x)`;
+- `sin x + 1` is `sin(x) + 1`.
 
 Quantifiers (`forall x in R: x^2 >= 0`), comprehensions (`[k^2 for k in 1..10]`), sums and products
 (`sum(k^2, k = 1..n)` or `∑_{k=1}^{n} k^2`), integrals (`∫ f(x) dx`), derivatives (`d/dx f`, `∂f/∂x`, `f'(x)`), sets
@@ -1726,8 +1757,8 @@ alternative (spec 43).
 
 | Form | Default | Why | Note recorded when |
 | :--- | :--- | :--- | :--- |
-| `1/2x` | `(1/2)·x`: implicit multiplication has the precedence of `*` | one precedence table, no exceptions | implicit multiplication directly follows `/` |
-| `sin x^2`, `sin 2x`, `sin x cos x` | `sin(x^2)`, `sin(2x)`, `sin(x)·cos(x)`: a function without brackets takes the next implicit product, up to the next function name or explicit operator | the textbook convention | always, for unbracketed application |
+| `1/2x`, `1/2 x` | `1/(2x)` and `(1/2)·x`: a tight term binds more strongly than `/`, spaced juxtaposition does not | matches how it is written by hand | always: the explicit grouping is shown |
+| `sin x^2`, `sin 2x`, `sin 2 x`, `sin x cos x` | `sin(x^2)`, `sin(2x)`, `sin(2)·x`, `sin(x)·cos(x)`: a function without brackets takes the following tight term | the textbook convention, made exact by spacing | always, for unbracketed application |
 | `f(x + 1)` | application if `f` is a function, a definition head, or unbound and written with no space; multiplication if `f` is bound to a value | spec 43.1 | `f` is unbound |
 | `x = 3` | a binding at statement level; an equation inside `solve`, `where` or a compound left side; `==` tests | spec 43.2 | the left side is a bound name being rebound (shadowing) |
 | `f(x) = ...` | a definition | today's notebooks | `f` was already defined (shadowing) |
@@ -1771,8 +1802,9 @@ source --lexer--> tokens (spans) --Pratt parser--> SurfaceAst (spans)
 
 - The elaborator resolves names against the environment. Calls become operations, `|>` becomes pipeline steps, and
   definitions become entries of the cell's anonymous module (8.24.1).
-- **Strings in operation arguments** are parsed as UraeScript when the argument expects an expression. This keeps
-  today's examples working (`target_log_prob = "-0.5 * theta^2"`) and records a note suggesting the unquoted form.
+- **Strings are strings.** A string literal is never parsed as an expression. An argument that expects an expression
+  takes an expression (`target_log_prob = -0.5 theta^2`). The converter (8.23.9) unquotes the string-encoded
+  expressions in old files.
 - **The canonical printer** prints a statement from its elaborated form. Canonical input round-trips exactly, which
   gives spec 45's "view and edit script" toggle for free.
 - **Error recovery and incremental work.**
@@ -1780,7 +1812,7 @@ source --lexer--> tokens (spans) --Pratt parser--> SurfaceAst (spans)
   - The LSP reparses only the statements an edit touched.
   - Elaboration reruns only from the first changed statement onward.
 
-  This partly answers the LSP latency question of 8.36.
+  This partly answers the LSP latency question of 8.37.
 
 #### 8.23.7 Dialects
 
@@ -1790,8 +1822,8 @@ binders and SMT-LIB are ingress adapters. Each produces the same `SurfaceAst` an
 - A dialect is chosen by file extension, by a `%%latex` cell magic, or by `use dialect latex` in a scope, and is
   registered like any importer (8.21, 8.22).
 - Every statement read through a dialect carries an "interpreted as" record in canonical UraeScript.
-- CatScript (`cat-lang`) becomes the categorical dialect. Its `: Dim` annotations become declarations, and CatPad's
-  cells merge into the notebook document format.
+- CatScript, CatPad and the old permissive syntax are not dialects. They are deprecated and read only by the
+  converter (8.23.9).
 
 #### 8.23.8 The document format
 
@@ -1804,7 +1836,22 @@ line or a heading. Two things are optional:
   dropdowns and pills (spec 45).
 
 The grammar lives as one EBNF file in the repository. It is the source for documentation, editor highlighting
-(including a generated tree-sitter grammar for editors that use it) and the parser's fuzz corpus (8.29).
+(including a generated tree-sitter grammar for editors that use it) and the parser's fuzz corpus (8.30).
+
+#### 8.23.9 Converting old files
+
+`urae convert` reads the deprecated syntaxes and writes canonical UraeScript. Those syntaxes are the old `.urae`
+notebooks, the permissive command forms and `.cat` / `.pad` files. Its output is a report of every change:
+
+- string-encoded expressions unquoted;
+- English shortcuts (`derivative of ... wrt ...`) rewritten as operations;
+- `expand_definitions`-style aliases turned into `define`s;
+- CatScript's `: Dim` annotations turned into `declare`s;
+- implicit multiplications regrouped where the new spacing rule reads them differently from the old parser, each
+  shown with both readings.
+
+The converter is the only place the old parsers live. It runs once per file, never at run time, and it is removed
+when its users have migrated. Phase 1's exit test checks it on every example notebook (8.36).
 
 ### 8.24 Modules: tier B in full
 
@@ -1881,7 +1928,7 @@ test bessel_like(1/2, 1) ≈ 0.67139670714180309 within 1e-15
    stated order on terms), checked on its pattern and replacement. A rule that cannot be shown to decrease is accepted
    only as `bidirectional` and used only inside e-graph saturation, which cannot loop.
 2. **Compile** into the same structures as tier A:
-   - function bodies into VM programs, per precision tier and lazily on first use (8.31.6);
+   - function bodies into VM programs, per precision tier and lazily on first use (8.32.6);
    - rules into the per-structure rule automata;
    - structures into descriptors;
    - methods into pipelines.
@@ -1904,7 +1951,7 @@ test bessel_like(1/2, 1) ≈ 0.67139670714180309 within 1e-15
     that condition appears in `holds_when` of every answer that used it (8.4). A module can therefore never silently
     change an answer.
 - **Limits.** A module cannot add native kernels, node kinds or bulk layouts, and it does no input or output. Its code
-  runs under the same budget as everything else. Modules are therefore safe on the public Worker (8.29).
+  runs under the same budget as everything else. Modules are therefore safe on the public Worker (8.30).
 - **Speed.** After loading, a module function runs as a compiled VM program, and a module rule matches like a core rule.
   The remaining gap to tier A is the VM against native code. A module used heavily can be turned into a tier A crate:
   `urae-ext codegen acme-special.urae` generates one, mapping every statement one-to-one onto a registration call,
@@ -1919,7 +1966,7 @@ A package is:
 - optional memo packs (8.25);
 - optional tests.
 
-Packages live in a local package directory, then later in a registry of known extensions (8.36). A saved document
+Packages live in a local package directory, then later in a registry of known extensions (8.37). A saved document
 records the exact versions it resolved, so it reopens with the same meaning.
 
 ### 8.25 Memoisation
@@ -1993,6 +2040,14 @@ integrate f(x), x, -oo, oo with goal = 1e-30
    versions of the rule packs used.
 7. **Render (8.17).** The notebook shows `√(π/a)`, the "interpreted as" line `integrate(f(x), x, -∞, ∞)`, and nothing
    else, because nothing else is true of it.
+8. **Record (8.27).** The cell's record holds:
+   - the three statements and their interpretations;
+   - the claim `∫ exp(-a x^2) dx = √(π/a)`;
+   - its premises: `a > 0` (typed by the user) and the definition of `f`;
+   - its justification: the Gaussian rule, its pack and version, and the guard that held;
+   - the trust class: proved by a core rule.
+
+   Exported to Lean, it becomes a theorem with the hypothesis `0 < a`.
 
 Then the user changes the first line to `declare a: Parameter`, dropping the fact.
 
@@ -2007,12 +2062,97 @@ Finally the user binds `a = 2` and asks for the number.
   starts at 128.
 - The resulting enclosure meets the goal at the first attempt, and the notebook shows exactly the 30 guaranteed digits.
 
-### 8.27 Calling styles: sync, async, batch, mutation and `const`
+### 8.27 Audit records and export
+
+UraeScript is written to be friendly. What it produces must be auditable: a result can be saved as a record in which
+every assumption, every interpretation and the whole path to the result can be reviewed, and which can be exported to
+UraeScript, the binary form, Lean, LaTeX and other formats.
+
+Today nothing like this exists:
+
+- the notebook saves its document text;
+- `ProofTrace` export is a separate feature reached from two places (`json_api.rs`, `urae-notebook/src/export.rs`);
+- results carry no record of the methods, assumptions or interpretations behind them (P47).
+
+#### 8.27.1 What a record holds
+
+A record is made for a request, a cell or a whole document. It is a graph of **claims**. Each claim is a statement
+result, with edges to its **premises** and a **justification**.
+
+| Part | Contents |
+| :--- | :--- |
+| Source | the original text with spans, the dialect it was read in, and for every statement the "interpreted as" form chosen and the alternatives rejected (8.23.4) |
+| Environment | every declaration, assumption, definition and binding in scope, each with its origin: typed by the user, from a module (name, version, content hash), or a default |
+| Claims | each statement's elaborated form in canonical UraeScript and its answer: value, accuracy, relation, goal state (8.4) |
+| Premises | for each claim, the assumptions, definitions, module facts and earlier claims it used: the read set of 8.25, made explicit |
+| Justification | the derivation (rule ids, the structures they ran in, the axioms they relied on, the conditions they added, 8.11), the plan (methods considered, chosen and why, 8.9.4), certificates with their checkers and trust levels, and where an answer came from the cache, from which layer (8.25) |
+| Conditions | every entry of `holds_when` with its origin: a user assumption, a module assertion, or a condition a method introduced |
+| Reproducibility | engine version and build, extension manifests, seeds and random streams (8.20), portfolio winners (8.9.3), precision schedules |
+
+**What a reviewer can ask of a record:**
+
+- **"What does this result depend on?"** The transitive premises of a claim: the complete list of assumptions,
+  definitions and asserted facts it rests on, and nothing else. A result that silently relied on something not in the
+  list is impossible, because premises are recorded from the read set the computation actually used.
+- **"How was it obtained?"** The justification chain, step by step, down to the rules and certificates.
+- **"How much should I trust it?"** A trust summary per claim, in these classes:
+  1. proved and checked by a core checker;
+  2. checked by an extension's checker;
+  3. computed by a rigorous method with an enclosure;
+  4. estimated or probabilistic, with the estimate or confidence;
+  5. resting on assertions (module facts, user assumptions), listed by name.
+
+  A claim's class is the weakest class among its premises and steps.
+
+#### 8.27.2 Making records
+
+- **Levels.** `Env.record` (8.4) chooses the detail:
+  - `summary`: claims, premises, conditions and trust classes;
+  - `standard`: adds plans, interpretations and certificates;
+  - `full`: adds every derivation step and intermediate expression.
+
+  The default is `summary` in the notebook and `standard` for saved proofs. Derivations and plans live in side tables
+  and are built only at the level asked for, so an unrecorded run pays nothing (8.32.5).
+- **In UraeScript:**
+  - `#[audit full]` on a cell or in the front matter sets the level;
+  - `why #3` shows the justification of cell 3's result;
+  - `premises #3` lists what it depends on;
+  - `export record #3 as lean to "gaussian.lean"` writes an export (8.27.3).
+- **Integrity.**
+  - Each part of a record is content-addressed, and the record's identity is the hash of its parts (a Merkle tree), so
+    a change to any claim, premise or step is detectable.
+  - A record can be signed.
+  - Engine and extension versions are pinned in it, so verifying it later uses the same meanings.
+- **Verification.** `urae verify record.cbor` does three things:
+  - re-checks every certificate with the checkers alone, without the planner or the original methods;
+  - re-runs the uncertified steps under the recorded plan, seeds and precisions, and compares the answers;
+  - reports each claim as confirmed, changed or no longer reproducible.
+
+  A record whose claims are all certified can be verified by checkers alone. That is the property a proof needs.
+- **Privacy.** A record may contain data the user wants to keep private. Exports can replace values with their hashes
+  while keeping the structure of the argument, so a reviewer can check the reasoning without seeing the data.
+
+#### 8.27.3 Exports
+
+| Format | What it contains | Fidelity |
+| :--- | :--- | :--- |
+| UraeScript | canonical source of every statement, the environment as `declare`, `assume` and `use` statements, and the claims as `#[claim ...]` attributes; reloading it reproduces the session and re-derives the claims | lossless |
+| Binary | the CBOR envelope of 8.12 with `PortableExpr`s, certificates and the record graph; content-addressed and signable | lossless; the form `urae verify` reads |
+| Lean 4, Coq | one theorem per claim: hypotheses from its premises, types from its structures (8.11), tactics chosen from the axioms each step used, certificates as witnesses (Farkas multipliers for `linarith`, sums of squares for `positivity`) | as complete as the tactics allow; every unclosed step is a `sorry` or `Admitted`, listed in the export's header |
+| LaTeX | a readable derivation: assumptions, statements, steps with their justifications, conditions and accuracy, in the presentation of 8.17 | presentation only |
+| Markdown and HTML | the same as LaTeX, for documents and the web, with collapsible levels of detail | presentation only |
+| JSON | the record graph for tools | lossless apart from the binary payloads, which are referenced |
+| SMT-LIB | the decision problems the record contains (8.10), with their answers and certificates, for independent checking by another solver | the decidable parts only |
+
+Exporters are registered per format (8.22), so an extension can add one. Every exporter states what it loses, and the
+export carries that statement in its header.
+
+### 8.28 Calling styles: sync, async, batch, mutation and `const`
 
 - **Synchronous:** `run(&op, &env, &mut run)`.
 - **Asynchronous:** `spawn(op, env) -> Task<T>` runs on the rayon pool on native targets.
   - In the browser, by default, it runs in a Web Worker with its own engine, exchanging `PortableExpr` messages
-    (8.32.16).
+    (8.33.16).
   - It uses WebAssembly threads where the host is cross-origin isolated.
   - Short operations step through checkpoints on the main thread.
   - `Task::latest()` returns the current `Outcome`, an anytime refinement with its accuracy, matching `cat-anytime`'s
@@ -2031,7 +2171,7 @@ Finally the user binds `a = 2` and asks for the number.
   - Trait methods cannot be `const` on stable Rust, so the `const` tier is free functions, not `Structure` methods.
   - The specification's `ConstLoweringPass` generates `const` code from an operation with fixed inputs.
 
-### 8.28 FFI and bindings
+### 8.29 FFI and bindings
 
 - **One C function per operation**, generated from the operation types. Each returns a status and writes its result
   through an out-parameter, for example
@@ -2064,7 +2204,7 @@ Finally the user binds `a = 2` and asks for the number.
 - **Python and WASM.** Python (through pyo3) and WASM sit on the same two layers, and a Python `Expr` holds a handle,
   not strings (P10).
 
-### 8.29 Safety and hostile input
+### 8.30 Safety and hostile input
 
 `wrangler.toml` deploys the WASM engine as a public Cloudflare Worker (`workers_dev = true`, with a `fetch` handler in
 `crates/urae-wasm/worker.js`). So hostile input is a real path, as are notebooks loaded from files and data arriving
@@ -2083,7 +2223,7 @@ through the FFI.
     thread-local, at about one addition per allocation. It enforces a hard ceiling.
 
   Both report to the same meter, and exceeding the ceiling is `Refusal::BudgetExceeded` with the resource named.
-- **Time.** Checkpoints (8.31.5) read the clock, through `web-time` on `wasm32`. The Worker also sets its platform's
+- **Time.** Checkpoints (8.32.5) read the clock, through `web-time` on `wasm32`. The Worker also sets its platform's
   CPU limit, and that is a second line, not the first.
 - **Validation of everything loaded.** `PortableExpr`, structure descriptors and certificates from outside are
   validated before use (8.12).
@@ -2091,16 +2231,16 @@ through the FFI.
     checker accepts it.
 - **Fuzzing.** The parser, the `PortableExpr` loader, the CBOR envelope reader and the C ABI get fuzz targets, run on a
   schedule, with every crash becoming a test (invariant 8).
-- **Hashing.** Tables fed by input use ahash's randomised keys (8.31.2), so collisions cannot be planted.
+- **Hashing.** Tables fed by input use ahash's randomised keys (8.32.2), so collisions cannot be planted.
 - **The AI agent** (`algebra-advanced::agent`) is an untrusted client of the operation API. It proposes operations and
   candidate answers. A candidate answer becomes a result only through certify-or-escalate (8.9.3), exactly like any
   other fast, untrusted method.
 - **External tools** (SMT solvers, proof assistants) run in a separate process with a time and memory limit, and their
   output is checked as evidence (8.11).
 
-### 8.30 Crate layout and public API evolution
+### 8.31 Crate layout and public API evolution
 
-**Where the pieces live.** An enum or trait in a lower crate cannot name types from higher ones (8.32.1), so placement
+**Where the pieces live.** An enum or trait in a lower crate cannot name types from higher ones (8.33.1), so placement
 follows the dependency order:
 
 | Crate | Holds |
@@ -2111,8 +2251,8 @@ follows the dependency order:
 | `algebra-engine`, `algebra-advanced` | operations and methods, registered through `register(&mut Registry)` |
 | `urae-ext` (new) | the stable extension API: the extension-facing subset of `urae-base` and `algebra-core`, versioned on its own (8.22.3) |
 | `urae-ext-testkit` (new) | the conformance checks for extensions (8.22.4) |
-| `urae` | the facade: calls every crate's `register`, builds `AnyOperation` (8.32.3), re-exports the prelude |
-| frontends | sessions (8.14), presentation (8.17), FFI and bindings (8.28) |
+| `urae` | the facade: calls every crate's `register`, builds `AnyOperation` (8.33.3), re-exports the prelude |
+| frontends | sessions (8.14), presentation (8.17), FFI and bindings (8.29) |
 
 `urae-base` is the one new crate. Both `algebra-core` and `cat-core` need its types, and neither depends on the other
 today. Being `no_std`, it serves the embedded and `const` targets of spec 13.
@@ -2134,12 +2274,12 @@ are made gradually:
   one minor release.
 - **The changelog** gets a migration note per phase, with before-and-after code for each changed public item.
 
-### 8.31 Performance
+### 8.32 Performance
 
 Revision 2 added layers: structures, accuracy, a planner, certificates. Each must cost nothing when it is not used and
 little when it is. This section sets the data layouts, dispatch rules and gates that keep it so.
 
-#### 8.31.1 Baseline
+#### 8.32.1 Baseline
 
 Measured on 27 Nov 2026, release build, mimalloc, on a graph of 8,006 nodes (polynomial and `sin` terms), two runs
 each:
@@ -2157,12 +2297,12 @@ With the allocation figures of 8.5 (about 230,000 allocations per probe pass, 74
 says the cost today is in layout, locking, cloning and hashing, not in arithmetic or the allocator. The flat-encoding
 figure covers node headers and child lists only; leaf payloads add one to three words per leaf.
 
-#### 8.31.2 The node store: a header column and a pool
+#### 8.32.2 The node store: a header column and a pool
 
 - **Ids.** `ExprId`, `SymbolId`, `FunctionId` and payload indices are `u32`. `StructureId`, `CalculusId`, `MethodId`
-  and `OpKind` are `u16`. Ids are dense, so per-node data is a `Vec<T>` indexed by id (8.31.3). The epoch of 8.5 lives
+  and `OpKind` are `u16`. Ids are dense, so per-node data is a `Vec<T>` indexed by id (8.32.3). The epoch of 8.5 lives
   in FFI handles and in the session, not in every `ExprId`, so ids do not double in size.
-- **Encoding** (revised in revision 4; 8.32.5 has the measurement). Each store holds `headers: Vec<u64>` and
+- **Encoding** (revised in revision 4; 8.33.5 has the measurement). Each store holds `headers: Vec<u64>` and
   `pool: Vec<u32>`.
   - `headers[id]` packs a 6-bit tag (an `enum NodeTag`), 2 flag bits, a 24-bit arity and the 32-bit start of the
     node's words in `pool`.
@@ -2217,7 +2357,7 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 - **Promotion** copies the nodes a result reaches, in id order (already topological), remapping through a `Vec<u32>`.
   Its cost is proportional to the result, not to the work done.
 
-#### 8.31.3 Side tables and traversals
+#### 8.32.3 Side tables and traversals
 
 - Per-node facts (structure, domain, dimension, memoised results, visited marks) are `Vec<T>` or bitsets
   (`Vec<u64>`) indexed by dense id. They are not `HashMap<ExprId, T>`: one index instead of a hash and a probe, and
@@ -2228,7 +2368,7 @@ figure covers node headers and child lists only; leaf payloads add one to three 
   tree (P29); parallel work belongs at the level of operations, batches, portfolios and large independent subtrees, with
   a minimum size before splitting.
 
-#### 8.31.4 Dispatch: generic inside, dynamic at the edges
+#### 8.32.4 Dispatch: generic inside, dynamic at the edges
 
 - **Inner loops are monomorphised.** Arithmetic, jets, tensor contractions and the numeric kernels are generic over the
   structure and element types. A `Ring<Elem = i64>` add inlines to an add with an overflow check.
@@ -2239,7 +2379,7 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 - **Exact arithmetic stays small.** Machine-word integers and rationals are checked and inline, and promote to big
   numbers (`auto-promoters`) only on overflow. The `*_into` methods (8.6.1) reuse buffers in loops.
 
-#### 8.31.5 Overheads of the new layers
+#### 8.32.5 Overheads of the new layers
 
 | Layer | Rule that bounds its cost |
 | :--- | :--- |
@@ -2247,12 +2387,12 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 | `Env` | One `Arc`, cloned by reference count; nothing per call. |
 | `Run::checkpoint()` | Decrements a local counter; every 1,024 calls it loads the cancel flag (relaxed atomic) and reads the clock. |
 | Planner | A fast path runs a single applicable, exact and cheap method directly. Plans are cached by operation kind, a shape hash of the input and the objective class. Portfolios start only above a predicted cost threshold, so small requests never spawn threads. |
-| Typing pass | Lazy and memoised per run; one forward sweep for whole-graph passes (8.32.9); dimension checks are fixed-size arrays. |
+| Typing pass | Lazy and memoised per run; one forward sweep for whole-graph passes (8.33.9); dimension checks are fixed-size arrays. |
 | Guards (8.10) | A fixed small budget for cheap deciders before a condition is recorded. |
 | Certificates and proofs (8.11) | Built only when asked for or when the goal requires certification. |
 | Provenance | A fixed-size default record (method, precision, elapsed time); full detail only when asked. |
 
-#### 8.31.6 Numerical paths
+#### 8.32.6 Numerical paths
 
 - **Cheapest representation that can meet the goal.** Most enclosures should be `f64` balls. Outward rounding uses
   `f64::next_up` and `next_down`, skipped when an error-free transformation (`TwoSum`, `TwoProd`) shows the operation
@@ -2267,13 +2407,13 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 - **Big numbers in payload tables**, so expression nodes stay hashable in a few nanoseconds whatever the size of their
   numbers.
 
-#### 8.31.7 Serialisation and FFI
+#### 8.32.7 Serialisation and FFI
 
 - `PortableExpr` carries the store's own header and pool arrays inside its CBOR envelope (8.12), so writing is a copy
   of the arrays plus the tables, and loading is a linear validation and re-intern. No text is parsed.
-- The C ABI passes handles (8.28), adds `urae_run_batch`, and converts to strings only when the caller asks for text.
+- The C ABI passes handles (8.29), adds `urae_run_batch`, and converts to strings only when the caller asks for text.
 
-#### 8.31.8 Gates
+#### 8.32.8 Gates
 
 Timing on shared CI runners is noisy; allocation counts and node counts are not. So the gates come in two kinds:
 
@@ -2286,7 +2426,7 @@ Timing on shared CI runners is noisy; allocation counts and node counts are not.
 
 Targets, to be confirmed by the phase that delivers each:
 
-| Path | Today | Target | Phase (8.35) |
+| Path | Today | Target | Phase (8.36) |
 | :--- | :--- | :--- | :--- |
 | node hash | 25–41 ns | 8 ns or less | 0 |
 | node read (`node()` and children) | 40–46 ns | 5 ns or less | 2 |
@@ -2296,13 +2436,13 @@ Targets, to be confirmed by the phase that delivers each:
 | `Outcome`, `Env` and planner overhead on the probe workload | not applicable | 2% or less | 1 and 6 |
 | `f64` ball evaluation against plain `f64` in the VM | not applicable | 4× or less | 4 |
 
-### 8.32 Alternatives considered
+### 8.33 Alternatives considered
 
 Each design decision above had alternatives. This section records them, with the trade-offs and the verdict, so a later
 change can see what was weighed. Where the review changed the design (revision 4), the earlier section has been updated
 and the verdict says so.
 
-#### 8.32.1 Enums or ids: one rule
+#### 8.33.1 Enums or ids: one rule
 
 Many decisions below choose between a Rust `enum` and an id into a table.
 
@@ -2316,7 +2456,7 @@ Many decisions below choose between a Rust `enum` and an id into a table.
 The rule the design follows:
 
 1. A set that is closed when its crate compiles and is used in hot code is an enum. That covers node tags, `CalculusKind`,
-   accuracy and enclosure kinds, `Ternary`, outcome states and the built-in functions (8.32.2). Axiom flags are a
+   accuracy and enclosure kinds, `Ternary`, outcome states and the built-in functions (8.33.2). Axiom flags are a
    bitflags word.
 2. A set that later crates, plugins or users extend, or that is created at run time, is an id into a registry. That
    covers operations, methods, structures and user functions.
@@ -2330,7 +2470,7 @@ The rule the design follows:
 The dependency direction limits rule 1. An enum in `algebra-core` cannot name a type defined in `algebra-engine` or
 `algebra-advanced`. `MathOperation` (43 variants) works today only because its payloads are strings.
 
-#### 8.32.2 Function identity (revised in revision 4)
+#### 8.33.2 Function identity (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2356,7 +2496,7 @@ impl FunctionId {
 Hot code matches on `Builtin` exhaustively and falls back to the descriptor for other ids. The descriptor table covers
 every id, so arities, aliases, printing and properties stay in one place.
 
-#### 8.32.3 Operations
+#### 8.33.3 Operations
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2372,7 +2512,7 @@ Adopted:
 - The `urae` facade, which sees every crate, builds `AnyOperation` from per-crate lists with a declarative macro, and
   the dynamic boundary (JSON, FFI, notebook) dispatches through it.
 
-#### 8.32.4 The result type (revised in revision 4)
+#### 8.33.4 The result type (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2382,7 +2522,7 @@ Adopted:
 
 The adopted shape is in 8.4.
 
-#### 8.32.5 The node store (revised in revision 4)
+#### 8.33.5 The node store (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2403,9 +2543,9 @@ The measurement behind the verdict, 27 Nov 2026, release build, 80,006 nodes, th
 | the same in random order | 9.9–11.5 ns | 8.8–11.3 ns |
 | scan for nodes of one kind | 0.71–1.09 ns per node | 0.36–0.52 ns per node |
 
-The adopted layout is in 8.31.2.
+The adopted layout is in 8.32.2.
 
-#### 8.32.6 Concurrency of the session store
+#### 8.33.6 Concurrency of the session store
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2415,19 +2555,19 @@ The adopted layout is in 8.31.2.
 | Per-thread stores, merged only at joins | no sharing at all | large shared inputs are copied per thread |
 | Epoch-based reclamation (`crossbeam-epoch`) | general | complexity without a need: nothing is freed while readers run |
 
-#### 8.32.7 Reclaiming memory (revised in revision 4)
+#### 8.33.7 Reclaiming memory (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | Never free | fastest allocation | measured: 1,535 MB left over where 0.6 MB was live (8.5) |
-| Reference counts per node, with slot reuse | frees incrementally | a count update per edge; reused slots break the children-before-parents order that the forward sweeps rely on (8.31.2) |
+| Reference counts per node, with slot reuse | frees incrementally | a count update per edge; reused slots break the children-before-parents order that the forward sweeps rely on (8.32.2) |
 | A tracing collector with free lists | general | the same order problem; pauses |
 | **Scratch scopes, promotion and compaction (adopted)** | one free per operation; order preserved | compaction copies the live graph |
 | **Regions per notebook cell (adopted for the notebook)** | a cell may refer only to earlier cells, so editing cell `k` drops the regions of cells `k` onward and nothing else; fits the incremental re-evaluation of 8.13 | the notebook must track which region each cell's results live in |
 
-The phase 0 rebuild of the notebook graph on every evaluation (8.35) stays as the stopgap until regions exist.
+The phase 0 rebuild of the notebook graph on every evaluation (8.36) stays as the stopgap until regions exist.
 
-#### 8.32.8 Structures and dispatch (revised in revision 4)
+#### 8.33.8 Structures and dispatch (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2448,7 +2588,7 @@ Adopted:
 - Axioms exist twice, as run-time flags and as marker traits (or associated constants) on the static kernels, and a
   test checks that the two agree.
 
-#### 8.32.9 The typing pass (revised in revision 4)
+#### 8.33.9 The typing pass (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2457,7 +2597,7 @@ Adopted:
 
 Both write the same side table.
 
-#### 8.32.10 Calculus identity (revised in revision 4)
+#### 8.33.10 Calculus identity (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2468,7 +2608,7 @@ Both write the same side table.
 `CalculusId(0)` is classical, and the classical path checks for zero and never consults the table, so the common case
 pays nothing for the generality.
 
-#### 8.32.11 Accuracy and enclosures
+#### 8.33.11 Accuracy and enclosures
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2481,7 +2621,7 @@ Verdict: the enum at boundaries, and one representation per lane inside the kern
 midpoint and radius, and the `f64` lane endpoints. Affine forms and Taylor models are an optional `Enclosure` case for
 iterative solvers, not a default.
 
-#### 8.32.12 Precision control
+#### 8.33.12 Precision control
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2490,7 +2630,7 @@ iterative solvers, not a default.
 | Fixed tiers (64, 128, 256 bits, ...) | simple | coarse |
 | **Predict with condition numbers, then retry (adopted)** | few retries; still correct when the prediction is wrong | needs the derivative, which the engine has |
 
-#### 8.32.13 Multiprecision arithmetic
+#### 8.33.13 Multiprecision arithmetic
 
 | Option | Licence | For | Against |
 | :--- | :--- | :--- | :--- |
@@ -2505,7 +2645,7 @@ Verdict: benchmark `dashu` against `astro-float` on the ball kernels at 64 to 4,
 policy excludes `rug` and `malachite` unless the policy changes, which would be a project decision, not a technical
 one.
 
-#### 8.32.14 Serialisation format (revised in revision 4)
+#### 8.33.14 Serialisation format (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2518,7 +2658,7 @@ one.
 Adopted: metadata, tables and versioned keys in CBOR, and the header and pool arrays as little-endian byte strings
 inside it. JSON is a debug view of the same envelope.
 
-#### 8.32.15 Hashing
+#### 8.33.15 Hashing
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2529,7 +2669,7 @@ inside it. JSON is a debug view of the same envelope.
 
 Verdict unchanged. foldhash joins the benchmark of phase 0.
 
-#### 8.32.16 Asynchrony on `wasm32` (revised in revision 4)
+#### 8.33.16 Asynchrony on `wasm32` (revised in revision 4)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2540,7 +2680,7 @@ Verdict unchanged. foldhash joins the benchmark of phase 0.
 Threads are used where the host is cross-origin isolated. Short operations still step through checkpoints on the main
 thread.
 
-#### 8.32.17 Language bindings
+#### 8.33.17 Language bindings
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2552,19 +2692,19 @@ thread.
 
 Verdict: the C ABI and pyo3 as planned; evaluate diplomat if C++, Dart or Kotlin bindings become goals.
 
-#### 8.32.18 Planner policy
+#### 8.33.18 Planner policy
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | Fixed rules | predictable; cheap | brittle as methods are added |
 | Cost models | adapts to input size and goal | needs calibration |
-| Learned predictions (bandits, the MCTS policy) | improves with use | reproducibility across versions (8.36) |
+| Learned predictions (bandits, the MCTS policy) | improves with use | reproducibility across versions (8.37) |
 | Always race a portfolio | robust | wastes cores and memory on small requests |
 
 Verdict: in stages. Rules and the fast path first, cost models next, learned predictions last, and portfolios only above
-a cost threshold (8.31.5).
+a cost threshold (8.32.5).
 
-#### 8.32.19 Session state (added in revision 5)
+#### 8.33.19 Session state (added in revision 5)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2572,7 +2712,7 @@ a cost threshold (8.31.5).
 | An event log, replayed to rebuild state | perfect history | replay cost grows with the session |
 | **A chain of immutable environments with a persistent map (adopted)** | undo is a pointer; tasks keep their view; one scoping rule; a statement costs only its change | a persistent-map dependency; slightly slower lookups than a plain hash map |
 
-#### 8.32.20 Bulk numerical data (added in revision 5)
+#### 8.33.20 Bulk numerical data (added in revision 5)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2581,15 +2721,15 @@ a cost threshold (8.31.5).
 | `nalgebra` or `faer` for dense linear algebra | fast, tested `f64` kernels | `f64` and `Complex` oriented; not over arbitrary structures |
 | **Own `Array<A>`, `Csr<A>`, `Mesh` and `Field<A>` over the structure layer, calling `faer`-class kernels as methods for `f64` (adopted)** | one generic family for every structure; specialised speed where it matters; answers section 6's decision 2 | the generic types must be written and tested |
 
-#### 8.32.21 Reverse-mode differentiation (added in revision 6)
+#### 8.33.21 Reverse-mode differentiation (added in revision 6)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | A recorded tape of operations | general; handles control flow | memory per operation; a second representation of the computation |
 | Forward mode only, one pass per input (today's `TapeFreeVjp`) | simple | cost grows with the number of inputs; impractical for models with many weights |
-| **A backward sweep over node ids, adjoints in a side table (adopted)** | the store's id order is already topological (8.31.2), so no tape; memory is one adjoint per node | covers expression DAGs; operations need their own `vjp` rules (8.18.1) |
+| **A backward sweep over node ids, adjoints in a side table (adopted)** | the store's id order is already topological (8.32.2), so no tape; memory is one adjoint per node | covers expression DAGs; operations need their own `vjp` rules (8.18.1) |
 
-#### 8.32.22 Extension mechanisms (added in revision 6)
+#### 8.33.22 Extension mechanisms (added in revision 6)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2601,7 +2741,7 @@ a cost threshold (8.31.5).
 | Native dynamic libraries through the C ABI | native speed, loaded at run time | `unsafe` loading, no stable Rust ABI, nothing on `wasm32`; rejected |
 | An embedded scripting language (Lua, Rhai) | easy to write | a second language beside UraeScript and CatScript; slower than tier C; rejected |
 
-#### 8.32.23 Random number generation (added in revision 6)
+#### 8.33.23 Random number generation (added in revision 6)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2609,7 +2749,7 @@ a cost threshold (8.31.5).
 | One shared sequential generator | simple | parallel results depend on scheduling |
 | **Counter-based generators keyed by seed, operation and stream (adopted)** | reproducible regardless of thread order; streams split without coordination | a few more instructions per number than a sequential generator |
 
-#### 8.32.24 How to parse UraeScript (added in revision 7)
+#### 8.33.24 How to parse UraeScript (added in revision 7)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
@@ -2618,28 +2758,36 @@ a cost threshold (8.31.5).
 | tree-sitter as the parser | incremental; editor support | a C runtime in the core; its trees still need an elaborator |
 | **A hand-written finite-state lexer and Pratt parser, with the grammar kept as EBNF (adopted)** | precise control of the ambiguity rules; spans and recovery; incremental by statement; no regular expressions; tree-sitter can be generated from the EBNF for editors | the parser must be kept in step with the EBNF, which a test checks on the fuzz corpus |
 
-#### 8.32.25 How powerful UraeScript is (added in revision 7)
+#### 8.33.25 Implicit multiplication (added in revision 8)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Implicit multiplication at the level of `*` (revision 7) | one table, no spacing rules | `1/2x` reads as `(1/2)x`, which is not what people write it for |
+| Implicit multiplication always tighter than `/` | `1/2x` is `1/(2x)` | `1/2 x` is also `1/(2x)`, so there is no way to write `(1/2)x` without an operator |
+| **Spacing-sensitive: tight terms bind more strongly than `/`, spaced juxtaposition binds like `*` (adopted)** | `1/2x` is `1/(2x)` and `1/2 x` is `(1/2)x`, matching handwriting | whitespace carries meaning; guarded by the canonical printer, the formatter and hover (8.23.3) |
+
+#### 8.33.26 How powerful UraeScript is (added in revision 7)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | A general-purpose language (mutable state, loops, input and output) | anything can be written | breaks purity, so memoisation and parallel evaluation are unsound; a second programming language to maintain |
 | **A pure expression language with recursion under the budget (adopted)** | sound memoisation and parallelism; easy to analyse; every function is a mathematical function | imperative algorithms must be written recursively or as tier A, C or D extensions |
 
-#### 8.32.26 Module source form (added in revision 7)
+#### 8.33.27 Module source form (added in revision 7)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | Pure data (TOML or CBOR) only | trivially safe to load | unpleasant to write mathematics in |
 | **UraeScript as the authored form, CBOR as the compiled and portable form (adopted)** | users write modules the way they write cells; tools exchange the compiled form | two forms, kept equivalent by a round-trip test |
 
-#### 8.32.27 Cache eviction (added in revision 7)
+#### 8.33.28 Cache eviction (added in revision 7)
 
 | Option | For | Against |
 | :--- | :--- | :--- |
 | Least recently used | simple | evicts an expensive Gröbner basis as readily as a cheap simplification |
 | **Cost per byte, as GreedyDual-Size does (adopted)** | keeps what is expensive to recompute | needs the recorded cost, which provenance already has |
 
-#### 8.32.28 Smaller choices
+#### 8.33.29 Smaller choices
 
 - **Id width.** `u32` node ids (up to about 4.3 billion nodes) rather than `u64` (twice the memory) or `usize`
   (platform-dependent). The `u32::MAX` guard of audit `E4` stays.
@@ -2647,12 +2795,12 @@ a cost threshold (8.31.5).
   is ambiguous between "unknown" and "not computed".
 - **Global allocator.** mimalloc, unchanged (8.5).
 
-### 8.33 Coverage
+### 8.34 Coverage
 
 This section checks the design against everything URAE contains and promises. A subsystem with no row here would be
 one the design forgot.
 
-#### 8.33.1 Every subsystem
+#### 8.34.1 Every subsystem
 
 | Area | Modules (section 3) | How it fits the design | Accuracy it reports | Phases |
 | :--- | :--- | :--- | :--- | :--- |
@@ -2663,39 +2811,39 @@ one the design forgot.
 | Geometry and simulation | `cad`, `geometry`, `iga`, `pipeline`, `visualizer` | `Mesh` and `Field` values; exact predicates; CAD-to-FEA as a pipeline | exact predicates; `Estimated` for meshes and solutions | 7, then wave 2 |
 | Algebraic structures | `tensor`, `cartan`, `cartan_symbolic`, `curvature`, `diffalg`, `weyl_dmodules`, `interconnect`, `exceptional_lie`, `cft`, `qft`, `padic_hodge`, `topology`, `tda`, `noneuclidean`, `tropical` | structures and constructors (`TensorSpace`, `StructureConstants`, `Weil`, `Tropical`); Ore operators for `weyl_dmodules` and `diffalg` | exact | 3, 5 |
 | Search and learning | `mcts`, `heuristic`, `geometric_dl` | methods, and predictors inside the planner | not applicable | 6 |
-| Interfaces | `executor`, `api`, `macros`, `session`, `stream`, `query`, `workbench`, `html_export` | registry dispatch; the fluent API and macros over operations (8.30); sessions (8.14); `Task` (8.27); queries as pipelines; renderers (8.17) | as computed | 1, 7 |
+| Interfaces | `executor`, `api`, `macros`, `session`, `stream`, `query`, `workbench`, `html_export` | registry dispatch; the fluent API and macros over operations (8.31); sessions (8.14); `Task` (8.28); queries as pipelines; renderers (8.17) | as computed | 1, 7 |
 | Advanced domains | `algebra-advanced`: `proof`, `morphism`, `quantum`, `crypto`, `stochastic`, `galois`, `knot`, `surreal`, `padic`, `adele`, `clifford`, `finite`, `structure_tensor`, `transcendents`, `statmech` | certificates and proof export (8.11); morphisms (8.6.4); structures (8.6.3); Itô calculus (8.8) | exact or as computed | 3, 5, 6 |
-| Code generation and GPU | `algebra-advanced`: `codegen`, `gpu` | compiled lanes and `const` and WGSL lowering as methods (8.31.6) | `Estimated` unless certified | 4, then wave 1 |
+| Code generation and GPU | `algebra-advanced`: `codegen`, `gpu` | compiled lanes and `const` and WGSL lowering as methods (8.32.6) | `Estimated` unless certified | 4, then wave 1 |
 | Machine learning | `pinn`, `neural_ode`, `geometric_dl`, the learned policy in `mcts` and `heuristic` | models as `FunctionValue`s, training as `Optimize`, learned methods with validity regions, analysis by enclosures (8.18) | `Estimated` or `Probabilistic`; `Enclosed` bounds from analysis | 4, 6, then wave 8 |
 | Statistics and data | the statistics commands in `inference`, `distributions`, `stream` | tables as values, statistics as operations (8.18.5) | `Probabilistic` with a stated confidence | 7 |
 | Randomised algorithms | `probabilistic`, `numbertheory` (Pollard's rho, primality), `lemma_miner` | the one randomness policy (8.20) | `Probabilistic`, or exact with an error-probability certificate | 4 |
-| Parsing and languages | `parser`, `query`, `input_text`, `session` (`expand_definitions`), `cat-lang`, the notebook's parser | UraeScript, its elaborator, dialects and the document format (8.23) | not applicable | 1, 3, 7 |
+| Parsing and languages | `parser`, `query`, `input_text`, `session` (`expand_definitions`), `cat-lang`, the notebook's parser | UraeScript, its elaborator, dialects and the document format (8.23); the old syntaxes only through the converter (8.23.9) | not applicable | 1, 3, 7 |
 | Caching | the notebook's `LineCache` and `PlotCache`, the VM's `subexpr_cache` | the memoisation layers (8.25) | as cached | 1, 2, 6 |
 | Extensions | none today | extension points, tiers A to E, contract and testing kit (8.22) | as declared, weighed by trust | 1, 7 |
-| AI agent | `algebra-advanced::agent` | an untrusted client of the operation API (8.29) | through certification only | 7 |
+| AI agent | `algebra-advanced::agent` | an untrusted client of the operation API (8.30) | through certification only | 7 |
 | Categorical engine | `cat-core`, `cat-bridge`, `cat-anytime`, `cat-egraph`, `cat-tangent`, `cat-numbers`, `cat-lang` | method-local `CatTerm`; bridge as morphisms; shared types (8.16) | as the method declares | 3 to 5 |
-| Integer promotion | `auto-promoters` | the checked fast path of `ScalarRing` kernels (8.31.4) | exact | 0, 3 |
-| Frontends | `urae-notebook`, `urae-cli`, `urae-wasm`, `urae-lsp`, `urae-kernel`, `urae-py`, `urae-ffi` | sessions, presentation, the FFI and bindings, the Web Worker (8.14, 8.17, 8.27, 8.28) | as rendered (8.17) | 7 |
-| spodeian-core dependencies | `sml-runtime` (umbral calculus, model loading), `spodeian-parallel`, `spodeian-telemetry`, `sml-lake` | umbral bases (8.8); parallelism at coarse grain (8.31.3); telemetry feeding planner calibration (8.9.4) | not applicable | 5, 6 |
+| Integer promotion | `auto-promoters` | the checked fast path of `ScalarRing` kernels (8.32.4) | exact | 0, 3 |
+| Frontends | `urae-notebook`, `urae-cli`, `urae-wasm`, `urae-lsp`, `urae-kernel`, `urae-py`, `urae-ffi` | sessions, presentation, the FFI and bindings, the Web Worker (8.14, 8.17, 8.28, 8.29) | as rendered (8.17) | 7 |
+| spodeian-core dependencies | `sml-runtime` (umbral calculus, model loading), `spodeian-parallel`, `spodeian-telemetry`, `sml-lake` | umbral bases (8.8); parallelism at coarse grain (8.32.3); telemetry feeding planner calibration (8.9.4) | not applicable | 5, 6 |
 
-#### 8.33.2 Every invariant (section 2)
+#### 8.34.2 Every invariant (section 2)
 
 | Invariant | How the design keeps it |
 | :--- | :--- |
-| 1. One hash-consed expression arena; nothing mutates a node | Still hash-consed and immutable (8.31.2). The arena becomes a session store with scratch scopes layered over it, sharing one id space within a run (8.5). |
-| 2. One operation language, one execution path | Operations, the registry and `AnyOperation`; every frontend and the fluent API dispatch through them (8.4, 8.13, 8.32.3). |
+| 1. One hash-consed expression arena; nothing mutates a node | Still hash-consed and immutable (8.32.2). The arena becomes a session store with scratch scopes layered over it, sharing one id space within a run (8.5). |
+| 2. One operation language, one execution path | Operations, the registry and `AnyOperation`; every frontend and the fluent API dispatch through them (8.4, 8.13, 8.33.3). |
 | 3. Exact before floating point | Planner rule 1 (8.9.2); the tower's rules (8.7.2); exact geometric predicates (8.15). |
 | 4. Refuse rather than guess | `Result<Answer, Refusal>`, `GoalState::NotMet`, `Associated` against `Equal`, calculi that refuse a rule they lack, renderers that never drop a condition (8.4, 8.7.4, 8.8.2, 8.17). |
-| 5. Results carry their evidence | Certificates and derivations (8.11), provenance (8.9.4). |
-| 6. Bounded resources | `Run`'s meter and checkpoints, memory metering and limits before work (8.4, 8.29, 8.31.5). |
-| 7. No unsafe code outside the FFI crate; no panics on reachable input | The store uses safe crates only (8.31.2); `Fallible` everywhere (8.6.1); `catch_unwind` and the unwind profile at the FFI (8.28). |
-| 8. Every defect gets a test that fails on the old code | The migration's rule (8.35); fuzz crashes become tests (8.29). |
+| 5. Results carry their evidence | Certificates and derivations (8.11), provenance (8.9.4), audit records with premises and exports (8.27). |
+| 6. Bounded resources | `Run`'s meter and checkpoints, memory metering and limits before work (8.4, 8.30, 8.32.5). |
+| 7. No unsafe code outside the FFI crate; no panics on reachable input | The store uses safe crates only (8.32.2); `Fallible` everywhere (8.6.1); `catch_unwind` and the unwind profile at the FFI (8.29). |
+| 8. Every defect gets a test that fails on the old code | The migration's rule (8.36); fuzz crashes become tests (8.30). |
 
-#### 8.33.3 Every wave of the specification (section 6)
+#### 8.34.3 Every wave of the specification (section 6)
 
 | Wave | What it needs from this design | Where |
 | :--- | :--- | :--- |
-| 1 | carrier and operator traits, the `ScalarRing` and `ContextualAlgebra` split, sparse types, compensated arithmetic, outward rounding, `const` and WGSL lowering | 8.6, 8.15, 8.7.3, 8.27, 8.31.6 |
+| 1 | carrier and operator traits, the `ScalarRing` and `ContextualAlgebra` split, sparse types, compensated arithmetic, outward rounding, `const` and WGSL lowering | 8.6, 8.15, 8.7.3, 8.28, 8.32.6 |
 | 2 | geometry values and exact predicates | 8.15 |
 | 3 | discretisations as methods, fields on meshes | 8.9, 8.15 |
 | 4 | stochastic and rough-path calculi, particle methods | 8.8, 8.15 |
@@ -2704,7 +2852,7 @@ one the design forgot.
 | 7 | multi-solution discovery, complete CAS | `SolutionSet` and `Cases` (8.4), 8.9 |
 | 8 | SciML, AI analysis, the formal kernel, non-classical logics | differentiation, models and analysis (8.18), methods (8.9), certificates (8.11), logics (8.10) |
 
-### 8.34 Consolidations the design requires
+### 8.35 Consolidations the design requires
 
 - One p-adic engine (the `cat-numbers` type, limited to digits below 256, is replaced), one adele type built as
   `Adeles<Q>`, one surreal engine (ledger `B16`), one Itô implementation (P12).
@@ -2727,13 +2875,15 @@ one the design forgot.
 - One grammar and elaborator in place of the permissive parser, the query rewrites, `input_text` and text substitution
   of definitions; CatScript as a dialect (P43 to P45).
 - One mechanism for user definitions and packages: cells are anonymous modules (8.24.1).
+- CatScript, CatPad and the old permissive syntax deprecated, reachable only through the converter (8.23.9).
+- One record and export path in place of the separate `ProofTrace` export features (P47).
 - One `ModelGraph` for the network code in `pinn`, `neural_ode` and `geometric_dl` (P38); `TapeFreeVjp` absorbed by
   the reverse sweep (P37).
 
-### 8.35 Migration
+### 8.36 Migration
 
 Each step starts with a failing test and ends with a ledger entry, as for any defect (invariant 8). Each phase also has
-a performance gate (8.31.8); a phase is done when both pass.
+a performance gate (8.32.8); a phase is done when both pass.
 
 **Documentation.** Every new public item follows `DOCUMENTATION_STANDARDS.md` (a mathematical statement, complexity,
 failure modes and a compiled example) when it lands, not afterwards.
@@ -2746,7 +2896,7 @@ switch, and each becomes a ledger entry if the old path was the one that was wro
 | :--- | :--- | :--- | :--- |
 | 0 | Fixes that need none of the redesign: outward rounding in `RealInterval` and `UniversalBall` (P16); an honest `BigValue` (P15); `WeilJet` refusing mixed calculi (P13); `worst_case_radius` not answering for probabilistic spreads (P17); checked `ConstRational` (P8); FFI `catch_unwind`, unwind profile and session lock (P9); notebook graph rebuilt per evaluation (P3); ahash for the deduplication maps (P27); the counting-allocator gate and the scheduled benchmark job | `[0.1, 0.1] + [0.2, 0.2]` contains the exact sum of the two doubles (fails today); a release-build `ConstRational` overflow is an error, not a wrap; a panicking call through the C ABI returns an error code; the notebook's node count stays flat over 1,000 slider steps | node hash 8 ns or less; allocation and node-count gates recorded at today's values |
 | 1 | `Outcome`, `Env`, `Run`, `Operation`; the registry with descriptors replacing the command tables and hooks (8.13); `FunctionId` with the `Builtin` enum and the `wildcard_enum_match_arm` lint; `PortableExpr` and schema versions (8.12); one method each for differentiate, simplify, solve and evaluate; the old traits become wrappers; `Env` threaded through in place of fresh `EvalContext`s | every existing test passes through the wrappers; one test per goal state and refusal kind; every expression in the test suites round-trips through `PortableExpr`; a malformed `PortableExpr` (a cycle, a bad arity, an out-of-range payload) is rejected; one command table remains | `Outcome` and `Env` overhead 2% or less on the probe workload |
-| 2 | The flat store (8.31.2): headers, pool, hashes, payload tables, scratch scopes with promotion, the segmented session store, forward-sweep passes, worklist traversals | the probe of 8.5 shows no session growth from intermediates; deep expressions (depth 10^5) format and evaluate without stack overflow on `wasm32` | node read 5 ns or less; deduplication hit 20 ns or less; 50,000 allocations or fewer per probe pass |
+| 2 | The flat store (8.32.2): headers, pool, hashes, payload tables, scratch scopes with promotion, the segmented session store, forward-sweep passes, worklist traversals | the probe of 8.5 shows no session growth from intermediates; deep expressions (depth 10^5) format and evaluate without stack overflow on `wasm32` | node read 5 ns or less; deduplication hit 20 ns or less; 50,000 allocations or fewer per probe pass |
 | 3 | Structure traits, `StructureInfo`, the typing pass with domains and dimensions; logic structures; `declare`, `assume`, `define` and `let` filling `Env.knowledge`; structures for `Z`, `Q`, `Z/nZ`, `GF(p^n)`, `Poly`, `Mat`, `StructureConstants`, `Quantity`; merged p-adic, adele and surreal carriers; rewrite rules declaring their axioms | octonion expressions are never reassociated; `x*y - y*x` simplifies to `0` over `Q` and not over `Mat_2(Q)`; field axioms are checked from structure constants; `3 m + 2 s` is refused and `3 m * 2 s` is `6 m s`; a contradictory scope is reported | typing pass 10% or less of the cost of the operation it serves on the probe workload |
 | 4 | Arbitrary-precision balls, constant generators, the precision retry loop, `Accuracy` in every numerical path; ball and double-double lanes in the VM | `evaluate(pi - 355/113, goal = 1e-60)` meets the goal with a rigorous enclosure; an unreachable goal returns `GoalState::NotMet` with the enclosure achieved | `f64` ball evaluation within 4× of plain `f64` |
 | 5 | The calculus registry: `CalculusId` on nodes, sigma-derivation rules for `Delta_h`, `D_q` and time scales, generic `Weil` jets, the Itô and Stratonovich conversion, umbral bases and bridges | the time-scale product rule with `mu = h` equals the difference rule; Itô's lemma for `exp(W_t)` gives drift `exp(W_t)/2`; Newton and Taylor series of a polynomial agree | jets carry no per-value calculus field (checked by a size test) |
@@ -2779,18 +2929,26 @@ Revision 7 adds:
 
 | Phase | Added work | Added exit test |
 | :--- | :--- | :--- |
-| 1 | the lexer, the Pratt parser and the elaborator, run in shadow mode beside the old parser; the EBNF file; the result cache; cells as anonymous modules | all 48 example notebooks give the same results through both parsers, with every difference explained in the ledger; canonical input round-trips through the printer |
+| 1 | the lexer, the Pratt parser and the elaborator; the EBNF file; the converter (8.23.9); the result cache; cells as anonymous modules | the converter translates all 48 example notebooks and the `.cat` test files; each converted notebook gives the same results as the original did through the old parser, with every difference explained in the ledger; canonical input round-trips through the printer; `1/2x` is `1/(2x)` and `1/2 x` is `(1/2)x` |
 | 2 | function memo tables; one computation per key | `fib(200)` under `memo` takes linear time; two tasks asking the same subproblem compute it once |
 | 3 | module statements for functions, rules, structures, calculi and units; rule termination checks; `known` with certificates | a module defining `GF(49)` loads with its irreducibility checked; a looping rule is rejected or confined to the e-graph |
 | 6 | module methods with `applies when` and `cost`; shared facts; memo packs | a module method is chosen by the planner when its guard holds and never otherwise; an asserted `known` fact appears in `holds_when` |
 | 7 | dialects (LaTeX, Mathematica, SymPy, Lean, SMT-LIB); packages and `use`; `urae-ext codegen`; incremental reparsing in the LSP; the old parser removed | a module and its generated tier A crate give identical results on its tests; an LSP edit reparses only the touched statements |
 
+Revision 8 adds:
+
+| Phase | Added work | Added exit test |
+| :--- | :--- | :--- |
+| 1 | records at the `summary` level: claims, premises from read sets, conditions with origins, trust classes; `why` and `premises` | every claim's premises equal the facts its run read; removing a listed premise invalidates the claim |
+| 6 | `standard` and `full` records; Lean, Coq, LaTeX, Markdown and SMT-LIB exporters | a record of a polynomial identity over `GF(7)` exports to Lean and checks without `sorry`; a record whose step cannot be closed lists the `sorry` in its header |
+| 7 | the binary record form, content addressing and signatures; `urae verify`; redacted exports; removal of the converter's old parsers from the default build | `urae verify` confirms a saved record on another machine; changing one step's bytes makes verification fail; a redacted export verifies with values hidden |
+
 Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap waves 1 and 6.
 
-### 8.36 Open questions
+### 8.37 Open questions
 
 - **Which multiprecision float.** `dashu` (already a dependency) against `astro-float`, both pure Rust and
-  permissively licensed. `rug` and `malachite` are LGPL, which `deny.toml` does not allow (8.32.13). The choice should
+  permissively licensed. `rug` and `malachite` are LGPL, which `deny.toml` does not allow (8.33.13). The choice should
   follow a benchmark of the ball kernels, not precede it.
 - **Segment size and dependencies.** 2^12-word segments bound the republish copy at 16 KB per promotion; the probe
   should confirm that against real promotion sizes. `arc-swap` and `hashbrown` become direct dependencies.
@@ -2815,9 +2973,9 @@ Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap wave
 - **Units.** Which base dimensions (`DimVector`'s eight against SI's seven plus angle), and whether exponents stay
   rational or become small integers for speed.
 - **Proof export coverage.** Which Mathlib types and tactics to target first; the order in 8.11 is a suggestion.
-- **Implicit multiplication after division.** `1/2x` follows one precedence table and means `(1/2)x`, with a note.
-  Many users mean `1/(2x)`. The usability probes of `PLANNING.md` should measure which reading users expect before the
-  default is fixed.
+- **Whitespace carries meaning.** Spacing decides how juxtaposed factors group (8.23.3). Copying an expression from a
+  source that collapses or adds spaces can change its meaning. The canonical printer and the hover display guard
+  against that, but pasted input from other tools should be checked in the usability probes.
 - **Exact decimals.** Exact decimal literals keep invariant 3, but numerical users may expect float speed from `2.5`.
   `~` opts out per literal; whether a scope-wide setting is also needed is open.
 - **Rule termination.** A decreasing measure on patterns is sufficient but conservative; some useful rule packs will
@@ -2845,7 +3003,7 @@ Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap wave
 - **External deciders.** Calling an external SMT solver or proof assistant needs a process boundary and a licence
   check (`deny.toml`); URAE's own checkers stay the default.
 
-### 8.37 Revision history
+### 8.38 Revision history
 
 **Revision 1** (commit `fbc3d09`): operations as values with a `run` method; one `Outcome` with value, steps,
 certificate and diagnostics; one mutable `Cx`; `ExprStore` and `ExprBuilder`; memory reclaimed by scope with the
@@ -2888,7 +3046,7 @@ left out, and the cost of its own layers:
    fixes that inconsistency (P21).
 4. **One registry and composition were added (8.13).** Descriptors replace the command tables; pipelines are
    operations; every reinterpretation of input is visible.
-5. **A performance section was added (8.31), with measured baselines:** a flat `u32` node store, dense ids and side
+5. **A performance section was added (8.32), with measured baselines:** a flat `u32` node store, dense ids and side
    tables, forward sweeps, ahash, lock-free reads through immutable segments, monomorphised inner loops, bounded
    overheads for every new layer, and deterministic allocation gates. Revision 2 left node storage as an open question;
    the measurements settled it in favour of the flat layout.
@@ -2896,36 +3054,36 @@ left out, and the cost of its own layers:
    read; ids leave a run only through promotion.
 7. **Migration gained a performance gate per phase,** and the new work went into phases 0, 1, 3, 6 and 7.
 
-**Revision 4** (commit `4ed0ea9`) set out the alternatives to each decision (8.32), with a common rule for when a set is an enum
+**Revision 4** (commit `4ed0ea9`) set out the alternatives to each decision (8.33), with a common rule for when a set is an enum
 and when it is an id, and adopted these changes:
 
 1. **Built-in functions became a closed `Builtin` enum** whose discriminants are the low `FunctionId`s, so the code
    that must handle every built-in is checked for exhaustiveness. Other functions stay open through the registry
-   (8.12, 8.32.2).
+   (8.12, 8.33.2).
 2. **The result type became `Result<Answer<T>, Refusal<T>>`** plus shared information. A value exists exactly when there
-   is an answer, `?` works, and a goal that is missed or an anytime cut-off is a state of the answer (8.4, 8.32.4).
+   is an answer, `?` works, and a goal that is missed or an anytime cut-off is a state of the answer (8.4, 8.33.4).
 3. **The node store became a `u64` header column and a `u32` pool,** in place of flat words with an offsets array. Memory
    and read cost are the same as measured, scans by kind are twice as fast, and tag and arity are read without touching
-   the pool (8.31.2, 8.32.5).
+   the pool (8.32.2, 8.33.5).
 4. **Calculi became a closed `CalculusKind` enum plus a parameter table,** with a classical fast path that never
-   consults the table (8.8.2, 8.32.10).
+   consults the table (8.8.2, 8.33.10).
 5. **Structure dispatch was layered and made explicit:** descriptors for typing and serialisation, monomorphised kernels
-   selected once per batch, and a dynamic fallback (8.6.1, 8.32.8).
-6. **Typing became lazy and memoised by default,** with the forward sweep kept for whole-graph passes (8.6.2, 8.32.9).
+   selected once per batch, and a dynamic fallback (8.6.1, 8.33.8).
+6. **Typing became lazy and memoised by default,** with the forward sweep kept for whole-graph passes (8.6.2, 8.33.9).
 7. **Serialisation uses a CBOR envelope** carrying the node arrays as byte strings, so other languages read it without
-   generated code (8.12, 8.32.14).
+   generated code (8.12, 8.33.14).
 8. **The notebook reclaims memory by regions per cell,** which fits incremental re-evaluation, with the per-evaluation
-   rebuild as the stopgap (8.5, 8.32.7).
-9. **In the browser, asynchronous work defaults to a Web Worker** exchanging `PortableExpr` messages (8.27, 8.32.16).
+   rebuild as the stopgap (8.5, 8.33.7).
+9. **In the browser, asynchronous work defaults to a Web Worker** exchanging `PortableExpr` messages (8.28, 8.33.16).
 10. **The multiprecision candidates were narrowed by licence:** `rug` and `malachite` are LGPL, which `deny.toml` does
-    not allow (8.32.13, 8.36).
+    not allow (8.33.13, 8.37).
 
 **Revision 5** (commit `1753caf`) came from a full read-through of revision 4 against everything URAE contains:
 
 1. **Contradictions fixed:**
-   - stale wording about the node store (8.5, 8.31.2) and the typing pass (8.31.5);
-   - the FFI sending midpoints as decimal text, against 8.12's exact form (8.28);
-   - the FFI's outcome still having a "status" (8.28);
+   - stale wording about the node store (8.5, 8.32.2) and the typing pass (8.32.5);
+   - the FFI sending midpoints as decimal text, against 8.12's exact form (8.29);
+   - the FFI's outcome still having a "status" (8.29);
    - racing methods that made replay non-deterministic; the winner is now chosen deterministically (8.9.3);
    - operations whose fields could not refer to other steps' outputs; fields are now `Input<T>` (8.4);
    - `PortableExpr` missing the calculus table and user-function bodies (8.12).
@@ -2938,12 +3096,12 @@ and when it is an id, and adopted these changes:
    shared types (8.16).
 6. **Presentation rules and diagnostics** with stable codes and source spans (8.17).
 7. **Safety:** limits before work, memory metering, validation, fuzzing, the agent and external tools as untrusted
-   (8.29).
-8. **Crate placement** with one new `urae-base` crate, and gradual API evolution (8.30).
+   (8.30).
+8. **Crate placement** with one new `urae-base` crate, and gradual API evolution (8.31).
 9. **One `Derivation`** for explanations and proofs (8.11), property tests of structure laws (8.6.1), compaction that is
    safe with running tasks (8.5), and a result cache with read-set invalidation (8.13).
-10. **Coverage tables** for subsystems, invariants and waves (8.33); two more alternatives (8.32.19, 8.32.20); shadow
-    mode and added work in the migration (8.35).
+10. **Coverage tables** for subsystems, invariants and waves (8.34); two more alternatives (8.33.19, 8.33.20); shadow
+    mode and added work in the migration (8.36).
 
 **Revision 6** (commit `840a4c2`) added the areas that revision 5 still left open, and integration of external libraries:
 
@@ -2959,11 +3117,11 @@ and when it is an id, and adopted these changes:
 6. **Extensions (8.22):** eleven extension points; five loading tiers (Rust crates, data packages, WebAssembly
    components, host-language callbacks, external processes); a contract covering manifests, namespaces, recorded
    dependencies, trust levels, limits and stability; a testing kit; first-party domains as the first extensions.
-7. **Supporting changes:** `urae-ext` and `urae-ext-testkit` crates (8.30); three alternatives (8.32.21 to 8.32.23);
-   coverage rows for learning, statistics, randomised algorithms and extensions (8.33); problems P37 to P42;
-   requirements R22 to R27; migration work and exit tests (8.35); open questions (8.36).
+7. **Supporting changes:** `urae-ext` and `urae-ext-testkit` crates (8.31); three alternatives (8.33.21 to 8.33.23);
+   coverage rows for learning, statistics, randomised algorithms and extensions (8.34); problems P37 to P42;
+   requirements R22 to R27; migration work and exit tests (8.36); open questions (8.37).
 
-**Revision 7** (this text) designed the language and the dynamic tier:
+**Revision 7** (commit `1c34fad`) designed the language and the dynamic tier:
 
 1. **UraeScript (8.23):**
    - principles, including purity and compatibility with the 48 example notebooks;
@@ -2983,4 +3141,20 @@ and when it is an id, and adopted these changes:
 4. **A worked example (8.26)** through parse, elaboration, cache, planner, guards, run, promotion, caching and rendering,
    including invalidation when a fact is removed.
 5. **Supporting changes:** requirements R28 to R30; problems P43 to P46; coverage rows for parsing and caching;
-   consolidations; four alternatives (8.32.24 to 8.32.27); migration work and exit tests; open questions.
+   consolidations; four alternatives (now 8.33.24 and 8.33.26 to 8.33.28); migration work and exit tests; open questions.
+
+**Revision 8** (this text) followed three decisions from review:
+
+1. **Spacing decides implicit multiplication (8.23.3, 8.23.4).** A tight term (no whitespace) binds more strongly than
+   `/`, and spaced juxtaposition binds like `*`, so `1/2x` is `1/(2x)` and `1/2 x` is `(1/2)x`. Unbracketed function
+   application takes the following tight term. The canonical printer, the formatter and hover guard against
+   whitespace changing meaning. The open question on `1/2x` is closed, and an alternative is recorded (8.33.25).
+2. **UraeScript is defined afresh.** The old permissive syntax and CatScript are deprecated. Good forms are kept on
+   their merits, string-encoded expressions are dropped, and a one-time converter migrates old files with a report of
+   every change (8.23.1, 8.23.9). CatScript is no longer a dialect (8.16, 8.23.7).
+3. **Results are auditable (8.27).** A record of claims, premises, justifications, conditions with origins and trust
+   classes; three levels of detail; content addressing, signatures and `urae verify`; redacted exports; and exports to
+   UraeScript, the binary form, Lean 4 and Coq, LaTeX, Markdown and HTML, JSON and SMT-LIB, each stating what it
+   loses.
+
+Also: requirement R31, problem P47, migration work for records, and the worked example's record (8.26).
