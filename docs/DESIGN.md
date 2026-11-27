@@ -237,11 +237,14 @@ second language. Section 8 proposes answers to the first and the last two.
 
 ## 8. Proposal: one operation model across algebras, calculi and precision
 
-*Status: proposed, revision 2 (27 Nov 2026). Nothing in this section is built. Revision 1 (commit `fbc3d09`) designed
+*Status: proposed, revision 3 (27 Nov 2026). Nothing in this section is built. Revision 1 (commit `fbc3d09`) designed
 the calling conventions: operations as values, one result type, read and build capabilities, memory by scope, async
-and FFI adapters. Revision 2 tests that design against the rest of URAE's scope (several calculi, arbitrary algebraic
-structures, symbolic and numerical analysis together, arbitrary precision with error tracking, automatic choice of
-methods) and changes it where it did not fit; section 8.15 lists the changes and why. The section proposes answers to
+and FFI adapters. Revision 2 (commit `e614cb3`) tested that design against the rest of URAE's scope (several calculi,
+arbitrary algebraic structures, symbolic and numerical analysis together, arbitrary precision with error tracking,
+automatic choice of methods) and changed it where it did not fit. Revision 3 adds what the plan and the specification
+still required (logic and decision, proofs and certificates, function identity, units, interoperability,
+serialisation, one registry, composition) and a performance section with measured baselines, data layouts and gates.
+Section 8.20 lists the changes in each revision and why. The section proposes answers to
 the first, third and fourth of the open decisions in section 6. It reuses the specification's names where one exists
 (`ExecutionObjective`, `AccuracyGoal`, `NumericRep`, `RuntimeEnv`, `ScalarRing` and `ContextualAlgebra`,
 certify-or-escalate) and says where it differs.*
@@ -258,11 +261,17 @@ certify-or-escalate) and says where it differs.*
 | R6 | Arbitrary precision where the problem allows it; where machines or budgets do not, a tracked and honest statement of how accurate the result is | invariants 4 and 6, spec 17 and 25.1 |
 | R7 | Automatic blending of methods to reach the requested accuracy at the lowest cost, with the user able to override any choice | spec 9, 19, 44.4 |
 | R8 | Every rule above keeps the existing invariants: exact before floating point, refuse rather than guess, bounded resources, no unsafe code outside the FFI crate | section 2 |
+| R9 | Logics and decision: assumptions as formulas in a stated logic, classical and non-classical logics, decision procedures that return evidence | spec 35, `logic.rs`, `smt.rs` |
+| R10 | Proofs: results carry checkable certificates, and proof traces export to Lean 4 and Coq with the right types and tactics | invariant 5, spec 23, `algebra-advanced::proof` |
+| R11 | Interoperability: one identity per function, domains and units as part of typing, conversions between Rust carriers and external type systems | spec 38, 41, `D13`, `units.rs` |
+| R12 | Serialisation: every value, structure, operation and result that leaves a session has a portable, versioned form | audit `E8` |
+| R13 | One registry for operations and methods, and composed pipelines as first-class operations | spec 8, 29, 37 |
+| R14 | Performance: the new layers cost nothing when unused and little when used; hot paths are measured and gated | this proposal |
 
 ### 8.2 What exists and what is in the way
 
 Each item was checked against `dev` at commit `1dfd2d4`. P1 to P10 come from revision 1; P11 to P20 were found while
-testing it against R3 to R7.
+testing it against R3 to R7; P21 to P30 while testing revision 2 against R9 to R14.
 
 | # | Observation | Where |
 | :--- | :--- | :--- |
@@ -286,10 +295,20 @@ testing it against R3 to R7.
 | P18 | 41 places outside test modules in algebra-engine build a fresh `EvalContext` (`::default()` or `::new`), losing the caller's bindings and precision (spec 44.4, audit `J4`). | algebra-engine |
 | P19 | Method choice is spread over the simplifier's domain detector, the lifting router (`LiftingFunctor`), the MCTS and heuristic tiers, and `cat-anytime`'s `FidelityMode`, with no shared description of what a method costs, guarantees or applies to. | `simplify/detector.rs`, `lifting/router.rs`, `heuristic.rs`, `cat-anytime` |
 | P20 | Three overlapping error types (`UncertainValue`, `UncertaintyKind`, `ErrorEnclosure`), and `ErrorEnclosure::method` is a free-form `String`. | `interval.rs`, `enclosure.rs` |
+| P21 | Nothing portable exists. `ExprNode` derives `Serialize`, but its children serialise as indices into one session's graph; `ExprGraph` cannot be serialised; `MathOperation` carries expressions as text (`String` fields throughout, no `ExprId`); the notebook saves only document text. Revision 2's JSON entry point assumed a portable expression format that does not exist. | `graph.rs`, `operation.rs`, `urae-notebook/src/notebook/session.rs` |
+| P22 | A proof step is a rule name plus a before and an after. The Lean and Coq export types every step over `ℝ` and closes it with `ring` or leaves `sorry` / `Admitted`. Evidence from `zeilberger_proof`, the Schwartz–Zippel tier and `FormalEquivalenceProver` has three unrelated shapes. | `algebra-advanced/src/proof.rs`, `lemma_miner.rs` |
+| P23 | The logic layer (`AssumptionsContext`, `Predicate`, `ThreeValuedLogic`, `GeneralizedValuedLogic<N>`, `SatSolver`, `smt.rs`) has no connection to structures or results; conditions are not formulas of a stated logic. | `logic.rs`, `smt.rs` |
+| P24 | Functions are identified by name. Alias lists (`"atan" \| "arctan"`) are repeated in `vm.rs`, `numeric.rs`, `limits.rs`, `executor.rs` and `simplify/mod.rs` (`canonical_function_name` normalises some spellings at intern time, but identity is still a string). | spec 38 |
+| P25 | Two unit models: `units.rs` (seven integer SI exponents) and cat-core's `DimVector` (eight rational exponents), which algebra-engine never uses. | `units.rs`, `cat-core/src/dimensions.rs` |
+| P26 | Two command tables that must stay in step (`parser.rs`, `numeric_commands.rs`), an ordered hook list (`COMMAND_HOOKS`) and inline special cases before it; no single registry of operations. | `PLANNING.md` (Structure), `session.rs` |
+| P27 | The deduplication maps (`ExprGraph`, `SymbolTable`, the cat-core arenas) are `DashMap`s with the default SipHash: 25–41 ns to hash a node, against 4–8 ns for ahash or FxHash (ahash is already a dependency). | `graph.rs`, `symbol.rs`, `cat-core/src/context.rs` |
+| P28 | A node read costs 40–46 ns (read lock, clone, `SmallVec` copy of the children) against 2.5 ns from a flat `u32` array; a node is 72 bytes, 32 of them a `Domain`, and is stored twice. | 8.16.1 |
+| P29 | Walkers are recursive (audit `E4`), and `parallel.rs`'s `contains_matching` starts a parallel iterator at every level of the tree. | `parallel.rs`, `format.rs`, `simplify` |
+| P30 | The bytecode VM is `f64`-only (`LoadConst(f64)`, a fixed 32-slot stack and 16 locals), so balls and arbitrary precision have no compiled lane; the criterion suites are compiled in CI but never run, so nothing guards performance. | `vm.rs`, section 5 |
 
 ### 8.3 Overview
 
-Five decisions carry the design:
+Seven decisions carry the design:
 
 1. **Requests are values.** An operation is a plain description; methods carry it out; a planner picks among them
    (8.4, 8.9).
@@ -298,7 +317,11 @@ Five decisions carry the design:
 3. **Every value says how well it is known.** Exact, rigorously enclosed, estimated, probabilistic or asymptotic, as
    distinct cases that never convert silently (8.7).
 4. **A calculus is a registered rule set, not a fork of the engine** (8.8).
-5. **Storage and calling style are adapters** around one core (8.5, 8.10, 8.11).
+5. **Storage and calling style are adapters** around one core (8.5, 8.14, 8.15).
+6. **Everything that leaves a session has a portable form,** and everything that claims to be true can carry evidence
+   (8.11, 8.12).
+7. **Performance is a measured contract.** Flat `u32` layouts, dense ids and monomorphised inner loops; the new layers
+   are paid for only when used, and hot paths are gated (8.16).
 
 ```mermaid
 graph TD
@@ -313,7 +336,10 @@ graph TD
     st --> store["ExprStore / ExprBuilder, scratch scopes"]
     calc --> store
     num --> store
+    m --> logic["Logic and decision"]
+    m --> cert["Certificates and checkers"]
     m --> out["Outcome: status, value, accuracy, conditions, certificate, provenance"]
+    out --> port["Portable forms: PortableExpr, structures, outcomes"]
 ```
 
 ### 8.4 Operations, environment and result
@@ -342,9 +368,10 @@ limit, series, transform, each with a `CalculusId`), solving (equations, systems
 evaluation (`Evaluate` into a numeric or finite structure), conversion (apply a morphism, section 8.6.4), tensor
 operations (contract, symmetrise, canonicalise) and structure queries (is this a field, the order of this group).
 `MathOperation` becomes a serde-tagged enum over these structs, so every frontend dispatches to the same code
-(invariant 2) and the request language does not grow separately.
+(invariant 2) and the request language does not grow separately. Its fields hold portable inputs (8.12), and an input
+may be another operation's output, which is how pipelines compose (8.13).
 
-**Environment and run state.** Revision 1 had one mutable `Cx`. Parallel portfolios (8.9) and tasks (8.10) need the
+**Environment and run state.** Revision 1 had one mutable `Cx`. Parallel portfolios (8.9) and tasks (8.14) need the
 shared part separated from the exclusive part:
 
 ```rust
@@ -365,7 +392,7 @@ pub struct Run<'a> {
     pub meter: BudgetMeter,        // ResourceBudget, wall clock and memory, charged as work happens
     pub cancel: CancelToken,
     pub recorder: Recorder,        // steps and provenance
-    pub progress: Option<ProgressSink>, // anytime refinements (8.10)
+    pub progress: Option<ProgressSink>, // anytime refinements (8.14)
 }
 ```
 
@@ -423,11 +450,11 @@ created on a fresh graph: `simplify (x+1)^2 - (x^2+2x+1)` 1 of 24; `diff sin(x)*
 
   Formatters, equivalence tests and free-symbol queries take `&impl ExprStore`; methods add nodes through `Run`'s
   builder (P1). `ExprGraph`, the scratch scope and a later flat encoding implement both, so engine code is written once
-  (P6). The node store is append-only with stable addresses (for example the `boxcar` crate: lock-free `push` that
-  returns the index, lock-free reads), which removes the clone and the read lock (audit `J2`).
+  (P6). The store's layout, a flat array of `u32` words with lock-free reads, is set out in 8.16.2.
 - **Scratch scopes.** Each run interns into a scratch graph layered over the session graph. At the end the nodes the
-  result reaches are copied into the session graph and the scratch graph is dropped in one step. A scratch id has its
-  own type, so it cannot escape.
+  result reaches are copied into the session graph and the scratch graph is dropped in one step. Scratch ids continue
+  the session's numbering (8.16.2), and `run` promotes every id in an `Outcome` before returning it, so a scratch id
+  cannot escape the run.
 - **Small nodes, payloads beside them.** Big integers, big rationals, balls and p-adic digit vectors live in side tables
   keyed by node, so nodes stay small and cheap to hash. Precision and accuracy are never stored in a node (they belong
   to values, 8.7). `Domain` leaves the node too (8.6.2).
@@ -522,7 +549,7 @@ associativity (octonions do not have it). The simplifier's domain detector becom
 **Expressions are typed by context.** `Domain` leaves `ExprNode` (audit `J2`), so `x + 1` is one node whether `x` is
 real, complex, in `GF(7)` or a matrix. `Env.knowledge` records each symbol's structure (`x in GF(7)`, `A in Mat_3(Q)`,
 `t` on the time scale `hZ`). A typing pass assigns a structure to each node a run touches, memoised in the run, and
-methods read it.
+methods read it. Domains and physical dimensions ride on the same pass (8.12).
 
 #### 8.6.3 Structures built from structures
 
@@ -570,6 +597,8 @@ generalises `cat-bridge`'s lift and lower pair, and it is the only place where p
 - **Completions and their relatives** (p-adics, formal power series, reals, surreals, adeles) all hold elements that
   are known up to a precision measured in their own metric. That is the same problem as numerical error, and section
   8.7 treats it once.
+- **Random variables** are values in a probability structure (`distributions.rs`, and `assume X ~ Normal(0, 1)` in
+  8.10). They are distinct from `Probabilistic` accuracy (8.7.1), which describes uncertainty about a computed value.
 
 ### 8.7 Numbers, precision and error tracking
 
@@ -774,7 +803,223 @@ are recorded, so a replay reproduces the run exactly; pinning a method in `Env.o
 `Provenance` is the specification's "why this method?" record (spec section 19) and replaces the free-form `method`
 string (P20).
 
-### 8.10 Calling styles: sync, async, batch, mutation and `const`
+### 8.10 Logic, assumptions and decision
+
+**Truth values are structures.** Each logic is a structure object with axiom flags, exactly like the algebras of
+8.6:
+
+- Boolean algebra;
+- Kleene's strong three-valued logic, which is what `Ternary` (8.6.1) implements;
+- Belnap's four-valued logic;
+- Heyting algebras for intuitionistic logic;
+- Łukasiewicz, Gödel and product t-norm logics;
+- orthomodular lattices for quantum logic;
+- the probability semiring and the tropical semiring.
+
+These form the specification's residuated-semiring continuum (spec 35). `ThreeValuedLogic` and
+`GeneralizedValuedLogic<N>` (`logic.rs`) become instances.
+
+**Formulas are expressions.** Connectives, quantifiers and predicates are function nodes with `FunctionId`s (8.12), read
+in the logic that `Env` names (classical by default). So `holds_when` (8.4) is a list of formulas in a stated logic, not
+opaque strings, and conditions can be combined, simplified and exported as hypotheses (8.11).
+
+**Knowledge is formulas plus declarations.** `AssumptionsContext` becomes the facts part of `Env.knowledge`. The
+specification's four declaration verbs (spec 42.2) map onto it:
+
+| Verb | Effect on the environment |
+| :--- | :--- |
+| `declare` | sets a symbol's structure (`declare A in Mat_3(Q)`) or domain |
+| `assume` | adds a formula (`x > 0`), or a distribution for a random variable |
+| `define` | adds a scoped rewrite or alias |
+| `let` | binds a value |
+
+Inner scopes shadow outer ones and report the shadowing. A fact that contradicts the same scope makes the scope
+unsatisfiable, and the next operation reports it rather than computing from it.
+
+**Deciding is an operation.**
+
+- `Decide { formula, logic }`, `Prove { goal, hypotheses }` and `FindModel { formula }` have methods like any other
+  operation (8.9):
+  - the SAT solver in `logic.rs` and the SMT layer in `smt.rs`;
+  - cylindrical algebraic decomposition for real quantifier elimination;
+  - Presburger arithmetic (Cooper's method) and linear arithmetic with Farkas certificates;
+  - Gröbner bases with Nullstellensatz cofactors;
+  - tableaux for the modal logics in spec 35.
+- A `True` answer carries a certificate (8.11). A `False` answer carries a model or counterexample.
+
+**Guards stay cheap.** When a rewrite needs `a != 0`, the planner first tries the cheapest deciders under a small fixed
+budget: exact evaluation, an interval bound, a lookup in the scope's facts. Only if those fail does it record `a != 0`
+in `holds_when`. A guard check must never cost more than the rewrite it protects (8.16).
+
+### 8.11 Proofs and certificates
+
+A certificate is evidence that a small checker can confirm without repeating the search that found it:
+
+```rust
+pub struct Certificate {
+    pub claim: Claim,       // what is certified: an identity, a bound, a root, an antiderivative, a decision
+    pub evidence: Evidence,
+    pub trust: Trust,
+}
+
+pub enum Evidence {
+    Recomputation { structure: StructureId },           // re-evaluated exactly in a decidable structure
+    Enclosure(Enclosure),                               // a ball or interval proof of a bound or a sign
+    RootBox { krawczyk: Enclosure },                    // existence and uniqueness of a root in a box
+    Fingerprint { prime: u64, points: u32, error_bound: f64 }, // Schwartz–Zippel: probabilistic
+    Telescoping { certificate: ExprId },                // creative telescoping (`zeilberger_proof`)
+    Antiderivative,                                     // checked by differentiation and simplification
+    Farkas { multipliers: Vec<BigRational> },           // infeasibility of a linear system
+    SumOfSquares { gram: ExactMatrix },                 // positivity
+    Nullstellensatz { cofactors: Vec<ExprId> },         // inconsistency of polynomial equations
+    Primality(PrimalityCertificate),
+    Rewrite(ProofTrace),                                // a chain of rule applications
+    External { system: ProofSystem, artefact: ContentHash },
+}
+
+pub enum Trust { CheckedHere(CheckerId), CheckableExternally(ProofSystem), Unchecked }
+```
+
+- **Checkers are methods.** Each evidence kind has a registered checker, and `Complete` with a certificate means the
+  checker accepted it.
+  - Probabilistic evidence (fingerprints) keeps its error bound. It is never reported as a proof of an exact claim;
+    the outcome's `relation` stays `Equal` only with deterministic evidence.
+  - The specification's formal kernel (spec 23) is one more checker, not a separate path.
+- **Proof steps record what they relied on.** Each step records the rule's id, the structure it ran in, the axiom flags
+  it used and the conditions it added. Today's step is a rule name plus a before and an after (P22). The export to Lean
+  4 and Coq can then:
+  - use the right types (`ℚ`, `ℂ`, `ZMod n`, `GaloisField p n`, `Matrix (Fin n) (Fin n) R`, `Polynomial R`) instead of
+    typing every step over `ℝ`;
+  - turn `holds_when` into hypotheses;
+  - choose the tactic from the axioms: `ring` for commutative rings, `noncomm_ring`, `field_simp` with the non-zero
+    side goals, `norm_num`, `linarith` given the Farkas multipliers, `positivity` given the sum of squares, `decide`
+    for finite structures.
+
+  A step that cannot be closed stays `sorry` or `Admitted`, and the certificate's trust says `Unchecked`.
+- **Equivalence classification** (`morphism.rs`, audit `A13`) answers through certificates, so a claimed isomorphism is
+  either evidenced or reported as unknown.
+- **Cost.** Proof objects live in side tables and are built only when `Env.record` asks for them (8.16).
+
+### 8.12 Identity, interoperability and serialisation
+
+**Function identity.** `FunctionId(u32)` (spec 38) names each function once, with its arities and a `DisplayAliasTag`
+so printing can reproduce the user's spelling.
+
+- The parser resolves a name to its id once.
+- Rules, methods, numeric kernels and certificates key on the id. That removes the alias lists repeated today in
+  `vm.rs`, `numeric.rs`, `limits.rs`, `executor.rs` and `simplify/mod.rs` (P24).
+- User-defined functions get ids in the session's table.
+
+**Structures and domains.** A structure (8.6) is the algebraic carrier. A domain (spec 41's `MathDomain`) is a subset of
+a carrier: an interval, a punctured or slit set, a union, a manifold chart.
+
+- Symbols carry both, in `Env.knowledge`.
+- The typing pass gives each node a structure and, where known, a domain.
+- `FunctionContract` reports, for each function over a structure, its domain, range and properties.
+
+So "`x` in `R`" and "`x` in `(0, oo)`" are one structure with two domains, not two types.
+
+**Units and dimensions.** A physical quantity lives in `Quantity<A>`: a value in `A` together with a dimension vector.
+
+- The dimension vector is cat-core's `DimVector`: eight base dimensions including angle (audit `J5`), with rational
+  exponents.
+- Multiplication adds dimension vectors. Addition requires equal dimensions and is an error otherwise.
+- Converting units is a morphism with a scale and, for temperatures, an offset.
+- `units.rs` (seven integer SI exponents) and `DimVector` (unused by algebra-engine today, P25) merge into this one
+  model.
+- Dimensions are checked in the typing pass as small fixed-size arrays, so the check costs almost nothing.
+
+**Conversions in Rust.** Exact, injective morphisms implement `From`; partial ones implement `TryFrom`. The dynamic
+value used at boundaries (the specification's `MathValue`) is an enum of:
+
+- an expression;
+- an integer, a rational, a ball, a p-adic element;
+- a finite-structure element (structure plus a word);
+- a matrix, a tensor, a mesh;
+- a truth value.
+
+**Mapping to external type systems:**
+
+| System | Mapping |
+| :--- | :--- |
+| Lean 4, Coq | the types in 8.11 |
+| SMT-LIB | `Int`, `Real`, `BitVec`, `Array` sorts; finite fields where the solver supports them |
+| Python | `int`, `fractions.Fraction`, mpmath `mpf` and interval values for balls, NumPy arrays through the buffer protocol |
+| JavaScript | `BigInt`, `Number`, typed arrays |
+| C | the tagged `urae_value` of 8.15 |
+
+**Serialisation.** Today nothing portable exists (P21):
+
+- `ExprNode` derives `Serialize`, but its children serialise as indices into one session's graph;
+- `ExprGraph` cannot be serialised at all;
+- `MathOperation` carries expressions as text (`String` fields throughout, no `ExprId`), so every request is re-parsed.
+
+Every artefact that leaves a session gets a portable, versioned form:
+
+- **`PortableExpr`**:
+  - `schema_version`;
+  - a symbol table and a function table (canonical names);
+  - a payload table (big integers as limbs, binary floats as exact mantissa and exponent);
+  - the node words in the flat layout of 8.16.2, with local, dense ids and children before parents;
+  - the roots.
+
+  Loading re-interns into the target store in one linear pass. It checks that every child id is smaller than its
+  parent's, that arities and tags are valid, and that payload indices are in range, so untrusted input cannot build a
+  cycle or read out of bounds.
+- **Structures** serialise as their constructor tree with parameters (for example
+  `Quot(Poly(GF(7)), x^3 + x + 1)` or `Balls(256)`). Ids are resolved again on load.
+- **Accuracy and enclosures** keep midpoints exact (mantissa and exponent as integers, never a rounded decimal) and
+  radii rounded upward.
+- **Operations, outcomes, certificates and provenance** use serde with a `schema_version`. `MathOperation`'s fields
+  become `Input<...>` over portable values (8.13). Text stays an input syntax, not the wire format.
+- **Formats.**
+  - A binary form (little-endian words) for FFI, caches and bulk data.
+  - JSON for interoperability and debugging.
+  - Renderers (LaTeX, Unicode, MathML, SMT-LIB, Lean) registered per operation and type (8.13).
+- **Compatibility.** Readers accept the current and the previous schema version (audit `E8`). A saved notebook keeps its
+  document text as the source of truth, with an optional `PortableExpr` cache beside it.
+
+### 8.13 Registry, discovery and composition
+
+**One registry.** Each operation kind has one descriptor (the specification's `OperationDescriptor` in its
+`SubsystemRegistry`, spec 29) holding:
+
+- the canonical name and argument schema;
+- parser aliases and natural-language triggers;
+- serialisers and renderers;
+- GUI metadata;
+- the methods of 8.9.
+
+That one table replaces the two command tables that must stay in step (`parser.rs` and `numeric_commands.rs`), the
+ordered `COMMAND_HOOKS` in `session.rs` and the inline special cases before them (`PLANNING.md`, P26).
+
+- Registration is explicit: each crate exposes `register(&mut Registry)`, and the `urae` facade calls them in a fixed
+  order. This avoids link-section tricks, which behave differently on `wasm32`.
+- A CI test checks that every public operation module has a descriptor (spec 29's completeness gate).
+
+**Composition.** An operation's input can be another operation's output:
+
+```rust
+pub enum Input<T> { Given(T), From(StepRef) }
+pub struct Pipeline { pub steps: Vec<AnyOperation>, pub outputs: SmallVec<[StepRef; 2]> } // a DAG; itself an Operation
+```
+
+A pipeline is the specification's `AnalysisPlan` (spec 37) in data form. The planner plans it whole:
+
+- adjacent symbolic steps share one scratch scope, so nothing is promoted between them;
+- a representation is kept across steps (a ball stays a ball rather than being made exact and then approximated again);
+- the pipeline streams anytime refinements end to end.
+
+Pipelines nest and serialise. The composition DSL (spec 8) and notebook cells compile to them, and the notebook's
+dependency tracking becomes the pipeline's DAG plus content hashes. A changed cell then re-runs only the steps
+downstream of it.
+
+**"Interpreted as."** The parser records, in provenance, the canonical form it chose and the alternatives it rejected
+(spec 45). Each reinterpretation of input (an English phrase, a shorthand, a retry after a failed parse) is a
+registered input method with its guards and tests. `PLANNING.md` records that almost every wrong answer found by the
+usability probes came from such rewrites; making each one visible and tested is the fix.
+
+### 8.14 Calling styles: sync, async, batch, mutation and `const`
 
 - **Synchronous:** `run(&op, &env, &mut run)`.
 - **Asynchronous:** `spawn(op, env) -> Task<T>` runs on the rayon pool on native targets and is stepped by
@@ -795,7 +1040,7 @@ string (P20).
   - Trait methods cannot be `const` on stable Rust, so the `const` tier is free functions, not `Structure` methods.
   - The specification's `ConstLoweringPass` generates `const` code from an operation with fixed inputs.
 
-### 8.11 FFI and bindings
+### 8.15 FFI and bindings
 
 - **One C function per operation**, generated from the operation types. Each returns a status and writes its result
   through an out-parameter, for example
@@ -820,11 +1065,171 @@ string (P20).
   run concurrently.
 - **Tasks.** `urae_spawn`, `urae_task_latest`, `urae_task_wait`, `urae_task_cancel` and `urae_task_free`.
 - **One generic entry point.** `urae_run(session, request_json, out_json)` reaches every operation through the serde
-  form of `MathOperation`; the typed functions are the fast path.
+  form of `MathOperation`; the typed functions are the fast path, and `urae_run_batch` amortises the crossing.
+- **Expressions leaving a session** cross as `PortableExpr` in its binary form (8.12), not as text.
 - **Python and WASM.** Python (through pyo3) and WASM sit on the same two layers, and a Python `Expr` holds a handle,
   not strings (P10).
 
-### 8.12 Consolidations the design requires
+### 8.16 Performance
+
+Revision 2 added layers: structures, accuracy, a planner, certificates. Each must cost nothing when it is not used and
+little when it is. This section sets the data layouts, dispatch rules and gates that keep it so.
+
+#### 8.16.1 Baseline
+
+Measured on 27 Nov 2026, release build, mimalloc, on a graph of 8,006 nodes (polynomial and `sin` terms), two runs
+each:
+
+| Path | Cost today |
+| :--- | :--- |
+| `get()` and `children()` of a node (read lock, clone, `SmallVec` copy) | 40–46 ns |
+| interning a node that already exists (a deduplication hit) | 69–113 ns |
+| hashing an `ExprNode` with the default SipHash (what the `DashMap`s use) | 25–41 ns |
+| the same hash with ahash / FxHash | 6–8 ns / 4–6 ns |
+| reading the same node's children from a flat `Vec<u32>` | 2.5 ns |
+| node storage: 72 bytes per node plus a second copy as the map key, against a flat encoding of the same structure | 1.15 MB plus map overhead, against 128 KB |
+
+With the allocation figures of 8.5 (about 230,000 allocations per probe pass, 74% of them 16 bytes or smaller), this
+says the cost today is in layout, locking, cloning and hashing, not in arithmetic or the allocator. The flat-encoding
+figure covers node headers and child lists only; leaf payloads add one to three words per leaf.
+
+#### 8.16.2 The node store: flat `u32` words
+
+- **Ids.** `ExprId`, `SymbolId`, `FunctionId` and payload indices are `u32`. `StructureId`, `CalculusId`, `MethodId`
+  and `OpKind` are `u16`. Ids are dense, so per-node data is a `Vec<T>` indexed by id (8.16.3). The epoch of 8.5 lives
+  in FFI handles and in the session, not in every `ExprId`, so ids do not double in size.
+- **Encoding.** Each store holds `words: Vec<u32>` and `offsets: Vec<u32>`, where `offsets[id]` is the node's first
+  word.
+  - A node is a header word (6-bit tag, 2-bit flags, 24-bit arity), then `arity` child ids, then payload words for its
+    tag.
+  - Payloads:
+
+    | Node | Payload |
+    | :--- | :--- |
+    | symbol | `SymbolId` |
+    | integer fitting in `i32` | inline, one word |
+    | other `i64` | two words |
+    | `f64` | two words of bits |
+    | big integer or big rational | an index into the payload table |
+    | function | `FunctionId` before the arguments |
+    | derivative | `wrt`, `order` and `CalculusId` |
+    | matrix | `rows` and `cols` before the elements |
+    | integral, sum, product | which bounds are present, in the flags |
+
+  - Arity up to 2^24 covers any matrix the engine will hold as one node.
+  - Numbers stay out of the hash key's heavy path: big values are hashed once, when they enter the payload table.
+- **No implicit reordering.** The store never sorts children: commutativity is a property of the structure (8.6.2), not
+  of the syntax. Canonical ordering is a rewrite that needs the axiom.
+- **Children before parents.** Hash-consing appends a node only after its children exist, so every child id is smaller
+  than its parent's. A bottom-up pass (typing, constant folding, numerical evaluation, the dimension check, free
+  symbols) is then a single forward loop over ids: no recursion, no hashing, no visited set. This also settles audit
+  `E4`'s stack-overflow risk for those passes.
+- **Reads.** `NodeRef<'a>` is a header and a `&'a [u32]` with typed accessors. `children()` yields `ExprId`s by mapping
+  `u32` words, so no `unsafe` cast is needed; the `bytemuck` crate's safe wrappers are the alternative if a slice is
+  required. Reading is an index, a load and a slice: the 2.5 ns case above, with no lock and no clone.
+- **Deduplication.**
+  - Each store keeps `hashes: Vec<u32>` beside `offsets`, plus a `hashbrown::HashTable<ExprId>`: ids only, the node
+    words being the key.
+  - The hash of a node is computed over its words with ahash, which is randomised and so resists collision attacks from
+    untrusted input (FFI, WASM, notebooks loaded from files).
+  - Internal maps keyed by ids, where the input cannot be chosen by an attacker, use FxHash.
+  - Equality first compares the stored hashes and then the word slices.
+- **Concurrency without locks on reads.**
+  - A run's scratch store is owned by that run, so it is a plain `Vec<u32>` with no locks or atomics.
+  - Scratch ids continue the session's numbering (`id >= base` means scratch), so one comparison routes a read.
+  - The session store, which is shared and mostly read, is a list of immutable segments (`Arc<[u32]>`, 2^12 words
+    each) behind `arc-swap`; `offsets` and `hashes` are segmented the same way. A reader takes a snapshot with one
+    atomic load and then indexes without locks.
+  - Writes happen only when a run promotes its result, once per operation, under a mutex. Full segments are never
+    touched again; the partial last segment is copied and republished, so a promotion copies at most 16 KB plus its
+    own nodes. This is the lock-free read path that audit `J2` asks for, without `unsafe` code in the workspace.
+  - The session's deduplication table is consulted only while interning. It is a sharded map of ids (`DashMap` with
+    ahash), so a lookup takes one shard's read lock briefly; node reads never do.
+  - Parallel methods inside a run give each worker a child scratch store over the shared view, and merge at the join by
+    re-interning the results. That bounded cost is paid once per join, not per node.
+- **Promotion** copies the nodes a result reaches, in id order (already topological), remapping through a `Vec<u32>`.
+  Its cost is proportional to the result, not to the work done.
+
+#### 8.16.3 Side tables and traversals
+
+- Per-node facts (structure, domain, dimension, memoised results, visited marks) are `Vec<T>` or bitsets
+  (`Vec<u64>`) indexed by dense id. They are not `HashMap<ExprId, T>`: one index instead of a hash and a probe, and
+  sequential memory for forward sweeps.
+- Top-down traversals use explicit worklists (`Vec<u32>` stacks) with a bitset for visited nodes, and charge the budget
+  in batches.
+- Coarse-grained parallelism only. `parallel.rs`'s `contains_matching` starts a parallel iterator at every level of the
+  tree (P29); parallel work belongs at the level of operations, batches, portfolios and large independent subtrees, with
+  a minimum size before splitting.
+
+#### 8.16.4 Dispatch: generic inside, dynamic at the edges
+
+- **Inner loops are monomorphised.** Arithmetic, jets, tensor contractions and the numeric kernels are generic over the
+  structure and element types. A `Ring<Elem = i64>` add inlines to an add with an overflow check.
+- **Choices are made once per batch.** `dyn Method`, registry lookups and the representation tower's `match` happen once
+  per operation or batch, never once per element.
+- **Rules are compiled per structure.** The rule set for a structure is filtered by its axiom flags once and cached by
+  `StructureId`. A rule's guard check is then a bit test on a `u64`.
+- **Exact arithmetic stays small.** Machine-word integers and rationals are checked and inline, and promote to big
+  numbers (`auto-promoters`) only on overflow. The `*_into` methods (8.6.1) reuse buffers in loops.
+
+#### 8.16.5 Overheads of the new layers
+
+| Layer | Rule that bounds its cost |
+| :--- | :--- |
+| `Outcome<T>` | Hot fields inline (status, value, a small `Accuracy`); rare fields (certificate, steps, conditions, detailed provenance) behind one `Option<Box<_>>` that stays `None` unless `Env.record` asks. Large `Enclosure` cases (adelic, Lie group) are boxed so `Accuracy` stays small. |
+| `Env` | One `Arc`, cloned by reference count; nothing per call. |
+| `Run::checkpoint()` | Decrements a local counter; every 1,024 calls it loads the cancel flag (relaxed atomic) and reads the clock. |
+| Planner | A fast path runs a single applicable, exact and cheap method directly. Plans are cached by operation kind, a shape hash of the input and the objective class. Portfolios start only above a predicted cost threshold, so small requests never spawn threads. |
+| Typing pass | One forward sweep (8.16.2), memoised per run; dimension checks are fixed-size arrays. |
+| Guards (8.10) | A fixed small budget for cheap deciders before a condition is recorded. |
+| Certificates and proofs (8.11) | Built only when asked for or when the goal requires certification. |
+| Provenance | A fixed-size default record (method, precision, elapsed time); full detail only when asked. |
+
+#### 8.16.6 Numerical paths
+
+- **Cheapest representation that can meet the goal.** Most enclosures should be `f64` balls. Outward rounding uses
+  `f64::next_up` and `next_down`, skipped when an error-free transformation (`TwoSum`, `TwoProd`) shows the operation
+  was exact. Arbitrary precision starts only where the prediction of 8.7.3 says `f64` cannot reach the goal, and only for
+  those subexpressions.
+- **Compile once, run in batches.** An expression is compiled once per structure and precision tier into the flat
+  instruction stream of `vm.rs`, and the program is cached by node and tier.
+  - Lanes are structure-of-arrays: `f64`; `f64` balls as two arrays; jets; double-double.
+  - The stack and local sizes are computed at compile time instead of today's fixed 32 stack slots and 16 locals.
+  - `vm.rs` is `f64`-only today (P30). The same compiled form feeds the specification's WGSL and `const` lowering
+    (spec 13) as further methods.
+- **Big numbers in payload tables**, so expression nodes stay hashable in a few nanoseconds whatever the size of their
+  numbers.
+
+#### 8.16.7 Serialisation and FFI
+
+- `PortableExpr` uses the store's own word layout (8.12), so writing is a copy of words plus the tables, and loading is
+  a linear validation and re-intern. No text is parsed.
+- The C ABI passes handles (8.15), adds `urae_run_batch`, and converts to strings only when the caller asks for text.
+
+#### 8.16.8 Gates
+
+Timing on shared CI runners is noisy; allocation counts and node counts are not. So the gates come in two kinds:
+
+- **Hard gates (deterministic, every pull request).** A test with a counting allocator runs the probe workload of 8.5
+  and fails if allocations per pass or session-graph growth exceed the recorded limits. Node-count tests check that
+  scratch scopes reclaim their nodes.
+- **Tracked timings (scheduled job on a fixed runner).** The existing criterion suites (`hash_cons_hot_interning`,
+  `vm_eval_scalar`, `vm_eval_batch_1024`, the formatters) plus the probes of this section run against stored
+  baselines. A regression beyond 10% opens an issue. Today the suites are compiled in CI but never run (P30).
+
+Targets, to be confirmed by the phase that delivers each:
+
+| Path | Today | Target | Phase (8.18) |
+| :--- | :--- | :--- | :--- |
+| node hash | 25–41 ns | 8 ns or less | 0 |
+| node read (`node()` and children) | 40–46 ns | 5 ns or less | 2 |
+| deduplication hit | 69–113 ns | 20 ns or less | 2 |
+| allocations per probe pass | about 230,000 | 50,000 or fewer | 2 |
+| session-graph growth from intermediates | grows | none | 2 |
+| `Outcome`, `Env` and planner overhead on the probe workload | not applicable | 2% or less | 1 and 6 |
+| `f64` ball evaluation against plain `f64` in the VM | not applicable | 4× or less | 4 |
+
+### 8.17 Consolidations the design requires
 
 - One p-adic engine (the `cat-numbers` type, limited to digits below 256, is replaced), one adele type built as
   `Adeles<Q>`, one surreal engine (ledger `B16`), one Itô implementation (P12).
@@ -833,31 +1238,39 @@ string (P20).
 - The tensor code shares index structures and canonicalisation (`cat-numbers::tensor`, `butler_portugal`,
   `algebra-engine::tensor`).
 - Either `dashu` is used for the arbitrary-precision ball midpoints or it is removed (P15).
+- One command registry in place of the two command tables, `COMMAND_HOOKS` and the inline cases (P26).
+- One unit model (`DimVector`'s) in place of two (P25).
+- One `Certificate` type for the Schwartz–Zippel tier, `zeilberger_proof`, `FormalEquivalenceProver` and the proof
+  traces (P22).
+- One hashing policy: ahash for tables fed by input, FxHash for id-keyed internal maps (P27).
 
-### 8.13 Migration
+### 8.18 Migration
 
-Each step starts with a failing test and ends with a ledger entry, as for any defect (invariant 8).
+Each step starts with a failing test and ends with a ledger entry, as for any defect (invariant 8). Each phase also has
+a performance gate (8.16.8); a phase is done when both pass.
 
-| Phase | Work | Exit test (examples) |
-| :--- | :--- | :--- |
-| 0 | Fixes that need none of the redesign: outward rounding in `RealInterval` and `UniversalBall` (P16); an honest `BigValue` (P15); `WeilJet` refusing mixed calculi (P13); `worst_case_radius` not answering for probabilistic spreads (P17); checked `ConstRational` (P8); FFI `catch_unwind`, unwind profile and session lock (P9); notebook graph rebuilt per evaluation (P3) | `[0.1, 0.1] + [0.2, 0.2]` contains the exact sum of the two doubles (fails today); a release-build `ConstRational` overflow is an error, not a wrap; a panicking call through the C ABI returns an error code; the notebook's node count stays flat over 1,000 slider steps |
-| 1 | `Outcome`, `Env`, `Run`, `Operation` and the registry, with one method each for differentiate, simplify, solve and evaluate; the old traits become wrappers; `Env` threaded through in place of fresh `EvalContext`s | every existing test passes through the wrappers; one test per status value |
-| 2 | `ExprStore` and `ExprBuilder`, scratch scopes, payload side tables, a deduplication map without node copies | the allocation probe of 8.5 shows fewer allocations per pass and no growth of the session graph from intermediates |
-| 3 | Structure traits, `StructureInfo`, the typing pass; structures for `Z`, `Q`, `Z/nZ`, `GF(p^n)`, `Poly`, `Mat`, `StructureConstants`, p-adics (merged); rewrite rules declaring their axioms | octonion expressions are never reassociated; `x*y - y*x` simplifies to `0` over `Q` and not over `Mat_2(Q)`; field axioms are checked from structure constants |
-| 4 | Arbitrary-precision balls, constant generators, the precision retry loop, `Accuracy` in every numerical path | `evaluate(pi - 355/113, goal = 1e-60)` meets the goal with a rigorous enclosure; an unreachable goal returns `GoalNotMet` with the enclosure achieved |
-| 5 | The calculus registry: `CalculusId` on nodes, sigma-derivation rules for `Delta_h`, `D_q` and time scales, generic `Weil` jets, the Itô and Stratonovich conversion, umbral bases and bridges | the time-scale product rule with `mu = h` equals the difference rule; Itô's lemma for `exp(W_t)` gives drift `exp(W_t)/2`; Newton and Taylor series of a polynomial agree |
-| 6 | Method predictions and the planner for evaluate, definite integration and root finding; blending patterns 1, 2, 5 and 6; multi-modular gcd and determinant | a definite integral with a closed form is found by recognition and then proved; the portfolio cancels losing methods; replaying a provenance record reproduces the plan |
-| 7 | `Task` with refinements; the new FFI; pyo3 bindings; WASM on the same layers | dropping a task stops its work within one checkpoint interval; an outcome round-trips through C with its accuracy |
+| Phase | Work | Exit test (examples) | Performance gate |
+| :--- | :--- | :--- | :--- |
+| 0 | Fixes that need none of the redesign: outward rounding in `RealInterval` and `UniversalBall` (P16); an honest `BigValue` (P15); `WeilJet` refusing mixed calculi (P13); `worst_case_radius` not answering for probabilistic spreads (P17); checked `ConstRational` (P8); FFI `catch_unwind`, unwind profile and session lock (P9); notebook graph rebuilt per evaluation (P3); ahash for the deduplication maps (P27); the counting-allocator gate and the scheduled benchmark job | `[0.1, 0.1] + [0.2, 0.2]` contains the exact sum of the two doubles (fails today); a release-build `ConstRational` overflow is an error, not a wrap; a panicking call through the C ABI returns an error code; the notebook's node count stays flat over 1,000 slider steps | node hash 8 ns or less; allocation and node-count gates recorded at today's values |
+| 1 | `Outcome`, `Env`, `Run`, `Operation`; the registry with descriptors replacing the command tables and hooks (8.13); `FunctionId`; `PortableExpr` and schema versions (8.12); one method each for differentiate, simplify, solve and evaluate; the old traits become wrappers; `Env` threaded through in place of fresh `EvalContext`s | every existing test passes through the wrappers; one test per status value; every expression in the test suites round-trips through `PortableExpr`; a malformed `PortableExpr` (a cycle, a bad arity, an out-of-range payload) is rejected; one command table remains | `Outcome` and `Env` overhead 2% or less on the probe workload |
+| 2 | The flat store (8.16.2): words, offsets, hashes, payload tables, scratch scopes with promotion, the segmented session store, forward-sweep passes, worklist traversals | the probe of 8.5 shows no session growth from intermediates; deep expressions (depth 10^5) format and evaluate without stack overflow on `wasm32` | node read 5 ns or less; deduplication hit 20 ns or less; 50,000 allocations or fewer per probe pass |
+| 3 | Structure traits, `StructureInfo`, the typing pass with domains and dimensions; logic structures; `declare`, `assume`, `define` and `let` filling `Env.knowledge`; structures for `Z`, `Q`, `Z/nZ`, `GF(p^n)`, `Poly`, `Mat`, `StructureConstants`, `Quantity`; merged p-adic, adele and surreal carriers; rewrite rules declaring their axioms | octonion expressions are never reassociated; `x*y - y*x` simplifies to `0` over `Q` and not over `Mat_2(Q)`; field axioms are checked from structure constants; `3 m + 2 s` is refused and `3 m * 2 s` is `6 m s`; a contradictory scope is reported | typing pass 10% or less of the cost of the operation it serves on the probe workload |
+| 4 | Arbitrary-precision balls, constant generators, the precision retry loop, `Accuracy` in every numerical path; ball and double-double lanes in the VM | `evaluate(pi - 355/113, goal = 1e-60)` meets the goal with a rigorous enclosure; an unreachable goal returns `GoalNotMet` with the enclosure achieved | `f64` ball evaluation within 4× of plain `f64` |
+| 5 | The calculus registry: `CalculusId` on nodes, sigma-derivation rules for `Delta_h`, `D_q` and time scales, generic `Weil` jets, the Itô and Stratonovich conversion, umbral bases and bridges | the time-scale product rule with `mu = h` equals the difference rule; Itô's lemma for `exp(W_t)` gives drift `exp(W_t)/2`; Newton and Taylor series of a polynomial agree | jets carry no per-value calculus field (checked by a size test) |
+| 6 | Method predictions and the planner for evaluate, definite integration and root finding; blending patterns 1, 2, 5 and 6; multi-modular gcd and determinant; decision operations with certificates and checkers (8.10, 8.11); proof export with structure-aware types and tactics | a definite integral with a closed form is found by recognition and then proved; `x^2 + 1 > 0` is proved by a sum-of-squares certificate checked in URAE; an identity over `GF(7)` exports to Lean with `ZMod 7`; the portfolio cancels losing methods; replaying a provenance record reproduces the plan | planner overhead 2% or less on the probe workload; fast path 1 µs or less per trivial operation |
+| 7 | `Task` with refinements; the new FFI with `PortableExpr`, handles and batches; pyo3 bindings; WASM on the same layers; pipelines and "interpreted as" (8.13) | dropping a task stops its work within one checkpoint interval; an outcome round-trips through C with its accuracy; editing one notebook cell re-runs only the steps downstream of it | a batch of 1,000 calls through `urae_run_batch` within 10% of the same calls in process |
 
 Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap waves 1 and 6.
 
-### 8.14 Open questions
+### 8.19 Open questions
 
 - **Which multiprecision float.** `dashu` is already a dependency and pure Rust, which keeps `wasm32` builds simple, but
   its speed against the needs of 8.7 is unmeasured. The choice should follow a benchmark of the ball kernels, not
   precede it.
-- **Node storage.** Is a flat variable-size encoding worth its complexity over an append-only `boxcar` store with
-  small nodes? This should be measured with the 8.5 probe after phase 2.
+- **Segment size and dependencies.** 2^12-word segments bound the republish copy at 16 KB per promotion; the probe
+  should confirm that against real promotion sizes. `arc-swap` and `hashbrown` become direct dependencies.
+- **Header limits.** A 6-bit tag allows 64 node kinds. Today's 17 `ExprKind` variants become about 23 once numbers
+  split by size, plus the calculus and logic additions; an escape tag with a kind word covers growth beyond that.
 - **Trusting derived axioms.** Who certifies maximality of an ideal, or irreducibility of a defining polynomial, and is
   an unproven `DIVISION` flag ever allowed? This proposal says no.
 - **Ore generalisation risk.** Generalising Gosper, Zeilberger and the holonomic code to Ore operators touches proven
@@ -871,15 +1284,23 @@ Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap wave
   that divide or cancel.
 - **Rough paths and fractional operators** fit the registry's `NonLocal` and stochastic kinds on paper. Neither has
   code, so both are the least tested parts of this design.
+- **Determinism with randomised hashing.** Ids follow insertion order, not hash order, so results stay deterministic
+  with ahash's random keys; this holds only while nothing iterates a hash table to produce output, which a lint or test
+  should check.
+- **Units.** Which base dimensions (`DimVector`'s eight against SI's seven plus angle), and whether exponents stay
+  rational or become small integers for speed.
+- **Proof export coverage.** Which Mathlib types and tactics to target first; the order in 8.11 is a suggestion.
+- **External deciders.** Calling an external SMT solver or proof assistant needs a process boundary and a licence
+  check (`deny.toml`); URAE's own checkers stay the default.
 
-### 8.15 Revision history
+### 8.20 Revision history
 
 **Revision 1** (commit `fbc3d09`): operations as values with a `run` method; one `Outcome` with value, steps,
 certificate and diagnostics; one mutable `Cx`; `ExprStore` and `ExprBuilder`; memory reclaimed by scope with the
 allocator measurements; `Task`, budgets and cancellation as adapters; shared `const` kernels; a C ABI with handles,
 status codes, panic containment and locking.
 
-**Revision 2** (this text) tested revision 1 against R3 to R7 and changed it:
+**Revision 2** (commit `e614cb3`) tested revision 1 against R3 to R7 and changed it:
 
 1. **Operations became pure descriptions,** run through a method registry and a planner. A single `run` method could
    not offer several methods with different costs and guarantees for one operation (R7).
@@ -900,3 +1321,25 @@ status codes, panic containment and locking.
 8. **The structure traits gained `*_into` methods** for allocation-free loops, and the `const` tier gained
    const-generic structures.
 9. **Migration gained phase 0** (fixes that do not wait for the redesign) and phases 3 to 6, each with an exit test.
+
+**Revision 3** (this text) tested revision 2 against R9 to R14, the topics of the plan and the specification that it
+left out, and the cost of its own layers:
+
+1. **Logic, assumptions and decision were added (8.10).** Logics are structures, formulas are expressions, the four
+   declaration verbs fill the environment, decision procedures are methods that return evidence, and guard checks
+   have a fixed small budget.
+2. **Proofs and certificates were added (8.11).** Evidence is typed and has checkers and a trust level. Proof steps
+   record their structure and axioms, so export uses the right types and tactics.
+3. **Identity, interoperability and serialisation were added (8.12):** `FunctionId`, domains as subsets of structures,
+   one unit model, Rust and external type mappings, `PortableExpr` and portable forms for everything else. Revision 2's
+   operations held `ExprId`s and offered a JSON entry point with no portable expression format to carry them; this
+   fixes that inconsistency (P21).
+4. **One registry and composition were added (8.13).** Descriptors replace the command tables; pipelines are
+   operations; every reinterpretation of input is visible.
+5. **A performance section was added (8.16), with measured baselines:** a flat `u32` node store, dense ids and side
+   tables, forward sweeps, ahash, lock-free reads through immutable segments, monomorphised inner loops, bounded
+   overheads for every new layer, and deterministic allocation gates. Revision 2 left node storage as an open question;
+   the measurements settled it in favour of the flat layout.
+6. **Scratch ids now continue the session's numbering** instead of being a separate type, so one comparison routes a
+   read; ids leave a run only through promotion.
+7. **Migration gained a performance gate per phase,** and the new work went into phases 0, 1, 3, 6 and 7.
