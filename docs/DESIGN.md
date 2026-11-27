@@ -237,14 +237,15 @@ second language. Section 8 proposes answers to the first and the last two.
 
 ## 8. Proposal: one operation model across algebras, calculi and precision
 
-*Status: proposed, revision 3 (27 Nov 2026). Nothing in this section is built. Revision 1 (commit `fbc3d09`) designed
+*Status: proposed, revision 4 (27 Nov 2026). Nothing in this section is built. Revision 1 (commit `fbc3d09`) designed
 the calling conventions: operations as values, one result type, read and build capabilities, memory by scope, async
 and FFI adapters. Revision 2 (commit `e614cb3`) tested that design against the rest of URAE's scope (several calculi,
 arbitrary algebraic structures, symbolic and numerical analysis together, arbitrary precision with error tracking,
-automatic choice of methods) and changed it where it did not fit. Revision 3 adds what the plan and the specification
-still required (logic and decision, proofs and certificates, function identity, units, interoperability,
-serialisation, one registry, composition) and a performance section with measured baselines, data layouts and gates.
-Section 8.20 lists the changes in each revision and why. The section proposes answers to
+automatic choice of methods) and changed it where it did not fit. Revision 3 (commit `fc89f9a`) added what the plan
+and the specification still required (logic and decision, proofs and certificates, function identity, units,
+interoperability, serialisation, one registry, composition) and a performance section with measured baselines, data
+layouts and gates. Revision 4 weighs the alternatives to each decision (section 8.17) and adopts the better option
+where the review found one. Section 8.21 lists the changes in each revision and why. The section proposes answers to
 the first, third and fourth of the open decisions in section 6. It reuses the specification's names where one exists
 (`ExecutionObjective`, `AccuracyGoal`, `NumericRep`, `RuntimeEnv`, `ScalarRing` and `ContextualAlgebra`,
 certify-or-escalate) and says where it differs.*
@@ -404,22 +405,38 @@ saturation, series terms, solver iterations, ODE steps) call it.
 
 ```rust
 pub struct Outcome<T> {
-    pub status: Status,            // Complete | GoalNotMet | Partial | Refused | Cancelled
-    pub value: Option<T>,
-    pub accuracy: Accuracy,        // how close `value` is known to be (8.7)
-    pub relation: Relation,        // Equal, or Associated (an approximate or Colombeau-style equality, 8.7.4)
-    pub holds_when: Vec<Condition>,// what the result depends on: x != 0, the principal branch, p not dividing n
-    pub certificate: Option<Certificate>,
-    pub steps: Option<Steps>,
-    pub provenance: Provenance,    // methods considered and run, predictions against actuals, precision schedule
-    pub refusal: Option<AlgebraError>,
+    pub result: Result<Answer<T>, Refusal<T>>,
+    pub info: Info,                  // provenance, and (only when asked for) steps
+}
+
+pub struct Answer<T> {
+    pub value: T,
+    pub goal: GoalState,             // Met | NotMet | Partial (an anytime result cut short)
+    pub accuracy: Accuracy,          // how close `value` is known to be (8.7)
+    pub relation: Relation,          // Equal, or Associated (an approximate or Colombeau-style equality, 8.7.4)
+    pub holds_when: Conditions,      // what the result depends on: x != 0, the principal branch, p not dividing n
+    pub certificate: Option<Box<Certificate>>,
+}
+
+pub enum Refusal<T> {
+    Unsupported(AlgebraError),       // names the limitation
+    Undecidable(AlgebraError),
+    InvalidInput(AlgebraError),
+    Cancelled { best: Option<Box<Answer<T>>> }, // the best answer so far, if any
 }
 ```
 
-The statuses keep invariant 4. `Complete` means the value meets the requested goal. `GoalNotMet` returns the best
-value with its true accuracy and is never presented as meeting the goal. `Partial` is an anytime result cut short by
-time. `Refused` has no value and names the limitation. Steps, certificates and conditions are fields, not method
-variants (P4, P5).
+The shape keeps invariant 4 and makes illegal states unrepresentable: there is a value exactly when there is an
+answer.
+
+- `GoalState::Met` means the value meets the requested goal.
+- `NotMet` gives the best value with its true accuracy and is never presented as meeting the goal.
+- `Partial` is an anytime result cut short by time.
+- A refusal has no value and names the limitation.
+- `?` works on `result`.
+- Steps, certificates and conditions are fields, not method variants (P4, P5).
+
+Revision 4 replaced revision 3's struct of optional fields; 8.17.4 gives the comparison.
 
 ### 8.5 Storage and memory
 
@@ -459,10 +476,13 @@ created on a fresh graph: `simplify (x+1)^2 - (x^2+2x+1)` 1 of 24; `diff sin(x)*
   keyed by node, so nodes stay small and cheap to hash. Precision and accuracy are never stored in a node (they belong
   to values, 8.7). `Domain` leaves the node too (8.6.2).
 - **The deduplication map** holds hashes and ids, not a second copy of each node.
-- **Lifetimes of graphs.** The notebook rebuilds its graph on each `evaluate_all` (its caches hold strings and floats,
-  never `ExprId`s, so this is safe now, P3). Long-lived sessions compact when the node count passes a limit tied to the
-  memory constraint: copy what the session's roots reach, remap, and bump an epoch carried in every handle so a stale id
-  is detected.
+- **Lifetimes of graphs.**
+  - The notebook keeps one region per cell. A cell may refer only to earlier cells, so editing cell `k` drops the
+    regions of cells `k` onward and nothing else (8.17.7).
+  - Until regions exist, the notebook rebuilds its graph on each `evaluate_all`. Its caches hold strings and floats,
+    never `ExprId`s, so this is safe now (P3).
+  - Long-lived sessions compact when the node count passes a limit tied to the memory constraint: copy what the
+    session's roots reach, remap, and bump an epoch carried in every handle so a stale id is detected.
 
 ### 8.6 Algebraic structures
 
@@ -523,6 +543,13 @@ Choices behind the sketch:
 - **`*_into` methods** give mutation where it belongs: on owned elements, inside loops. Expressions stay immutable.
 - The 21 traits in `traits.rs` are replaced, not extended, since nothing implements them yet (P11). Laws stay
   documentation plus property tests, as now.
+- **Dispatch** is layered (8.17.8):
+  - a `StructureDesc` enum tree, hash-consed into a `StructureId`, describes every structure for typing, planning and
+    serialisation;
+  - kernels are monomorphised for a fixed table of element representations and selected once per batch;
+  - anything outside the table runs through a `dyn Structure` fallback.
+
+  Axioms exist both as run-time flags and as marker traits on the static kernels, and a test checks that they agree.
 
 #### 8.6.2 What a structure promises
 
@@ -548,8 +575,9 @@ associativity (octonions do not have it). The simplifier's domain detector becom
 
 **Expressions are typed by context.** `Domain` leaves `ExprNode` (audit `J2`), so `x + 1` is one node whether `x` is
 real, complex, in `GF(7)` or a matrix. `Env.knowledge` records each symbol's structure (`x in GF(7)`, `A in Mat_3(Q)`,
-`t` on the time scale `hZ`). A typing pass assigns a structure to each node a run touches, memoised in the run, and
-methods read it. Domains and physical dimensions ride on the same pass (8.12).
+`t` on the time scale `hZ`). Typing assigns a structure to each node a run touches, lazily and memoised in the run, and
+methods read it. Whole-graph passes type in one forward sweep instead (8.17.9). Domains and physical dimensions ride on
+the same pass (8.12).
 
 #### 8.6.3 Structures built from structures
 
@@ -660,7 +688,7 @@ Rules:
   rounding in every primitive. On `wasm32`, which cannot set rounding modes, that means `next_up` and `next_down`
   after each operation (spec 17.2). Fixing P16 is a precondition.
 - **Goal-driven retry (Ziv's strategy).** For an `AccuracyGoal`, evaluate at a working precision. If the enclosure is
-  too wide, raise the precision geometrically and repeat, within the budget. Stop with `GoalNotMet` and the best
+  too wide, raise the precision geometrically and repeat, within the budget. Stop with `GoalState::NotMet` and the best
   enclosure, never a narrower claim.
 - **Prediction instead of blind doubling.** The exact derivative gives the condition number `|x f'(x) / f(x)|` of each
   input, and a cancellation check on sums gives the precision a subexpression will lose, before evaluating anything.
@@ -668,7 +696,7 @@ Rules:
 - **Local precision.** Each subexpression gets its own working precision, so only ill-conditioned parts pay for
   multiprecision (spec 17.2).
 - **Machine limits.** `NumericPolicy` bounds the maximum precision, and `MemoryConstraint` bounds the space. On hitting
-  either, the result is `GoalNotMet` with what was achieved. Non-rigorous lanes (compiled `f64`, `f32` or GPU
+  either, the answer is `GoalState::NotMet` with what was achieved. Non-rigorous lanes (compiled `f64`, `f32` or GPU
   surrogates) return `Estimated` unless a certifier upgrades them.
 - **Non-archimedean precision.** Absolute precision `O(p^N)` propagates by the ultrametric rules: a sum is known to the
   smaller precision, and a product's precision shifts by valuations. Formal series behave the same way with `O(x^N)`,
@@ -717,16 +745,24 @@ The umbral identities become morphisms between calculi with stated remainders: `
 #### 8.8.2 Design
 
 ```rust
-pub struct CalculusId(u16); // 0 is classical
+#[repr(u8)]
+pub enum CalculusKind {             // closed: rules match on it exhaustively (8.17.10)
+    Classical, Difference, QDifference, TimeScale, Ito, Stratonovich, Colombeau, Fractional,
+}
+
+pub struct CalculusId(u16);         // index into the session's table of (kind, parameters); 0 is classical
 
 pub struct CalculusSpec {
-    pub kind: CalculusKind,         // Derivation | SigmaDerivation { sigma } | Stochastic { covariation }
-                                    // | Quotient { nets } | NonLocal { kernel }
+    pub kind: CalculusKind,
+    pub params: CalculusParams,     // h, q, the graininess, the covariance table, alpha, the mollifier
     pub product_rule: ProductRule,  // drives both the symbolic rules and jet arithmetic
     pub chain_rule: Option<ChainRule>, // absent where none holds in general (difference calculus)
     pub inverse: Option<OpKind>,    // the integral or sum that inverts it
 }
 ```
+
+The classical path tests `CalculusId(0)` and never consults the table, so the common case pays nothing for the
+generality.
 
 - `ExprKind::Derivative`, `Integral` and `Sum` gain a `CalculusId`, so `d/dx`, `Delta_h`, `D_q` and Itô `d` are
   different nodes and cannot be confused (P14).
@@ -880,7 +916,7 @@ pub enum Evidence {
 pub enum Trust { CheckedHere(CheckerId), CheckableExternally(ProofSystem), Unchecked }
 ```
 
-- **Checkers are methods.** Each evidence kind has a registered checker, and `Complete` with a certificate means the
+- **Checkers are methods.** Each evidence kind has a registered checker, and a certificate on an answer means the
   checker accepted it.
   - Probabilistic evidence (fingerprints) keeps its error bound. It is never reported as a proof of an exact claim;
     the outcome's `relation` stays `Equal` only with deterministic evidence.
@@ -903,7 +939,9 @@ pub enum Trust { CheckedHere(CheckerId), CheckableExternally(ProofSystem), Unche
 ### 8.12 Identity, interoperability and serialisation
 
 **Function identity.** `FunctionId(u32)` (spec 38) names each function once, with its arities and a `DisplayAliasTag`
-so printing can reproduce the user's spelling.
+so printing can reproduce the user's spelling. The built-in functions are a closed `#[repr(u16)] enum Builtin` whose
+discriminants are the low ids (8.17.2). The differentiator, evaluator and simplifier match on `Builtin` exhaustively,
+and every other id goes through its registry descriptor.
 
 - The parser resolves a name to its id once.
 - Rules, methods, numeric kernels and certificates key on the id. That removes the alias lists repeated today in
@@ -960,7 +998,7 @@ Every artefact that leaves a session gets a portable, versioned form:
   - `schema_version`;
   - a symbol table and a function table (canonical names);
   - a payload table (big integers as limbs, binary floats as exact mantissa and exponent);
-  - the node words in the flat layout of 8.16.2, with local, dense ids and children before parents;
+  - the node header and pool arrays in the layout of 8.16.2, with local, dense ids and children before parents;
   - the roots.
 
   Loading re-interns into the target store in one linear pass. It checks that every child id is smaller than its
@@ -972,9 +1010,11 @@ Every artefact that leaves a session gets a portable, versioned form:
   radii rounded upward.
 - **Operations, outcomes, certificates and provenance** use serde with a `schema_version`. `MathOperation`'s fields
   become `Input<...>` over portable values (8.13). Text stays an input syntax, not the wire format.
-- **Formats.**
-  - A binary form (little-endian words) for FFI, caches and bulk data.
-  - JSON for interoperability and debugging.
+- **Formats** (8.17.14).
+  - A CBOR envelope (RFC 8949) holds the metadata, tables and versioned keys. The header and pool arrays sit inside it
+    as little-endian byte strings, so the bulk is copied, not parsed, and any language with a CBOR reader can load it
+    without generated code. This form serves FFI, caches, Web Worker messages (8.14) and bulk data.
+  - JSON is a debug and interoperability view of the same envelope.
   - Renderers (LaTeX, Unicode, MathML, SMT-LIB, Lean) registered per operation and type (8.13).
 - **Compatibility.** Readers accept the current and the previous schema version (audit `E8`). A saved notebook keeps its
   document text as the source of truth, with an optional `PortableExpr` cache beside it.
@@ -1022,8 +1062,11 @@ usability probes came from such rewrites; making each one visible and tested is 
 ### 8.14 Calling styles: sync, async, batch, mutation and `const`
 
 - **Synchronous:** `run(&op, &env, &mut run)`.
-- **Asynchronous:** `spawn(op, env) -> Task<T>` runs on the rayon pool on native targets and is stepped by
-  `cat-anytime` on `wasm32`.
+- **Asynchronous:** `spawn(op, env) -> Task<T>` runs on the rayon pool on native targets.
+  - In the browser, by default, it runs in a Web Worker with its own engine, exchanging `PortableExpr` messages
+    (8.17.16).
+  - It uses WebAssembly threads where the host is cross-origin isolated.
+  - Short operations step through checkpoints on the main thread.
   - `Task::latest()` returns the current `Outcome`, an anytime refinement with its accuracy, matching `cat-anytime`'s
     `FidelityStream`.
   - `Task::wait()` returns the final outcome.
@@ -1098,10 +1141,11 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 - **Ids.** `ExprId`, `SymbolId`, `FunctionId` and payload indices are `u32`. `StructureId`, `CalculusId`, `MethodId`
   and `OpKind` are `u16`. Ids are dense, so per-node data is a `Vec<T>` indexed by id (8.16.3). The epoch of 8.5 lives
   in FFI handles and in the session, not in every `ExprId`, so ids do not double in size.
-- **Encoding.** Each store holds `words: Vec<u32>` and `offsets: Vec<u32>`, where `offsets[id]` is the node's first
-  word.
-  - A node is a header word (6-bit tag, 2-bit flags, 24-bit arity), then `arity` child ids, then payload words for its
-    tag.
+- **Encoding** (revised in revision 4; 8.17.5 has the measurement). Each store holds `headers: Vec<u64>` and
+  `pool: Vec<u32>`.
+  - `headers[id]` packs a 6-bit tag (an `enum NodeTag`), 2 flag bits, a 24-bit arity and the 32-bit start of the
+    node's words in `pool`.
+  - The pool holds the `arity` child ids and then the payload words for the tag.
   - Payloads:
 
     | Node | Payload |
@@ -1126,19 +1170,21 @@ figure covers node headers and child lists only; leaf payloads add one to three 
   `E4`'s stack-overflow risk for those passes.
 - **Reads.** `NodeRef<'a>` is a header and a `&'a [u32]` with typed accessors. `children()` yields `ExprId`s by mapping
   `u32` words, so no `unsafe` cast is needed; the `bytemuck` crate's safe wrappers are the alternative if a slice is
-  required. Reading is an index, a load and a slice: the 2.5 ns case above, with no lock and no clone.
+  required.
+  - Reading is one header load and a slice: the 2.5 ns case above, with no lock and no clone.
+  - A scan for nodes of one kind reads only the header column, at about 0.4 ns per node.
 - **Deduplication.**
-  - Each store keeps `hashes: Vec<u32>` beside `offsets`, plus a `hashbrown::HashTable<ExprId>`: ids only, the node
-    words being the key.
+  - Each store keeps `hashes: Vec<u32>` beside `headers`, plus a `hashbrown::HashTable<ExprId>`: ids only, the node's
+    header and pool words being the key.
   - The hash of a node is computed over its words with ahash, which is randomised and so resists collision attacks from
     untrusted input (FFI, WASM, notebooks loaded from files).
   - Internal maps keyed by ids, where the input cannot be chosen by an attacker, use FxHash.
-  - Equality first compares the stored hashes and then the word slices.
+  - Equality first compares the stored hashes, then the headers (tag and arity), then the pool slices.
 - **Concurrency without locks on reads.**
-  - A run's scratch store is owned by that run, so it is a plain `Vec<u32>` with no locks or atomics.
+  - A run's scratch store is owned by that run, so its arrays are plain `Vec`s with no locks or atomics.
   - Scratch ids continue the session's numbering (`id >= base` means scratch), so one comparison routes a read.
   - The session store, which is shared and mostly read, is a list of immutable segments (`Arc<[u32]>`, 2^12 words
-    each) behind `arc-swap`; `offsets` and `hashes` are segmented the same way. A reader takes a snapshot with one
+    of pool) behind `arc-swap`; `headers` and `hashes` are segmented the same way. A reader takes a snapshot with one
     atomic load and then indexes without locks.
   - Writes happen only when a run promotes its result, once per operation, under a mutex. Full segments are never
     touched again; the partial last segment is copied and republished, so a promotion copies at most 16 KB plus its
@@ -1176,7 +1222,7 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 
 | Layer | Rule that bounds its cost |
 | :--- | :--- |
-| `Outcome<T>` | Hot fields inline (status, value, a small `Accuracy`); rare fields (certificate, steps, conditions, detailed provenance) behind one `Option<Box<_>>` that stays `None` unless `Env.record` asks. Large `Enclosure` cases (adelic, Lie group) are boxed so `Accuracy` stays small. |
+| `Outcome<T>` | Hot fields inline (the result, the value, the goal state, a small `Accuracy`); rare fields (certificate, steps, detailed provenance) boxed and absent unless `Env.record` asks or the goal requires them. Large `Enclosure` cases (adelic, Lie group) are boxed so `Accuracy` stays small. |
 | `Env` | One `Arc`, cloned by reference count; nothing per call. |
 | `Run::checkpoint()` | Decrements a local counter; every 1,024 calls it loads the cancel flag (relaxed atomic) and reads the clock. |
 | Planner | A fast path runs a single applicable, exact and cheap method directly. Plans are cached by operation kind, a shape hash of the input and the objective class. Portfolios start only above a predicted cost threshold, so small requests never spawn threads. |
@@ -1202,8 +1248,8 @@ figure covers node headers and child lists only; leaf payloads add one to three 
 
 #### 8.16.7 Serialisation and FFI
 
-- `PortableExpr` uses the store's own word layout (8.12), so writing is a copy of words plus the tables, and loading is
-  a linear validation and re-intern. No text is parsed.
+- `PortableExpr` carries the store's own header and pool arrays inside its CBOR envelope (8.12), so writing is a copy
+  of the arrays plus the tables, and loading is a linear validation and re-intern. No text is parsed.
 - The C ABI passes handles (8.15), adds `urae_run_batch`, and converts to strings only when the caller asks for text.
 
 #### 8.16.8 Gates
@@ -1219,7 +1265,7 @@ Timing on shared CI runners is noisy; allocation counts and node counts are not.
 
 Targets, to be confirmed by the phase that delivers each:
 
-| Path | Today | Target | Phase (8.18) |
+| Path | Today | Target | Phase (8.19) |
 | :--- | :--- | :--- | :--- |
 | node hash | 25–41 ns | 8 ns or less | 0 |
 | node read (`node()` and children) | 40–46 ns | 5 ns or less | 2 |
@@ -1229,7 +1275,283 @@ Targets, to be confirmed by the phase that delivers each:
 | `Outcome`, `Env` and planner overhead on the probe workload | not applicable | 2% or less | 1 and 6 |
 | `f64` ball evaluation against plain `f64` in the VM | not applicable | 4× or less | 4 |
 
-### 8.17 Consolidations the design requires
+### 8.17 Alternatives considered
+
+Each design decision above had alternatives. This section records them, with the trade-offs and the verdict, so a later
+change can see what was weighed. Where the review changed the design (revision 4), the earlier section has been updated
+and the verdict says so.
+
+#### 8.17.1 Enums or ids: one rule
+
+Many decisions below choose between a Rust `enum` and an id into a table.
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Closed `#[repr(u8/u16)]` enum | the compiler checks every `match` covers every case; no lookup; usable in `const` code; readable | closed: adding a case recompiles the defining crate; cannot name types from crates that depend on it; a wildcard arm (`_ =>`) silently defeats the check |
+| Id into a registry (`u16`/`u32`) | open to later crates, plugins and users; per-case data lives in one descriptor | no exhaustiveness check; a lookup on use; an unknown id is a run-time error |
+| Interned name (today's `SymbolId` for functions) | trivially open | string matching scattered through the code (P24); typos are silent |
+| Hybrid: enum for the closed core, ids above it | exhaustive and free for the hot core; open for the rest | two paths (core and extension) to keep consistent |
+
+The rule the design follows:
+
+1. A set that is closed when its crate compiles and is used in hot code is an enum. That covers node tags, `CalculusKind`,
+   accuracy and enclosure kinds, `Ternary`, outcome states and the built-in functions (8.17.2). Axiom flags are a
+   bitflags word.
+2. A set that later crates, plugins or users extend, or that is created at run time, is an id into a registry. That
+   covers operations, methods, structures and user functions.
+3. A hot closed core with an open fringe is a hybrid. The enum's discriminants are the low ids, and descriptors exist
+   for every id, including the enum's.
+4. Nothing persists a discriminant or an id. Serialised data names things canonically, by name or descriptor (8.12), so
+   reordering an enum or a registry never breaks saved data.
+5. Crates that match on these enums enable clippy's `wildcard_enum_match_arm` lint, so the exhaustiveness check is not
+   lost to a `_` arm.
+
+The dependency direction limits rule 1. An enum in `algebra-core` cannot name a type defined in `algebra-engine` or
+`algebra-advanced`. `MathOperation` (43 variants) works today only because its payloads are strings.
+
+#### 8.17.2 Function identity (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Names (today) | open | P24 |
+| `FunctionId` into a registry (revision 3) | open; descriptors | the differentiator, evaluator and simplifier get no exhaustiveness check for the functions they must all handle |
+| Closed enum of all functions | exhaustive; free | user-defined and downstream functions impossible |
+| **Hybrid (adopted)** | exhaustive for built-ins, open for the rest | adding a built-in recompiles `algebra-core` (rare) |
+
+Adopted:
+
+```rust
+#[repr(u16)]
+pub enum Builtin { Sin, Cos, Tan, Exp, Ln, Sqrt, Abs, Gamma, Erf, BesselJ, /* ... */ }
+
+pub struct FunctionId(u32); // ids below Builtin::COUNT are built-ins, the rest are registered
+
+impl FunctionId {
+    pub const fn builtin(b: Builtin) -> Self { Self(b as u32) }
+    pub fn as_builtin(self) -> Option<Builtin> { /* ... */ }
+}
+```
+
+Hot code matches on `Builtin` exhaustively and falls back to the descriptor for other ids. The descriptor table covers
+every id, so arities, aliases, printing and properties stay in one place.
+
+#### 8.17.3 Operations
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| One enum (today's `MathOperation`) | exhaustive; simple serde | must live in `algebra-core` and so cannot hold engine types; every frontend change touches it |
+| Operation structs, a registry and dynamic dispatch (revisions 2 and 3) | open; metadata in descriptors | no exhaustiveness at the dynamic boundary; serde needs a name-to-constructor table |
+| Automatic registration (`inventory`, `linkme`, `typetag`) | no forgotten registrations | relies on link-time or constructor tricks that differ by platform, including `wasm32` |
+| **Structs, an explicit registry, and a facade enum (adopted)** | static dispatch and an exhaustive enum where all crates are visible; open below it | the facade recompiles when an operation is added |
+
+Adopted:
+
+- Engine code calls operation structs directly, typed and statically dispatched.
+- The registry holds the metadata: aliases, schemas, renderers, GUI fields and methods.
+- The `urae` facade, which sees every crate, builds `AnyOperation` from per-crate lists with a declarative macro, and
+  the dynamic boundary (JSON, FFI, notebook) dispatches through it.
+
+#### 8.17.4 The result type (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| A struct of optional fields (revisions 2 and 3) | flat; easy to extend | illegal states are representable: `Complete` with no value, `Refused` with one |
+| `Result<T, Error>` only | idiomatic; `?` works | cannot say "here is a value that misses the goal" or "here is a partial result" |
+| **`Result<Answer<T>, Refusal<T>>` plus shared information (adopted)** | `?` works; a value exists exactly when there is an answer; partial and goal-missing answers are explicit | one more level of nesting |
+
+The adopted shape is in 8.4.
+
+#### 8.17.5 The node store (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| `Vec<ExprNode>` and a `DashMap` (today) | simple | 40–46 ns reads, clones, double storage (P2, P28) |
+| An append-only vector of small fixed-size nodes (`boxcar`) | lock-free; simple | variable child lists need a second store; per-node atomics on insertion |
+| Flat words and an offsets array (revision 3) | compact; 2–4 ns reads | an offsets array just to find the header; finding nodes of one kind means touching every node's words |
+| **A header column and a child pool (adopted)** | measured: same memory and read cost as flat words, twice as fast to scan by kind; tag and arity without touching the pool; the header is a cheap equality pre-check | headers are 8 bytes even for leaves |
+| Full structure-of-arrays (one column per field) | fastest column scans; simple decoding | a node read touches four or more arrays |
+| An e-graph as the primary store | rewriting built in | equivalence classes are not syntax; memory; kept as a method-local tool (`cat-egraph`) |
+| Reference-counted trees without hash-consing | simplest | no sharing; equality is a full traversal |
+
+The measurement behind the verdict, 27 Nov 2026, release build, 80,006 nodes, three runs:
+
+| | Flat words and offsets | Header column and pool |
+| :--- | :--- | :--- |
+| memory | 1,600,088 bytes | 1,600,088 bytes |
+| read a node and its children, in id order | 2.1–3.7 ns | 2.7–2.8 ns |
+| the same in random order | 9.9–11.5 ns | 8.8–11.3 ns |
+| scan for nodes of one kind | 0.71–1.09 ns per node | 0.36–0.52 ns per node |
+
+The adopted layout is in 8.16.2.
+
+#### 8.17.6 Concurrency of the session store
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| `RwLock<Vec>` (today) | simple | a lock on every read; deadlock risk under rayon (audit `J2`) |
+| **Immutable segments behind `arc-swap` (adopted)** | reads are one atomic load then plain indexing; writes once per operation | republishing the partial last segment (bounded at 16 KB) |
+| `boxcar` | lock-free reads and pushes | an atomic per pushed node; acceptable fallback if republishing proves costly |
+| Per-thread stores, merged only at joins | no sharing at all | large shared inputs are copied per thread |
+| Epoch-based reclamation (`crossbeam-epoch`) | general | complexity without a need: nothing is freed while readers run |
+
+#### 8.17.7 Reclaiming memory (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Never free | fastest allocation | measured: 1,535 MB left over where 0.6 MB was live (8.5) |
+| Reference counts per node, with slot reuse | frees incrementally | a count update per edge; reused slots break the children-before-parents order that the forward sweeps rely on (8.16.2) |
+| A tracing collector with free lists | general | the same order problem; pauses |
+| **Scratch scopes, promotion and compaction (adopted)** | one free per operation; order preserved | compaction copies the live graph |
+| **Regions per notebook cell (adopted for the notebook)** | a cell may refer only to earlier cells, so editing cell `k` drops the regions of cells `k` onward and nothing else; fits the incremental re-evaluation of 8.13 | the notebook must track which region each cell's results live in |
+
+The phase 0 rebuild of the notebook graph on every evaluation (8.19) stays as the stopgap until regions exist.
+
+#### 8.17.8 Structures and dispatch (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Static generics only | fastest; checked at compile time | structures built at run time (a user's `GF(p)`, `Mat_n`, quotient by a polynomial) cannot be types; compile times and code size grow with every combination |
+| `dyn Structure` only | fully dynamic | a virtual call per element operation; elements must be erased |
+| An interpreted descriptor enum | serialisable; no generic explosion | an interpretive `match` per element |
+| **Descriptors, specialised kernels and a dynamic fallback (adopted)** | descriptors for typing, planning and serialisation; monomorphised speed in loops; anything constructible still works | three layers to keep consistent |
+
+Adopted:
+
+- A `StructureDesc` enum tree, hash-consed into a `StructureId`, describes every structure. It is what the typing pass,
+  the planner and serialisation use.
+- Kernels are monomorphised for a fixed table of element representations: `i64`, big integers, rationals, a `GF(p)`
+  word, `f64` balls, multiprecision balls and expressions. The descriptor selects the kernel once per batch, so the cost
+  is one `match` per batch (enum dispatch), not a virtual call per element.
+- Structures outside that table, such as an arbitrary algebra given by structure constants, run through a `dyn`
+  fallback.
+- Axioms exist twice, as run-time flags and as marker traits (or associated constants) on the static kernels, and a
+  test checks that the two agree.
+
+#### 8.17.9 The typing pass (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| An eager forward sweep over the whole scratch graph | branch-free; no recursion | pays for nodes the operation never looks at |
+| **Lazy and memoised, with the sweep for whole-graph passes (adopted)** | most operations touch part of a graph; whole-graph passes (evaluation, folding) still sweep | two entry points |
+
+Both write the same side table.
+
+#### 8.17.10 Calculus identity (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| `CalculusId` into a table of specifications (revisions 2 and 3) | open | rules cannot match exhaustively on the kind of calculus |
+| A closed enum with parameters inside the node | exhaustive; no lookup | parameters (`h`, `q`, a graininess function, a covariance table) are numbers or expressions; they would bloat every node |
+| **A closed `CalculusKind` enum and a parameter table (adopted)** | exhaustive matching on the kind; nodes keep a `u16`; classical calculus never touches the table | a new kind of calculus changes `algebra-core` (rare) |
+
+`CalculusId(0)` is classical, and the classical path checks for zero and never consults the table, so the common case
+pays nothing for the generality.
+
+#### 8.17.11 Accuracy and enclosures
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| **A kind enum at the boundaries (adopted)** | says exactly what is known: exact, rigorous, estimated, probabilistic, asymptotic | a `match` at boundaries |
+| Everything a ball, exact meaning radius zero (as in Arb) | uniform | cannot carry ultrametric, probabilistic or asymptotic information; forces exact rationals into binary floats |
+| Affine arithmetic or Taylor models | much tighter over long iterations (the wrapping effect) | several times the cost per operation |
+| Endpoints (lower, upper) against midpoint and radius | endpoints are tighter for signs and monotone functions at low precision | at high precision endpoints cost two full-precision numbers, a ball one |
+
+Verdict: the enum at boundaries, and one representation per lane inside the kernels. The multiprecision lane uses
+midpoint and radius, and the `f64` lane endpoints. Affine forms and Taylor models are an optional `Enclosure` case for
+iterative solvers, not a default.
+
+#### 8.17.12 Precision control
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Retry with more precision (Ziv's strategy) | always reaches a reachable goal | blind retries waste work |
+| A priori error analysis | no retries | pessimistic bounds overshoot the precision |
+| Fixed tiers (64, 128, 256 bits, ...) | simple | coarse |
+| **Predict with condition numbers, then retry (adopted)** | few retries; still correct when the prediction is wrong | needs the derivative, which the engine has |
+
+#### 8.17.13 Multiprecision arithmetic
+
+| Option | Licence | For | Against |
+| :--- | :--- | :--- | :--- |
+| `dashu` | MIT or Apache-2.0 | pure Rust; already a dependency | speed against the 8.7 kernels unmeasured |
+| `astro-float` | MIT | pure Rust; correctly rounded binary floats | integers come from elsewhere |
+| `num-bigint` | MIT or Apache-2.0 | already used | integers only; slower multiplication at large sizes |
+| `rug` (GMP, MPFR) | LGPL | the fastest | not in `deny.toml`'s allowed licences; needs a C toolchain; no `wasm32-unknown-unknown` |
+| `malachite` | LGPL-3.0 | pure Rust, fast | not in the allowed licences |
+| An own implementation | not applicable | full control | large effort and risk |
+
+Verdict: benchmark `dashu` against `astro-float` on the ball kernels at 64 to 4,096 bits before phase 4. The licence
+policy excludes `rug` and `malachite` unless the policy changes, which would be a project decision, not a technical
+one.
+
+#### 8.17.14 Serialisation format (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| A custom word blob (revision 3) | near-memcpy | every language needs a hand-written reader; versioning must be designed from scratch |
+| postcard or bincode (serde) | compact; trivial in Rust | not self-describing: other languages need the schema; evolution only through explicit version fields |
+| JSON | readable everywhere | large and slow for big graphs |
+| FlatBuffers or Cap'n Proto | zero-copy; cross-language; schema evolution | code generation and a heavier dependency |
+| **CBOR envelope with the arrays as byte strings (adopted)** | self-describing and standard (RFC 8949), readable in any language without code generation; keyed fields evolve; the bulk arrays are copied, not parsed | two layers to specify |
+
+Adopted: metadata, tables and versioned keys in CBOR, and the header and pool arrays as little-endian byte strings
+inside it. JSON is a debug view of the same envelope.
+
+#### 8.17.15 Hashing
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| SipHash (today) | resists collision attacks | measured: 25–41 ns per node |
+| **ahash for tables fed by input (adopted)** | randomised keys; measured 6–8 ns | none significant |
+| **FxHash for id-keyed internal maps (adopted)** | measured 4–6 ns | weak against chosen inputs, so only for keys an attacker cannot choose |
+| foldhash | the default hasher of recent `hashbrown` versions; fast | weaker resistance claims than ahash; unmeasured here |
+
+Verdict unchanged. foldhash joins the benchmark of phase 0.
+
+#### 8.17.16 Asynchrony on `wasm32` (revised in revision 4)
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Resumable methods stepping cooperatively on the main thread | no copying | every long method rewritten as a state machine |
+| WebAssembly threads | shared memory; the native design unchanged | needs `SharedArrayBuffer`, which needs cross-origin isolation headers from the host |
+| **A Web Worker running its own engine, exchanging `PortableExpr` messages (adopted as default)** | works in every browser; the UI never blocks; reuses 8.12 | a copy per message |
+
+Threads are used where the host is cross-origin isolated. Short operations still step through checkpoints on the main
+thread.
+
+#### 8.17.17 Language bindings
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| **A C ABI with cbindgen (adopted as the stable core)** | universal; full control | hand-written wrappers per language |
+| uniffi | generates Kotlin, Swift, Python and Ruby | per-call overhead; no C or JavaScript |
+| diplomat | generates several languages, including C, C++ and JavaScript, from one annotated definition | less widely used; its own conventions |
+| **pyo3 for Python (adopted)** | the best Python ergonomics and speed | Python-only |
+| C ABI and cffi for Python | one binding surface | worse ergonomics |
+
+Verdict: the C ABI and pyo3 as planned; evaluate diplomat if C++, Dart or Kotlin bindings become goals.
+
+#### 8.17.18 Planner policy
+
+| Option | For | Against |
+| :--- | :--- | :--- |
+| Fixed rules | predictable; cheap | brittle as methods are added |
+| Cost models | adapts to input size and goal | needs calibration |
+| Learned predictions (bandits, the MCTS policy) | improves with use | reproducibility across versions (8.20) |
+| Always race a portfolio | robust | wastes cores and memory on small requests |
+
+Verdict: in stages. Rules and the fast path first, cost models next, learned predictions last, and portfolios only above
+a cost threshold (8.16.5).
+
+#### 8.17.19 Smaller choices
+
+- **Id width.** `u32` node ids (up to about 4.3 billion nodes) rather than `u64` (twice the memory) or `usize`
+  (platform-dependent). The `u32::MAX` guard of audit `E4` stays.
+- **Three-valued answers.** A dedicated `Ternary` enum with Kleene's operations rather than `Option<bool>`, whose `None`
+  is ambiguous between "unknown" and "not computed".
+- **Global allocator.** mimalloc, unchanged (8.5).
+
+### 8.18 Consolidations the design requires
 
 - One p-adic engine (the `cat-numbers` type, limited to digits below 256, is replaced), one adele type built as
   `Adeles<Q>`, one surreal engine (ledger `B16`), one Itô implementation (P12).
@@ -1244,7 +1566,7 @@ Targets, to be confirmed by the phase that delivers each:
   traces (P22).
 - One hashing policy: ahash for tables fed by input, FxHash for id-keyed internal maps (P27).
 
-### 8.18 Migration
+### 8.19 Migration
 
 Each step starts with a failing test and ends with a ledger entry, as for any defect (invariant 8). Each phase also has
 a performance gate (8.16.8); a phase is done when both pass.
@@ -1252,24 +1574,24 @@ a performance gate (8.16.8); a phase is done when both pass.
 | Phase | Work | Exit test (examples) | Performance gate |
 | :--- | :--- | :--- | :--- |
 | 0 | Fixes that need none of the redesign: outward rounding in `RealInterval` and `UniversalBall` (P16); an honest `BigValue` (P15); `WeilJet` refusing mixed calculi (P13); `worst_case_radius` not answering for probabilistic spreads (P17); checked `ConstRational` (P8); FFI `catch_unwind`, unwind profile and session lock (P9); notebook graph rebuilt per evaluation (P3); ahash for the deduplication maps (P27); the counting-allocator gate and the scheduled benchmark job | `[0.1, 0.1] + [0.2, 0.2]` contains the exact sum of the two doubles (fails today); a release-build `ConstRational` overflow is an error, not a wrap; a panicking call through the C ABI returns an error code; the notebook's node count stays flat over 1,000 slider steps | node hash 8 ns or less; allocation and node-count gates recorded at today's values |
-| 1 | `Outcome`, `Env`, `Run`, `Operation`; the registry with descriptors replacing the command tables and hooks (8.13); `FunctionId`; `PortableExpr` and schema versions (8.12); one method each for differentiate, simplify, solve and evaluate; the old traits become wrappers; `Env` threaded through in place of fresh `EvalContext`s | every existing test passes through the wrappers; one test per status value; every expression in the test suites round-trips through `PortableExpr`; a malformed `PortableExpr` (a cycle, a bad arity, an out-of-range payload) is rejected; one command table remains | `Outcome` and `Env` overhead 2% or less on the probe workload |
-| 2 | The flat store (8.16.2): words, offsets, hashes, payload tables, scratch scopes with promotion, the segmented session store, forward-sweep passes, worklist traversals | the probe of 8.5 shows no session growth from intermediates; deep expressions (depth 10^5) format and evaluate without stack overflow on `wasm32` | node read 5 ns or less; deduplication hit 20 ns or less; 50,000 allocations or fewer per probe pass |
+| 1 | `Outcome`, `Env`, `Run`, `Operation`; the registry with descriptors replacing the command tables and hooks (8.13); `FunctionId` with the `Builtin` enum and the `wildcard_enum_match_arm` lint; `PortableExpr` and schema versions (8.12); one method each for differentiate, simplify, solve and evaluate; the old traits become wrappers; `Env` threaded through in place of fresh `EvalContext`s | every existing test passes through the wrappers; one test per goal state and refusal kind; every expression in the test suites round-trips through `PortableExpr`; a malformed `PortableExpr` (a cycle, a bad arity, an out-of-range payload) is rejected; one command table remains | `Outcome` and `Env` overhead 2% or less on the probe workload |
+| 2 | The flat store (8.16.2): headers, pool, hashes, payload tables, scratch scopes with promotion, the segmented session store, forward-sweep passes, worklist traversals | the probe of 8.5 shows no session growth from intermediates; deep expressions (depth 10^5) format and evaluate without stack overflow on `wasm32` | node read 5 ns or less; deduplication hit 20 ns or less; 50,000 allocations or fewer per probe pass |
 | 3 | Structure traits, `StructureInfo`, the typing pass with domains and dimensions; logic structures; `declare`, `assume`, `define` and `let` filling `Env.knowledge`; structures for `Z`, `Q`, `Z/nZ`, `GF(p^n)`, `Poly`, `Mat`, `StructureConstants`, `Quantity`; merged p-adic, adele and surreal carriers; rewrite rules declaring their axioms | octonion expressions are never reassociated; `x*y - y*x` simplifies to `0` over `Q` and not over `Mat_2(Q)`; field axioms are checked from structure constants; `3 m + 2 s` is refused and `3 m * 2 s` is `6 m s`; a contradictory scope is reported | typing pass 10% or less of the cost of the operation it serves on the probe workload |
-| 4 | Arbitrary-precision balls, constant generators, the precision retry loop, `Accuracy` in every numerical path; ball and double-double lanes in the VM | `evaluate(pi - 355/113, goal = 1e-60)` meets the goal with a rigorous enclosure; an unreachable goal returns `GoalNotMet` with the enclosure achieved | `f64` ball evaluation within 4× of plain `f64` |
+| 4 | Arbitrary-precision balls, constant generators, the precision retry loop, `Accuracy` in every numerical path; ball and double-double lanes in the VM | `evaluate(pi - 355/113, goal = 1e-60)` meets the goal with a rigorous enclosure; an unreachable goal returns `GoalState::NotMet` with the enclosure achieved | `f64` ball evaluation within 4× of plain `f64` |
 | 5 | The calculus registry: `CalculusId` on nodes, sigma-derivation rules for `Delta_h`, `D_q` and time scales, generic `Weil` jets, the Itô and Stratonovich conversion, umbral bases and bridges | the time-scale product rule with `mu = h` equals the difference rule; Itô's lemma for `exp(W_t)` gives drift `exp(W_t)/2`; Newton and Taylor series of a polynomial agree | jets carry no per-value calculus field (checked by a size test) |
 | 6 | Method predictions and the planner for evaluate, definite integration and root finding; blending patterns 1, 2, 5 and 6; multi-modular gcd and determinant; decision operations with certificates and checkers (8.10, 8.11); proof export with structure-aware types and tactics | a definite integral with a closed form is found by recognition and then proved; `x^2 + 1 > 0` is proved by a sum-of-squares certificate checked in URAE; an identity over `GF(7)` exports to Lean with `ZMod 7`; the portfolio cancels losing methods; replaying a provenance record reproduces the plan | planner overhead 2% or less on the probe workload; fast path 1 µs or less per trivial operation |
-| 7 | `Task` with refinements; the new FFI with `PortableExpr`, handles and batches; pyo3 bindings; WASM on the same layers; pipelines and "interpreted as" (8.13) | dropping a task stops its work within one checkpoint interval; an outcome round-trips through C with its accuracy; editing one notebook cell re-runs only the steps downstream of it | a batch of 1,000 calls through `urae_run_batch` within 10% of the same calls in process |
+| 7 | `Task` with refinements; the new FFI with `PortableExpr`, handles and batches; pyo3 bindings; WASM on the same layers with the Web Worker default; notebook regions per cell; pipelines and "interpreted as" (8.13) | dropping a task stops its work within one checkpoint interval; an outcome round-trips through C with its accuracy; editing one notebook cell re-runs only the steps downstream of it | a batch of 1,000 calls through `urae_run_batch` within 10% of the same calls in process |
 
 Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap waves 1 and 6.
 
-### 8.19 Open questions
+### 8.20 Open questions
 
-- **Which multiprecision float.** `dashu` is already a dependency and pure Rust, which keeps `wasm32` builds simple, but
-  its speed against the needs of 8.7 is unmeasured. The choice should follow a benchmark of the ball kernels, not
-  precede it.
+- **Which multiprecision float.** `dashu` (already a dependency) against `astro-float`, both pure Rust and
+  permissively licensed. `rug` and `malachite` are LGPL, which `deny.toml` does not allow (8.17.13). The choice should
+  follow a benchmark of the ball kernels, not precede it.
 - **Segment size and dependencies.** 2^12-word segments bound the republish copy at 16 KB per promotion; the probe
   should confirm that against real promotion sizes. `arc-swap` and `hashbrown` become direct dependencies.
-- **Header limits.** A 6-bit tag allows 64 node kinds. Today's 17 `ExprKind` variants become about 23 once numbers
+- **Header limits.** A 6-bit tag allows 64 node kinds, and a 32-bit pool start allows 2^32 pool words (16 GiB) per store. Today's 17 `ExprKind` variants become about 23 once numbers
   split by size, plus the calculus and logic additions; an escape tag with a kind word covers growth beyond that.
 - **Trusting derived axioms.** Who certifies maximality of an ideal, or irreducibility of a defining polynomial, and is
   an unproven `DIVISION` flag ever allowed? This proposal says no.
@@ -1293,7 +1615,7 @@ Phases 0 to 3 fit milestone M3 (architecture wave 1). Phases 4 to 7 overlap wave
 - **External deciders.** Calling an external SMT solver or proof assistant needs a process boundary and a licence
   check (`deny.toml`); URAE's own checkers stay the default.
 
-### 8.20 Revision history
+### 8.21 Revision history
 
 **Revision 1** (commit `fbc3d09`): operations as values with a `run` method; one `Outcome` with value, steps,
 certificate and diagnostics; one mutable `Cx`; `ExprStore` and `ExprBuilder`; memory reclaimed by scope with the
@@ -1322,7 +1644,7 @@ status codes, panic containment and locking.
    const-generic structures.
 9. **Migration gained phase 0** (fixes that do not wait for the redesign) and phases 3 to 6, each with an exit test.
 
-**Revision 3** (this text) tested revision 2 against R9 to R14, the topics of the plan and the specification that it
+**Revision 3** (commit `fc89f9a`) tested revision 2 against R9 to R14, the topics of the plan and the specification that it
 left out, and the cost of its own layers:
 
 1. **Logic, assumptions and decision were added (8.10).** Logics are structures, formulas are expressions, the four
@@ -1343,3 +1665,27 @@ left out, and the cost of its own layers:
 6. **Scratch ids now continue the session's numbering** instead of being a separate type, so one comparison routes a
    read; ids leave a run only through promotion.
 7. **Migration gained a performance gate per phase,** and the new work went into phases 0, 1, 3, 6 and 7.
+
+**Revision 4** (this text) set out the alternatives to each decision (8.17), with a common rule for when a set is an enum
+and when it is an id, and adopted these changes:
+
+1. **Built-in functions became a closed `Builtin` enum** whose discriminants are the low `FunctionId`s, so the code
+   that must handle every built-in is checked for exhaustiveness. Other functions stay open through the registry
+   (8.12, 8.17.2).
+2. **The result type became `Result<Answer<T>, Refusal<T>>`** plus shared information. A value exists exactly when there
+   is an answer, `?` works, and a goal that is missed or an anytime cut-off is a state of the answer (8.4, 8.17.4).
+3. **The node store became a `u64` header column and a `u32` pool,** in place of flat words with an offsets array. Memory
+   and read cost are the same as measured, scans by kind are twice as fast, and tag and arity are read without touching
+   the pool (8.16.2, 8.17.5).
+4. **Calculi became a closed `CalculusKind` enum plus a parameter table,** with a classical fast path that never
+   consults the table (8.8.2, 8.17.10).
+5. **Structure dispatch was layered and made explicit:** descriptors for typing and serialisation, monomorphised kernels
+   selected once per batch, and a dynamic fallback (8.6.1, 8.17.8).
+6. **Typing became lazy and memoised by default,** with the forward sweep kept for whole-graph passes (8.6.2, 8.17.9).
+7. **Serialisation uses a CBOR envelope** carrying the node arrays as byte strings, so other languages read it without
+   generated code (8.12, 8.17.14).
+8. **The notebook reclaims memory by regions per cell,** which fits incremental re-evaluation, with the per-evaluation
+   rebuild as the stopgap (8.5, 8.17.7).
+9. **In the browser, asynchronous work defaults to a Web Worker** exchanging `PortableExpr` messages (8.14, 8.17.16).
+10. **The multiprecision candidates were narrowed by licence:** `rug` and `malachite` are LGPL, which `deny.toml` does
+    not allow (8.17.13, 8.20).
